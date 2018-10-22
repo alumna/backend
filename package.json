@@ -1,0 +1,32 @@
+{
+	"name": "@altiva/backend",
+	"version": "1.0.0",
+	"description": "Altiva Backend: Real-time backend without runtime dependencies",
+	"repository": {
+		"type": "git",
+		"url": "git://github.com/altiva/backend.git"
+	},
+	"main": "altiva.js",
+	"scripts": {
+		"build": "rollup --config other/rollup/rollup.js",
+		"prepare": "npm run build",
+		"test": "echo \"We will implement Jest here, the same way as Altiva Frontend\" && exit 1"
+	},
+	"author": "Paulo Coghi",
+	"license": "MIT",
+	"bugs": {
+		"url": "https://github.com/altiva/backend/issues"
+	},
+	"dependencies": {},
+	"devDependencies": {
+		"@polka/send-type": "^0.5.0",
+		"body-parser": "^1.18.3",
+		"cors": "^2.8.4",
+		"polka": "^0.5.1",
+		"primus": "^7.2.3",
+		"rollup": "^0.66.6",
+		"rollup-plugin-commonjs": "^9.2.0",
+		"rollup-plugin-json": "^3.1.0",
+		"rollup-plugin-node-resolve": "^3.4.0"
+	}
+}
