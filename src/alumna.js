@@ -1,14 +1,15 @@
 // Node modules
-const EventEmitter 	= require( 'events' );
+import EventEmitter from 'events';
 
-// Altiva modules
-const Service 		= require( './service' );
-const Hook 			= require( './hook' );
+// Alumna modules
+import Service 		from './service';
+import Hook 		from './hook';
 
 // Servers
-const Server 		= require( './server' );
+import Server 		from './server';
 
-class Altiva extends EventEmitter {
+
+class Alumna extends EventEmitter {
 
 	constructor () {
 
@@ -80,10 +81,10 @@ class Altiva extends EventEmitter {
 
 		this.listening = true;
 
-		console.log( '[Altiva Backend] Listening on ' + ( hostname ? hostname + ':' : 'port: ' ) + port );
+		console.log( '[Alumna Backend] Listening on ' + ( hostname ? hostname + ':' : 'port: ' ) + port );
 
 	}
 
 }
 
-module.exports = new Altiva();
+export default Alumna;

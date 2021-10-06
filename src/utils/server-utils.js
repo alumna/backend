@@ -6,7 +6,7 @@ const methods = {
 			verb: 'get',
 			sufix: '',
 			async execute ( params ) {
-				return await service.find( params )
+				return service.find( params )
 			}
 		}
 
@@ -18,7 +18,7 @@ const methods = {
 			verb: 'get',
 			sufix: '/:id',
 			async execute ( params, req ) {
-				return await service.get( req.params.id, params )
+				return service.get( req.params.id, params )
 			}
 		}
 
@@ -30,7 +30,7 @@ const methods = {
 			verb: 'post',
 			sufix: '',
 			async execute ( params, req ) {
-				return await service.create( req.body, params )
+				return service.create( req.body, params )
 			}
 		}
 
@@ -42,7 +42,7 @@ const methods = {
 			verb: 'put',
 			sufix: '/:id',
 			async execute ( params, req ) {
-				return await service.update( req.params.id, req.body, params )
+				return service.update( req.params.id, req.body, params )
 			}
 		}
 
@@ -54,7 +54,7 @@ const methods = {
 			verb: 'patch',
 			sufix: '/:id',
 			async execute ( params, req ) {
-				return await service.patch( req.params.id, req.body, params )
+				return service.patch( req.params.id, req.body, params )
 			}
 		}
 
@@ -66,7 +66,7 @@ const methods = {
 			verb: 'delete',
 			sufix: '/:id',
 			async execute ( params, req ) {
-				return await service.remove( req.params.id, params )
+				return service.remove( req.params.id, params )
 			}
 		}
 
@@ -74,5 +74,5 @@ const methods = {
 
 }
 
-module.exports = { methods }
+export { methods }
 
