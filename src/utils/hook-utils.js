@@ -37,6 +37,16 @@ const redefine_context = function ( read_only_context, modified = {}, type ) {
 
 const run_chain = async function ( context, read_only_context, functions, moment, method  ) {
 
+	/*
+		"method" is the service method, like "find", "get", "create", etc
+		Since external requests always come from a specific method,
+		verifying it existenceis the way to say:
+		"ok, we need check and run the 'app' hooks, first"
+
+		The "if" below calls a "run_chain" with a "null" method,allowing
+		a logical way to verify and run the "app" hooks
+	*/
+
 	// When we are running hooks before a service method, first we need to run the app's before hooks
 	if ( method && moment == 'before' )
 		context = await run_chain( context, read_only_context, context.app.hook_chain.hooks[ moment ], moment );
@@ -66,4 +76,4 @@ const run_chain = async function ( context, read_only_context, functions, moment
 
 }
 
-module.exports = { prepare_context, prepare_args, run_chain }
+export { prepare_context, prepare_args, run_chain }

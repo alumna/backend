@@ -1,32 +1,48 @@
 {
-	"name": "@altiva/backend",
-	"version": "1.0.0",
-	"description": "Altiva Backend: Real-time backend without runtime dependencies",
+	"name": "@alumna/backend",
+	"version": "1.0.1",
+	"description": "Alumna Backend: Real-time backend without runtime dependencies",
 	"repository": {
 		"type": "git",
-		"url": "git://github.com/altiva/backend.git"
+		"url": "git://github.com/alumna/backend.git"
 	},
-	"main": "altiva.js",
+	"main": "dist/alumna.cjs.js",
+	"module": "dist/alumna.es.js",
 	"scripts": {
-		"build": "rollup --config other/rollup/rollup.js",
+		"build": "rollup --config other/rollup/cjs.js && rollup --config other/rollup/es.js",
 		"prepare": "npm run build",
-		"test": "echo \"We will implement Jest here, the same way as Altiva Frontend\" && exit 1"
+		"test": "jest --runInBand --coverage --forceExit",
+		"clear_jest": "jest --clearCache"
 	},
 	"author": "Paulo Coghi",
 	"license": "MIT",
-	"bugs": {
-		"url": "https://github.com/altiva/backend/issues"
+	"jest": {
+		"coverageDirectory": "./coverage/",
+		"collectCoverage": true,
+		"collectCoverageFrom": [
+			"**/src/**",
+			"!**/dist/**",
+			"!**/node_modules/**",
+			"!**/rollup/**"
+		],
+		"verbose": true,
+		"testEnvironment": "node"
 	},
-	"dependencies": {},
+	"bugs": {
+		"url": "https://github.com/alumna/backend/issues"
+	},
 	"devDependencies": {
-		"@polka/send-type": "^0.5.0",
-		"body-parser": "^1.18.3",
-		"cors": "^2.8.4",
-		"polka": "^0.5.1",
-		"primus": "^7.2.3",
-		"rollup": "^0.66.6",
-		"rollup-plugin-commonjs": "^9.2.0",
-		"rollup-plugin-json": "^3.1.0",
-		"rollup-plugin-node-resolve": "^3.4.0"
+		"@babel/plugin-transform-modules-commonjs": "^7.15.4",
+		"@polka/send-type": "^0.5.2",
+		"@rollup/plugin-commonjs": "^20.0.0",
+		"@rollup/plugin-json": "^4.1.0",
+		"@rollup/plugin-node-resolve": "^13.0.5",
+		"body-parser": "^1.19.0",
+		"cors": "^2.8.5",
+		"httpie": "^1.1.2",
+		"jest": "^27.2.4",
+		"polka": "^0.5.2",
+		"rollup": "^2.57.0",
+		"rollup-plugin-terser": "^7.0.2"
 	}
 }

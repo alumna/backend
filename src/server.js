@@ -1,13 +1,14 @@
 // Performant express-like framework
-const polka 		= require( 'polka' );
-const send 			= require( '@polka/send-type' );
+import polka 		from 'polka';
+import send 		from '@polka/send-type';
 
 // Server utils
-const { methods } 	= require( './utils/server-utils' );
+import { methods } 	from './utils/server-utils';
 
 // HTTP middlewares
-const cors 			= require( 'cors' );
-const bodyParser 	= require( 'body-parser' );
+import cors 		from 'cors';
+import bodyParser 	from 'body-parser';
+
 
 // Integration with http server and sockets with services 
 class Server {
@@ -44,24 +45,23 @@ class Server {
 		// Nice!
 		this.polka[ selected.verb ]( '/' + service_path + selected.sufix, async ( req, res ) => {
 
-			params.query = req.query;
+			params.query = req.query
+			const run    = await selected.execute( params, req );
 
-			try	{
-				return send( res, 200, await selected.execute( params, req ));
-			}
-
-			catch ( error ) {
+			if ( run instanceof Error ) {
 				
-				const standard = {
+				const error = {
 					name: 'BadRequest',
 					message: '',
 					code: 400
 				}
 
-				error = Object.assign( error, standard );
+				Object.assign( error, run );
 
-				return send( res, error.code, { error: { name: error.name, message: error.message, code: error.code } } );
+				return send( res, error.code, error );
 			}
+
+			return send( res, 200, run);
 
 		});
 
@@ -91,4 +91,4 @@ class Server {
 
 // ---
 
-module.exports = Server;
+export default Server;

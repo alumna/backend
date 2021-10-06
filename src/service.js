@@ -1,7 +1,7 @@
 // Node modules
-const EventEmitter 	= require( 'events' );
-// Altiva modules
-const Hook = require( './hook' );
+import EventEmitter 	from 'events';
+// Alumna modules
+import Hook 			from './hook';
 
 
 class Service extends EventEmitter {
@@ -85,4 +85,4 @@ class Service extends EventEmitter {
 
 
 
-module.exports = Service;
+export default Service;
