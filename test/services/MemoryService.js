@@ -68,6 +68,12 @@ class MemoryService {
 
 		throw error;
 	}
+
+	async setup ( app, path ) {
+
+		this.setup_done = 'done'
+
+	}
 }
 
 export default MemoryService;
