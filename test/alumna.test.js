@@ -7,6 +7,7 @@ import MemoryService					from './services/MemoryService.js'
 import IncompleteService				from './services/IncompleteService.js'
 import ErrorService						from './services/ErrorService.js'
 
+
 /* Hooks */
 import UserHooks						from './hooks/UserHooks'
 
@@ -15,6 +16,7 @@ backend.use( 'messages',   new MemoryService() )
 backend.use( 'incomplete', new IncompleteService() )
 backend.use( 'users',      new MemoryService() )
 backend.use( 'errors',      new ErrorService() )
+
 
 backend.service( 'users' ).hooks( UserHooks )
 
@@ -35,6 +37,7 @@ describe('Alumna Backend Tests', () => {
 			done()
 			
 		});
+
 
 		test('1. 404 on root URI', done => {
 
@@ -183,5 +186,6 @@ describe('Alumna Backend Tests', () => {
 		});
 
 	});
+
 
 });

@@ -74,6 +74,7 @@ class MemoryService {
 		this.setup_done = 'done'
 
 	}
+
 }
 
 export default MemoryService;
