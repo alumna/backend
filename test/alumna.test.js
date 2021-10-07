@@ -5,6 +5,7 @@ import { get, patch, post, put, del } 	from 'httpie';
 /* Services */
 import MemoryService					from './services/MemoryService.js'
 import IncompleteService				from './services/IncompleteService.js'
+import ErrorService						from './services/ErrorService.js'
 
 /* Hooks */
 import UserHooks						from './hooks/UserHooks'
@@ -13,6 +14,7 @@ const backend = new Alumna();
 backend.use( 'messages',   new MemoryService() )
 backend.use( 'incomplete', new IncompleteService() )
 backend.use( 'users',      new MemoryService() )
+backend.use( 'errors',      new ErrorService() )
 
 backend.service( 'users' ).hooks( UserHooks )
 
@@ -153,6 +155,28 @@ describe('Alumna Backend Tests', () => {
 
 			const users = await get( 'http://127.0.0.1:3000/users' )
 			expect( users.data ).toEqual( { 1: { _id: 1, email: 'user@provider.com', newField: 'New field' } } )
+
+			return;
+			
+		});
+
+	});
+
+	describe('Testing error output on responses', () => {
+
+		test('1. Basic error on service', async () => {
+
+			try {
+				const response = await get( 'http://127.0.0.1:3000/errors' )
+			}
+			catch ( error ) {
+				expect( error.data ).toEqual( {
+					"name": "BadRequest",
+					"message": "Test message",
+					"code": 400
+				})
+				expect( error.statusCode ).toBe( 400 )
+			}
 
 			return;
 			
