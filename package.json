@@ -1,6 +1,6 @@
 {
 	"name": "@alumna/backend",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Alumna Backend: Real-time backend without runtime dependencies",
 	"repository": {
 		"type": "git",
