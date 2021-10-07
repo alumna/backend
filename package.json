@@ -1,6 +1,6 @@
 {
 	"name": "@alumna/backend",
-	"version": "1.0.1",
+	"version": "1.0.2",
 	"description": "Alumna Backend: Real-time backend without runtime dependencies",
 	"repository": {
 		"type": "git",
@@ -10,7 +10,7 @@
 	"module": "dist/alumna.es.js",
 	"scripts": {
 		"build": "rollup --config other/rollup/cjs.js && rollup --config other/rollup/es.js",
-		"prepare": "npm run build",
+		"prepare": "pnpm build",
 		"test": "jest --runInBand --coverage --forceExit",
 		"clear_jest": "jest --clearCache"
 	},

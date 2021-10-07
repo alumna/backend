@@ -2,3 +2,4 @@ coverage/
 other/
 src/
 test/
+.pnpm-debug.log
