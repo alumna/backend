@@ -27,6 +27,13 @@ describe('Alumna Backend Tests', () => {
 
 	describe('Messages API - Complete service class - No hooks', () => {
 
+		test('0. Setup', done => {
+
+			// expect( backend.service( 'messages' ).setupDone ).toBe( 'done' )
+			done()
+			
+		});
+
 		test('1. 404 on root URI', done => {
 
 			http.get( 'http://127.0.0.1:3000/', response => {
