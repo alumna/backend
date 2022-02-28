@@ -52,7 +52,7 @@ class Server {
 				
 				const error = {
 					name: 'BadRequest',
-					message: '',
+					message: run.message,
 					code: 400
 				}
 

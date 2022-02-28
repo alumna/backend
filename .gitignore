@@ -9,3 +9,6 @@ node_modules/
 
 # macOS contributros
 .DS_Store
+
+# pnpm debug files
+.pnpm-debug.log
