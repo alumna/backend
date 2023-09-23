@@ -173,6 +173,8 @@ describe('Alumna Backend Tests', () => {
 			}
 			catch ( error ) {
 				expect( error.data ).toEqual( {
+					// "originalColumn": 20,
+					// "originalLine": 6,
 					"name": "BadRequest",
 					"message": "Test message",
 					"code": 400

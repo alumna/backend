@@ -1,7 +1,7 @@
 import commonjs 	from '@rollup/plugin-commonjs';
 import json 		from '@rollup/plugin-json';
 import resolve 		from '@rollup/plugin-node-resolve';
-import { terser } 	from 'rollup-plugin-terser';
+import terser 		from '@rollup/plugin-terser';
 
 export default {
 	input: 'src/alumna.js',
@@ -22,7 +22,7 @@ export default {
 	],
 
 	output: {
-		file: 'dist/alumna.es.js',
+		file: 'dist/alumna.js',
 		format: 'esm',
 		name: 'Alumna',
 	},
