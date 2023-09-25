@@ -20,7 +20,7 @@ npm install @alumna/backend
 
 Import the library and create the endpoints:
 
-```
+```js
 // import the library
 import Alumna from '@alumna/backend';
 
