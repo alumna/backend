@@ -1,5 +1,10 @@
 # Alumna Backend - Changelog
 
+## v1.0.4 - 2024-03-23
+
+* [Bugfix] Re-build ES module which correctly runs on Bun but not on Node
+* Eliminate Babel and work natively as ES module from now on
+
 ## v1.0.3 - 2023-09-21
 
 * Ensure Bun compatibility
