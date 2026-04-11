@@ -1,0 +1,13 @@
+name: alumna
+version: 0.1.0
+
+authors:
+  - Paulo Coghi <paulo@airsailer.io>
+
+crystal: '>= 1.19.1'
+
+license: MIT
+
+dependencies:
+  msgpack:
+    github: crystal-community/msgpack-crystal
