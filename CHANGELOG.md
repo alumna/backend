@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.1.6 - 2026-04-13
+
+* Unit tests for the router at `src/http/router.cr`
+
 ## 0.1.5 - 2026-04-13
 
 * Unit tests for serializers in `src/http/serializers/` (`json` and `msgpack`)

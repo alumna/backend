@@ -61,7 +61,9 @@ module Alumna
       when .find?
         {find(ctx), nil}
       when .get?
-        {get(ctx), nil}
+        result = get(ctx)
+        raise ServiceError.not_found unless result
+        {result, nil}
       when .create?
         {create(ctx), nil}
       when .update?
