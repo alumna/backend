@@ -16,9 +16,13 @@ module Alumna
       end
 
       def decode(io : IO) : Hash(String, AnyData)
-        raw = Hash(String, MessagePack::Type).from_msgpack(io)
-        raw.transform_values { |v| from_msgpack_type(v) }
-      rescue MessagePack::UnpackError | MessagePack::TypeCastError
+        unpacker = MessagePack::IOUnpacker.new(io)
+        result = Hash(String, AnyData).new
+        unpacker.consume_table do |key|
+          result[key] = from_msgpack_type(unpacker.read_value)
+        end
+        result
+      rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
         {} of String => AnyData
       end
 
