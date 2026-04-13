@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.1.4 - 2026.04-13
+
+* Unit tests for `dispatch` method in `src/service/base.cr`
+
 ## 0.1.3 - 2026.04-13
 
 * Unit tests for `src/adapter/memory.cr`
