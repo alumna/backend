@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.1.2 - 2026.04-13
+
+* Unit tests for `src/rule/orchestrator.cr`
+
 ## 0.1.1 - 2026.04-13
 
 * Unit tests for `src/schema/validator.cr`
