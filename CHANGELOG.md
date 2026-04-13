@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## 0.1.1 - 2026.04-13
+
+* Unit tests for `src/schema/validator.cr`
+* Fix validator to check whether the result is `nil`, not whether it's truthy
+
 ## 0.1.0 - 2026.04-11
 
 * First working release

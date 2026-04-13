@@ -69,7 +69,7 @@ module Alumna
       when .float?
         value.as_f? || value.as_i? ? nil : "must be a number"
       when .bool?
-        value.as_bool? ? nil : "must be true or false"
+        !value.as_bool?.nil? ? nil : "must be true or false"
       else
         nil
       end
