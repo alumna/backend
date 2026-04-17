@@ -1,5 +1,5 @@
 module Alumna
-  VERSION = "0.1.8"
+  VERSION = "0.2.1"
 
   # Returns a ready-to-use validation rule for a schema.
   # Usage: before Alumna.validate(UserSchema), only: [:create, :update, :patch]

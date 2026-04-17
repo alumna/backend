@@ -98,6 +98,38 @@ Schemas are plain objects. Call `schema.validate(data, method)` to get back an `
 errors = PostSchema.validate(ctx.data, ctx.method)
 ```
 
+### Built-in validation rule
+
+Most services validate the same way, so Alumna ships a helper that builds the rule for you:
+
+```crystal
+Alumna.validate(UserSchema)
+```
+
+It’s equivalent to:
+
+```crystal
+Alumna::Rule.new do |ctx|
+  errors = UserSchema.validate(ctx.data, ctx.method)
+  next Alumna::RuleResult.continue if errors.empty?
+  details = errors.to_h { |e| {e.field, e.message} }
+  Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
+end
+```
+
+Because it receives `ctx.method`, it automatically respects `required_on: [:create, :update]`. Use it directly in your service:
+
+```crystal
+class UserService < Alumna::MemoryAdapter
+  def initialize
+    super("/users", UserSchema)
+    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+  end
+end
+```
+
+You still keep full control — write your own rule when you need custom messages, transformations, or conditional validation. `Alumna.validate` is just a zero-magic shortcut for the 90% case.
+
 ---
 
 ### Rules
