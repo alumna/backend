@@ -1,5 +1,13 @@
 # Alumna Backend changelog
 
+## 0.2.2 - 2026-04-18
+
+* Automated tests on multiple critical parts of the framework
+
+## 0.2.1 - 2026-04-18
+
+* _(docs)_ built-in validation rule
+
 ## 0.2.0 - 2026-04-17
 
 * Optimizations:

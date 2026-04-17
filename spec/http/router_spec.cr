@@ -236,4 +236,67 @@ describe "Router integration" do
       response.status_code.should eq(404)
     end
   end
+
+  # ── Serializer negotiation edge cases ──────────────────────────────────────────
+
+  describe "serializer negotiation" do
+    it "falls back to app default when Content-Type is missing" do
+      # post without Content-Type header — router should use JSON (app default)
+      client = HTTP::Client.new("127.0.0.1", PORT)
+      headers = HTTP::Headers{"Authorization" => "valid-token"}
+      response = client.post("/items", headers: headers, body: %|{"name":"NoCT"}|)
+      response.status_code.should eq(201)
+      JSON.parse(response.body)["name"].as_s.should eq("NoCT")
+    end
+
+    it "uses input serializer for output when Accept is missing" do
+      # GET with Content-Type: msgpack but no Accept — output should be msgpack
+      headers = AUTH.merge({"Content-Type" => "application/msgpack"})
+      response = get("/items", headers)
+      response.status_code.should eq(200)
+      response.content_type.should eq("application/msgpack")
+    end
+
+    it "resolves input and output serializers independently" do
+      # JSON in, MessagePack out
+      headers = AUTH.merge({
+        "Content-Type" => "application/json",
+        "Accept"       => "application/msgpack",
+      })
+      response = post("/items", %|{"name":"Indep"}|, headers)
+      response.status_code.should eq(201)
+      response.content_type.should eq("application/msgpack")
+    end
+  end
+
+  # ── Path matching edge cases ───────────────────────────────────────────────────
+
+  describe "path matching" do
+    it "returns 404 for trailing slash on id segment" do
+      # /items/1/ → id would be "1/", which contains '/', so no match
+      response = get("/items/1/", AUTH)
+      response.status_code.should eq(404)
+    end
+
+    it "returns 404 for nested path segments" do
+      response = get("/items/1/extra", AUTH)
+      response.status_code.should eq(404)
+    end
+  end
+
+  # ── Body parsing edge cases ────────────────────────────────────────────────────
+
+  describe "body parsing" do
+    it "treats missing body as empty hash, not nil" do
+      client = HTTP::Client.new("127.0.0.1", PORT)
+      headers = HTTP::Headers{
+        "Authorization" => "valid-token",
+        "Content-Type"  => "application/json",
+      }
+      # POST with headers but no body — should hit validation, not crash
+      response = client.post("/items", headers: headers)
+      response.status_code.should eq(422)
+      JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
+    end
+  end
 end
