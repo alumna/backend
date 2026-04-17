@@ -1,10 +1,7 @@
 module Alumna
-  class Orchestrator
-    def initialize(@rules : Array(Rule))
-    end
-
-    def run(ctx : RuleContext) : RuleContext
-      @rules.each do |rule|
+  module Orchestrator
+    def self.run(rules : Array(Rule), ctx : RuleContext) : RuleContext
+      rules.each do |rule|
         result = rule.call(ctx)
 
         if result.stop?

@@ -1,5 +1,14 @@
 # Alumna Backend changelog
 
+## 0.1.7 - 2026-04-17
+
+* Optimizations:
+  * `src/http/router.cr` - avoiding repeated intantiation of serializers
+  * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
+  * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
+  * `src/rule/orchestrator.cr` - changing it to a module
+  * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocation and method instantiation
+
 ## 0.1.6 - 2026-04-13
 
 * Unit tests for the router at `src/http/router.cr`

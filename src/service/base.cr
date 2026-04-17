@@ -85,7 +85,7 @@ module Alumna
     end
 
     private def run_rules(ctx : RuleContext, rules : Array(Rule))
-      Orchestrator.new(rules).run(ctx)
+      Orchestrator.run(rules, ctx)
     end
 
     private def collect_rules(method : ServiceMethod, phase : RulePhase) : Array(Rule)

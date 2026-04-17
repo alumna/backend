@@ -8,6 +8,10 @@ module Alumna
   end
 
   class Schema
+    EMAIL_REGEX = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
+    URL_REGEX   = /\Ahttps?:\/\/[^\s]+\z/
+    UUID_REGEX  = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
+
     def validate(data : Hash(String, AnyData)) : Array(FieldError)
       errors = [] of FieldError
 
@@ -80,11 +84,11 @@ module Alumna
       when .email?
         # Intentionally simple: local@domain.tld — not RFC 5322 complete,
         # which is the right pragmatic choice for a framework validator
-        !!(value =~ /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/)
+        !!(value =~ EMAIL_REGEX)
       when .url?
-        !!(value =~ /\Ahttps?:\/\/[^\s]+\z/)
+        !!(value =~ URL_REGEX)
       when .uuid?
-        !!(value =~ /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i)
+        !!(value =~ UUID_REGEX)
       else
         true
       end

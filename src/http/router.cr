@@ -2,6 +2,9 @@ require "http/server"
 
 module Alumna
   module Http
+    JSON_SERIALIZER    = JsonSerializer.new
+    MSGPACK_SERIALIZER = MsgpackSerializer.new
+
     class Router
       def initialize(@app : App)
       end
@@ -80,15 +83,15 @@ module Alumna
 
       private def resolve_input_serializer(request : HTTP::Request) : Serializer?
         case request.headers["content-type"]?.try(&.downcase)
-        when /msgpack/ then MsgpackSerializer.new
-        when /json/    then JsonSerializer.new
+        when /msgpack/ then MSGPACK_SERIALIZER
+        when /json/    then JSON_SERIALIZER
         end
       end
 
       private def resolve_output_serializer(request : HTTP::Request) : Serializer?
         case request.headers["accept"]?.try(&.downcase)
-        when /msgpack/ then MsgpackSerializer.new
-        when /json/    then JsonSerializer.new
+        when /msgpack/ then MSGPACK_SERIALIZER
+        when /json/    then JSON_SERIALIZER
         end
       end
 
