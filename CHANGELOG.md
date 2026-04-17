@@ -1,13 +1,16 @@
 # Alumna Backend changelog
 
-## 0.1.7 - 2026-04-17
+## 0.2.0 - 2026-04-17
 
 * Optimizations:
   * `src/http/router.cr` - avoiding repeated intantiation of serializers
   * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
-  * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
   * `src/rule/orchestrator.cr` - changing it to a module
-  * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocation and method instantiation
+  * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocations and method instantiations
+
+* Simplification of syntax allowing symbos for HTTP verbs like `:create`, `:update`, `:patch`, etc
+* `Alumna.validate(<Schema>)` for cleaner validations
+* First comprehensive integration test
 
 ## 0.1.6 - 2026-04-13
 

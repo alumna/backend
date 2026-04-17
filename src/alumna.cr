@@ -1,5 +1,16 @@
 module Alumna
-  VERSION = "0.1.0"
+  VERSION = "0.1.8"
+
+  # Returns a ready-to-use validation rule for a schema.
+  # Usage: before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+  def self.validate(schema : Schema) : Rule
+    Rule.new do |ctx|
+      errors = schema.validate(ctx.data, ctx.method)
+      next RuleResult.continue if errors.empty?
+      details = errors.each_with_object({} of String => String) { |e, h| h[e.field] = e.message }
+      RuleResult.stop(ServiceError.unprocessable("Validation failed", details))
+    end
+  end
 end
 
 # Core enums and primitives first — no dependencies

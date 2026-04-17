@@ -9,15 +9,27 @@ module Alumna
       @rules = RuleMap.new
     end
 
-    # --- Rule registration API ---
+    # --- Rule registration API (symbol-friendly) ---
 
-    def before(rule : Rule, only : Array(ServiceMethod) = [] of ServiceMethod) : self
-      register_rule(RulePhase::Before, only, rule)
+    # overload for single method
+    def before(rule : Rule, only : ServiceMethod | Symbol) : self
+      before(rule, only: [only])
+    end
+
+    def after(rule : Rule, only : ServiceMethod | Symbol) : self
+      after(rule, only: [only])
+    end
+
+    # existing array version (unchanged, except it now also accepts symbols)
+    def before(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
+      methods = only.map { |m| m.is_a?(Symbol) ? ServiceMethod.parse(m.to_s.capitalize) : m }
+      register_rule(RulePhase::Before, methods, rule)
       self
     end
 
-    def after(rule : Rule, only : Array(ServiceMethod) = [] of ServiceMethod) : self
-      register_rule(RulePhase::After, only, rule)
+    def after(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
+      methods = only.map { |m| m.is_a?(Symbol) ? ServiceMethod.parse(m.to_s.capitalize) : m }
+      register_rule(RulePhase::After, methods, rule)
       self
     end
 
@@ -95,7 +107,7 @@ module Alumna
     end
 
     private def register_rule(phase : RulePhase, methods : Array(ServiceMethod), rule : Rule)
-      targets = methods.empty? ? [nil] : methods.map { |m| m.as(ServiceMethod?) }
+      targets = methods.empty? ? [nil] : methods.map(&.as(ServiceMethod?))
       targets.each do |target|
         @rules[target] ||= {} of RulePhase => Array(Rule)
         @rules[target][phase] ||= [] of Rule

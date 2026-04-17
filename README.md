@@ -63,20 +63,40 @@ Crystal 1.9 or later is required.
 A schema describes the fields a service works with. It is used by rules for input validation and by adapters to understand the record structure.
 
 ```crystal
+# Type helpers
 UserSchema = Alumna::Schema.new
-  .field("name",  Alumna::FieldType::Str,  required: true,  min_length: 2, max_length: 100)
-  .field("email", Alumna::FieldType::Str,  required: true,  format: Alumna::FieldFormat::Email)
-  .field("age",   Alumna::FieldType::Int,  required: false)
-  .field("admin", Alumna::FieldType::Bool, required: false)
+  .str("name",  required: true,  min_length: 2, max_length: 100)
+  .str("email", required: true,  format: :email)
+  .int("age")
+  .bool("admin", required: false)
+
+# More explicit with `field` helper
+UserSchema = Alumna::Schema.new
+  .field("name",  :str, required: true,  min_length: 2, max_length: 100)
+  .field("email", :str, required: true,  format: :email)
+  .field("age",   :int)
+  .field("admin", :bool, required: false)
 ```
 
-**Supported field types:** `Str`, `Int`, `Float`, `Bool`, `Nullable`
+**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable` (or `Alumna::FieldType::Str`, etc.)
 
-**Supported formats:** `Email`, `Url`, `Uuid`
+**Supported formats:** `:email`, `:url`, `:uuid`
 
-**Supported constraints:** `required`, `min_length`, `max_length`, `format`
+**Supported constraints:** `required`, `required_on`, `min_length`, `max_length`, `format`
 
-Schemas are plain objects. You can pass them to a rule explicitly and call `schema.validate(ctx.data)` to get back an `Array(Alumna::FieldError)`, each carrying a `field` name and a `message`.
+`required_on` lets a field be required only for specific operations — perfect for PATCH:
+
+```crystal
+PostSchema = Alumna::Schema.new
+  .str("title", required_on: [:create, :update], min_length: 1, max_length: 200)
+  .str("body",  required_on: [:create, :update], min_length: 1)
+```
+
+Schemas are plain objects. Call `schema.validate(data, method)` to get back an `Array(Alumna::FieldError)`. Pass the current `ctx.method` so `required_on` is respected:
+
+```crystal
+errors = PostSchema.validate(ctx.data, ctx.method)
+```
 
 ---
 
@@ -88,29 +108,12 @@ A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rul
 # A rule that checks for a valid bearer token
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  if token == "Bearer my-secret"
-    Alumna::RuleResult.continue
-  else
-    Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
-  end
+  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
 end
 
-# A rule that validates the request body against a schema
-ValidateUser = Alumna::Rule.new do |ctx|
-  errors = UserSchema.validate(ctx.data)
-  if errors.empty?
-    Alumna::RuleResult.continue
-  else
-    details = errors.each_with_object({} of String => String) do |e, h|
-      h[e.field] = e.message
-    end
-    Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
-  end
-end
-
-# A rule that logs every completed response
-LogRequest = Alumna::Rule.new do |ctx|
-  puts "[#{ctx.method}] #{ctx.path}"
+# An after-rule that adds a response header
+AddRequestId = Alumna::Rule.new do |ctx|
+  ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
   Alumna::RuleResult.continue
 end
 ```
@@ -145,7 +148,7 @@ RuleResult.stop(ServiceError.bad_request("...")) # halt with a custom error
 **Available `ServiceError` constructors:**
 
 ```crystal
-ServiceError.bad_request("message", details)  # 400
+ServiceError.bad_request("message", details)   # 400
 ServiceError.unauthorized("message")           # 401
 ServiceError.forbidden("message")              # 403
 ServiceError.not_found("message")              # 404
@@ -159,28 +162,15 @@ ServiceError.internal("message")               # 500
 
 ### Services
 
-A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` directly when implementing a real storage adapter) and registers its rules in the constructor.
+A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` directly) and registers its rules in the constructor.
 
 ```crystal
 class UserService < Alumna::MemoryAdapter
   def initialize
     super("/users", UserSchema)
-
-    # Applied to every method, before the service call
-    self.before(Authenticate)
-
-    # Applied only to create, update, and patch
-    self.before(
-      ValidateUser,
-      only: [
-        Alumna::ServiceMethod::Create,
-        Alumna::ServiceMethod::Update,
-        Alumna::ServiceMethod::Patch,
-      ]
-    )
-
-    # Applied to every method, after the service call
-    self.after(LogRequest)
+    before Authenticate
+    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    after AddRequestId
   end
 end
 ```
@@ -189,14 +179,12 @@ end
 
 | Service method | HTTP verb | Path |
 |---|---|---|
-| `find(ctx)` | `GET` | `/users` |
-| `get(ctx)` | `GET` | `/users/:id` |
-| `create(ctx)` | `POST` | `/users` |
-| `update(ctx)` | `PUT` | `/users/:id` |
-| `patch(ctx)` | `PATCH` | `/users/:id` |
-| `remove(ctx)` | `DELETE` | `/users/:id` |
-
-Query parameters are available at `ctx.params`. The in-memory adapter applies simple equality filtering automatically, so `GET /users?admin=true` returns only records where `admin == "true"`.
+| `find` | `GET` | `/users` |
+| `get` | `GET` | `/users/:id` |
+| `create` | `POST` | `/users` |
+| `update` | `PUT` | `/users/:id` |
+| `patch` | `PATCH` | `/users/:id` |
+| `remove` | `DELETE` | `/users/:id` |
 
 ---
 
@@ -208,99 +196,45 @@ app.use("/users", UserService.new)
 app.listen(3000)
 ```
 
-To use MessagePack as the default serializer for all responses:
-
-```crystal
-app = Alumna::App.new(serializer: Alumna::Http::MsgpackSerializer.new)
-```
-
-Clients can also negotiate the format per request using standard HTTP headers. `Content-Type` determines how the request body is parsed; `Accept` determines the response format.
-
 ---
 
 ## Full example
 
 ```crystal
-# app.cr
 require "alumna"
 
-# ── Schemas ────────────────────────────────────────────────────────────────────
-
 UserSchema = Alumna::Schema.new
-  .field("name",  Alumna::FieldType::Str,  required: true,  min_length: 2, max_length: 100)
-  .field("email", Alumna::FieldType::Str,  required: true,  format: Alumna::FieldFormat::Email)
-  .field("age",   Alumna::FieldType::Int,  required: false)
+  .str("name",  required: true, min_length: 2, max_length: 100)
+  .str("email", required: true, format: :email)
+  .int("age")
+end
 
 PostSchema = Alumna::Schema.new
-  .field("title", Alumna::FieldType::Str, required: true, min_length: 1, max_length: 200)
-  .field("body",  Alumna::FieldType::Str, required: true, min_length: 1)
+  .str("title", required_on: [:create, :update], min_length: 1, max_length: 200)
+  .str("body",  required_on: [:create, :update], min_length: 1)
+end
 
-# ── Rules ──────────────────────────────────────────────────────────────────────
-
-require "./rules/authenticate"
-require "./rules/log_request"
-
-# rules/authenticate.cr
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  if token == "Bearer my-secret"
-    Alumna::RuleResult.continue
-  else
-    Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
-  end
+  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
 end
-
-# rules/log_request.cr
-LogRequest = Alumna::Rule.new do |ctx|
-  puts "[#{ctx.method}] #{ctx.path} (#{ctx.provider})"
-  Alumna::RuleResult.continue
-end
-
-# ── Validation rules (schema-specific) ────────────────────────────────────────
-
-ValidateUser = Alumna::Rule.new do |ctx|
-  errors = UserSchema.validate(ctx.data)
-  next Alumna::RuleResult.continue if errors.empty?
-  details = errors.each_with_object({} of String => String) { |e, h| h[e.field] = e.message }
-  Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
-end
-
-ValidatePost = Alumna::Rule.new do |ctx|
-  errors = PostSchema.validate(ctx.data)
-  next Alumna::RuleResult.continue if errors.empty?
-  details = errors.each_with_object({} of String => String) { |e, h| h[e.field] = e.message }
-  Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
-end
-
-# ── Services ───────────────────────────────────────────────────────────────────
 
 class UserService < Alumna::MemoryAdapter
   def initialize
     super("/users", UserSchema)
-    self.before(Authenticate)
-    self.before(ValidateUser, only: [
-      Alumna::ServiceMethod::Create,
-      Alumna::ServiceMethod::Update,
-      Alumna::ServiceMethod::Patch,
-    ])
-    self.after(LogRequest)
+    before Authenticate
+    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
   end
 end
 
 class PostService < Alumna::MemoryAdapter
   def initialize
     super("/posts", PostSchema)
-    self.before(Authenticate)
-    self.before(ValidatePost, only: [
-      Alumna::ServiceMethod::Create,
-      Alumna::ServiceMethod::Update,
-      Alumna::ServiceMethod::Patch,
-    ])
-    self.after(LogRequest)
+    before Authenticate
+    before Alumna.validate(PostSchema), only: [:create, :update, :patch]
+
   end
 end
-
-# ── App ────────────────────────────────────────────────────────────────────────
 
 app = Alumna::App.new
 app.use("/users", UserService.new)
@@ -308,41 +242,7 @@ app.use("/posts", PostService.new)
 app.listen(3000)
 ```
 
-**Example requests:**
-
-```bash
-# Create a user
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -H "authorization: Bearer my-secret" \
-  -d '{"name": "Alice", "email": "alice@example.com", "age": 30}'
-
-# List all users
-curl http://localhost:3000/users -H "authorization: Bearer my-secret"
-
-# Get a specific user
-curl http://localhost:3000/users/1 -H "authorization: Bearer my-secret"
-
-# Partial update
-curl -X PATCH http://localhost:3000/users/1 \
-  -H "Content-Type: application/json" \
-  -H "authorization: Bearer my-secret" \
-  -d '{"name": "Alice Smith"}'
-
-# Delete
-curl -X DELETE http://localhost:3000/users/1 -H "authorization: Bearer my-secret"
-
-# Validation error
-curl -X POST http://localhost:3000/users \
-  -H "Content-Type: application/json" \
-  -H "authorization: Bearer my-secret" \
-  -d '{"name": "A"}'
-# → 422 {"error":"Validation failed","details":{"name":"must be at least 2 characters","email":"is required"}}
-
-# Missing token
-curl http://localhost:3000/users
-# → 401 {"error":"Unauthorized","details":{}}
-```
+PATCH works without sending required fields, because `required_on` limits the requirement to create/update.
 
 ---
 

@@ -14,12 +14,13 @@ module Alumna
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
       @mutex.synchronize do
         records = @store.values
-        return records if ctx.params.empty?
+        return records.to_a if ctx.params.empty?
         records.select do |record|
           ctx.params.all? do |key, value|
-            record[key]?.try(&.to_s) == value
+            # use as_s? to avoid the extra quotes JSON::Any#to_s adds
+            record[key]?.try(&.as_s?) == value
           end
-        end
+        end.to_a
       end
     end
 

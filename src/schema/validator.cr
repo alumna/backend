@@ -12,7 +12,7 @@ module Alumna
     URL_REGEX   = /\Ahttps?:\/\/[^\s]+\z/
     UUID_REGEX  = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
 
-    def validate(data : Hash(String, AnyData)) : Array(FieldError)
+    def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
       errors = [] of FieldError
 
       @fields.each do |field|
@@ -21,9 +21,11 @@ module Alumna
         # --- Presence check ---
         if value.nil? || value.raw.nil?
           if field.required
-            errors << FieldError.new(field.name, "is required")
+            # required_on == nil → apply to all methods (old behaviour)
+            # method == nil    → also apply (keeps backward compatibility)
+            applies = field.required_on.nil? || method.nil? || field.required_on.try(&.includes?(method)) || false
+            errors << FieldError.new(field.name, "is required") if applies
           end
-          # Nothing more to validate for a missing optional field
           next
         end
 

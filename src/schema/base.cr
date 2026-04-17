@@ -3,6 +3,7 @@ module Alumna
     getter name : String
     getter type : FieldType
     getter required : Bool
+    getter required_on : Array(ServiceMethod)?
     getter min_length : Int32?
     getter max_length : Int32?
     getter format : FieldFormat?
@@ -14,22 +15,17 @@ module Alumna
       @min_length : Int32? = nil,
       @max_length : Int32? = nil,
       @format : FieldFormat? = nil,
+      @required_on : Array(ServiceMethod)? = nil,
     )
     end
   end
 
   enum FieldFormat
-    Email
-    Url
-    Uuid
+    Email; Url; Uuid
   end
 
   enum FieldType
-    Str
-    Int
-    Float
-    Bool
-    Nullable # wraps another type — for v1, nullable fields declare this
+    Str; Int; Float; Bool; Nullable
   end
 
   class Schema
@@ -39,23 +35,61 @@ module Alumna
       @fields = [] of FieldDescriptor
     end
 
+    # Core API — now accepts Symbols for ergonomics
     def field(
       name : String,
-      type : FieldType,
+      type : FieldType | Symbol,
       required : Bool = true,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
       format : FieldFormat? = nil,
+      required_on : Array(ServiceMethod) | Array(Symbol) | Nil = nil,
     ) : self
+      # normalize :str → FieldType::Str, :create → ServiceMethod::Create
+      field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
+
+      norm_required_on = required_on.try &.map do |m|
+        m.is_a?(ServiceMethod) ? m : ServiceMethod.parse(m.to_s.capitalize)
+      end
+
       @fields << FieldDescriptor.new(
         name: name,
-        type: type,
+        type: field_type,
         required: required,
         min_length: min_length,
         max_length: max_length,
-        format: format
+        format: format,
+        required_on: norm_required_on,
       )
       self
+    end
+
+    # --- tiny helpers for readability ---
+    def str(name, **opts)
+      field(name, :str, **opts)
+    end
+
+    def int(name, **opts)
+      field(name, :int, **opts)
+    end
+
+    def float(name, **opts)
+      field(name, :float, **opts)
+    end
+
+    def bool(name, **opts)
+      field(name, :bool, **opts)
+    end
+
+    def nullable(name, **opts)
+      field(name, :nullable, **opts)
+    end
+
+    # optional block-style builder
+    def self.build(& : self ->) : self
+      schema = new
+      yield schema
+      schema
     end
   end
 end
