@@ -18,7 +18,7 @@ jobs:
       - name: Install Crystal
         uses: crystal-lang/install-crystal@v1
         with:
-          crystal: "latest"   # or pin to "1.14.0" for reproducibility
+          crystal: ${{ matrix.crystal }}
 
       - name: Cache shards
         uses: actions/cache@v4
@@ -26,12 +26,13 @@ jobs:
           path: |
             lib
             ~/.cache/shards
-          key: ${{ runner.os }}-shards-${{ hashFiles('shard.yml', 'shard.lock') }}
+            %USERPROFILE%\.cache\shards
+          key: ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-${{ hashFiles('shard.yml') }}
           restore-keys: |
-            ${{ runner.os }}-shards-
+            ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-
 
       - name: Install dependencies
-        run: shards install --frozen --skip-postinstall
+        run: shards install
 
       - name: Run specs
         run: crystal spec --error-trace --verbose
