@@ -19,13 +19,22 @@ module Alumna
         value = data[field.name]?
 
         # --- Presence check ---
-        if value.nil? || value.raw.nil?
-          if field.required
-            # required_on == nil → apply to all methods (old behaviour)
-            # method == nil    → also apply (keeps backward compatibility)
-            applies = field.required_on.nil? || method.nil? || field.required_on.try(&.includes?(method)) || false
-            errors << FieldError.new(field.name, "is required") if applies
-          end
+        if value.nil?
+          req_on = field.required_on
+          should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
+
+          errors << FieldError.new(field.name, "is required") if should_require
+          next
+        end
+
+        # --- Explicit null ---
+        if value.raw.nil?
+          next if field.type.nullable?
+
+          req_on = field.required_on
+          should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
+
+          errors << FieldError.new(field.name, "is required") if should_require
           next
         end
 

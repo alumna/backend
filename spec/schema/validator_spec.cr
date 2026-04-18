@@ -213,4 +213,55 @@ describe Alumna::Schema do
       errs.first.message.should eq("must be a string")
     end
   end
+
+  describe "edge cases" do
+    it "requires a Nullable field when missing, but accepts null" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Nullable, required: true)
+      error_fields(schema, empty_data).should contain("v")
+      errors_for(schema, {"v" => any_nil}).should be_empty
+    end
+
+    it "Int rejects float values" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Int)
+      error_on(schema, {"v" => any(2.5)}, "v").should eq("must be an integer")
+    end
+
+    it "Float rejects bool" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Float)
+      error_on(schema, {"v" => any(true)}, "v").should eq("must be a number")
+    end
+
+    it "returns multiple errors for one field" do
+      schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str,
+        min_length: 10,
+        format: Alumna::FieldFormat::Email
+      )
+      # "a@b" is too short AND fails the email regex (no TLD)
+      errs = errors_for(schema, {"email" => any("a@b")})
+      errs.map(&.message).should contain("must be at least 10 characters")
+      errs.map(&.message).should contain("must be a valid email address")
+      errs.size.should eq(2)
+    end
+
+    it "ignores fields not defined in schema" do
+      schema = Alumna::Schema.new.field("name", Alumna::FieldType::Str)
+      errors_for(schema, {"name" => any("ok"), "extra" => any("ignored")}).should be_empty
+    end
+
+    it "accepts uppercase UUID" do
+      schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: Alumna::FieldFormat::Uuid)
+      errors_for(schema, {"id" => any("550E8400-E29B-41D4-A716-446655440000")}).should be_empty
+    end
+
+    it "rejects URL with trailing space" do
+      schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: Alumna::FieldFormat::Url)
+      error_on(schema, {"u" => any("https://example.com ")}, "u").should eq("must be a valid URL (http or https)")
+    end
+
+    it "required_on implies presence even when required: false" do
+      schema = Alumna::Schema.new.str("title", required: false, required_on: [:create])
+      errors_for(schema, empty_data, Alumna::ServiceMethod::Create).first.message.should eq("is required")
+      errors_for(schema, empty_data, Alumna::ServiceMethod::Patch).should be_empty
+    end
+  end
 end

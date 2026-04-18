@@ -42,8 +42,8 @@ module Alumna
       required : Bool = true,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
-      format : FieldFormat | Symbol | Nil = nil, # ← CHANGED: allow Symbol
-      required_on : Array(ServiceMethod) | Array(Symbol) | Nil = nil,
+      format : FieldFormat | Symbol | Nil = nil,
+      required_on : Array(ServiceMethod | Symbol) | Nil = nil,
     ) : self
       # normalize :str → FieldType::Str
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type

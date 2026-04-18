@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.2.4 - 2026-04-18
+
+* Test: covered `src/schema/base.cr`
+
 ## 0.2.3 - 2026-04-18
 
 * Fix: make `format:` accept symbols like everything else in `src/schema/base.cr`
@@ -10,7 +14,7 @@
 
 ## 0.2.1 - 2026-04-18
 
-* _(docs)_ built-in validation rule
+* Docs: built-in validation rule
 
 ## 0.2.0 - 2026-04-17
 
