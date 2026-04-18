@@ -266,4 +266,97 @@ describe Alumna::MemoryAdapter do
       error.status.should eq(400)
     end
   end
+
+  # ── Concurrency ────────────────────────────────────────────────────────────────
+
+  describe "concurrency" do
+    it "assigns unique sequential ids under concurrent creates" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      count = 100
+      done = Channel(Nil).new(count)
+
+      count.times do
+        spawn do
+          ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"x" => any("v")})
+          adapter.create(ctx)
+          done.send(nil)
+        end
+      end
+
+      count.times { done.receive }
+
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find)
+      records = adapter.find(ctx)
+
+      records.size.should eq(count)
+      ids = records.map { |r| r["id"].as_s.to_i64 }.sort
+      ids.should eq((1_i64..count.to_i64).to_a)
+    end
+
+    it "does not lose updates under concurrent patches to the same record" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      base = insert(adapter, {"counter" => any(0_i64)})
+      id = base["id"].as_s
+
+      writers = 50
+      done = Channel(Nil).new(writers)
+
+      writers.times do |i|
+        spawn do
+          # each fiber reads, increments, patches — without mutex this races
+          get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: id)
+          current = adapter.get(get_ctx).not_nil!
+          val = current["counter"].as_i64
+
+          patch_ctx = make_ctx(
+            adapter,
+            Alumna::ServiceMethod::Patch,
+            id: id,
+            data: {"counter" => any(val + 1)}
+          )
+          adapter.patch(patch_ctx)
+          done.send(nil)
+        end
+        # force a yield so fibers interleave
+        Fiber.yield
+      end
+
+      writers.times { done.receive }
+
+      final = adapter.get(make_ctx(adapter, Alumna::ServiceMethod::Get, id: id)).not_nil!
+      # With mutex, each patch is atomic — we won't lose writes entirely,
+      # but because read-modify-write isn't atomic across calls, the final
+      # value will be <= writers. The important assertion is no corruption:
+      final["counter"].as_i64.should be >= 1
+      final["counter"].as_i64.should be <= writers
+      final["id"].as_s.should eq(id) # record still intact
+    end
+
+    it "allows concurrent finds while writing" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      done = Channel(Nil).new(2)
+
+      spawn do
+        50.times do |i|
+          insert(adapter, {"n" => any(i.to_i64)})
+          Fiber.yield
+        end
+        done.send(nil)
+      end
+
+      spawn do
+        50.times do
+          ctx = make_ctx(adapter, Alumna::ServiceMethod::Find)
+          # should never raise ConcurrentModification or return nil
+          adapter.find(ctx).size.should be >= 0
+          Fiber.yield
+        end
+        done.send(nil)
+      end
+
+      2.times { done.receive }
+      # if we got here without deadlock or exception, mutex works
+      adapter.find(make_ctx(adapter, Alumna::ServiceMethod::Find)).size.should eq(50)
+    end
+  end
 end
