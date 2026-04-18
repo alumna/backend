@@ -239,12 +239,10 @@ UserSchema = Alumna::Schema.new
   .str("name",  required: true, min_length: 2, max_length: 100)
   .str("email", required: true, format: :email)
   .int("age")
-end
 
 PostSchema = Alumna::Schema.new
   .str("title", required_on: [:create, :update], min_length: 1, max_length: 200)
   .str("body",  required_on: [:create, :update], min_length: 1)
-end
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?

@@ -35,19 +35,23 @@ module Alumna
       @fields = [] of FieldDescriptor
     end
 
-    # Core API — now accepts Symbols for ergonomics
+    # Core API — accepts Symbols for ergonomics
     def field(
       name : String,
       type : FieldType | Symbol,
       required : Bool = true,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
-      format : FieldFormat? = nil,
+      format : FieldFormat | Symbol | Nil = nil, # ← CHANGED: allow Symbol
       required_on : Array(ServiceMethod) | Array(Symbol) | Nil = nil,
     ) : self
-      # normalize :str → FieldType::Str, :create → ServiceMethod::Create
+      # normalize :str → FieldType::Str
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
 
+      # normalize :email → FieldFormat::Email   ← NEW
+      norm_format = format.is_a?(Symbol) ? FieldFormat.parse(format.to_s.capitalize) : format
+
+      # normalize :create → ServiceMethod::Create
       norm_required_on = required_on.try &.map do |m|
         m.is_a?(ServiceMethod) ? m : ServiceMethod.parse(m.to_s.capitalize)
       end
@@ -58,7 +62,7 @@ module Alumna
         required: required,
         min_length: min_length,
         max_length: max_length,
-        format: format,
+        format: norm_format,
         required_on: norm_required_on,
       )
       self

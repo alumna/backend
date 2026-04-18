@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.2.3 - 2026-04-18
+
+* Fix: make `format:` accept symbols like everything else in `src/schema/base.cr`
+
 ## 0.2.2 - 2026-04-18
 
 * Automated tests on multiple critical parts of the framework

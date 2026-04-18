@@ -5,10 +5,15 @@ require "../src/alumna"
 # Describes the shape of a message. The adapter reads .fields to know
 # what to store; rules call schema.validate(data) for input checking.
 
+# MessageSchema = Alumna::Schema.new
+#   .field("body", :str, required: true, min_length: 1, max_length: 500)
+#   .field("author", :str, required: true, min_length: 1)
+#   .field("read", :bool, required: false)
+
 MessageSchema = Alumna::Schema.new
-  .field("body", Alumna::FieldType::Str, required: true, min_length: 1, max_length: 500)
-  .field("author", Alumna::FieldType::Str, required: true, min_length: 1)
-  .field("read", Alumna::FieldType::Bool, required: false)
+  .str("body", required: true, min_length: 1, max_length: 500)
+  .str("author", required: true, min_length: 1)
+  .bool("read", required: false)
 
 # ── 2. Rules ───────────────────────────────────────────────────────────────────
 # Each rule is a named Proc constant. It receives a context, returns a
