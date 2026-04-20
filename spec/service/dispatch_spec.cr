@@ -240,8 +240,12 @@ describe "Service#dispatch" do
       ctx = make_ctx(service, Alumna::ServiceMethod::Find)
       service.dispatch(ctx)
 
-      ctx.error.not_nil!.message.should eq("no access")
-      ctx.error.not_nil!.status.should eq(401)
+      error = ctx.error
+      error.should_not be_nil
+      if error
+        error.message.should eq("no access")
+        error.status.should eq(401)
+      end
     end
   end
 
@@ -293,7 +297,11 @@ describe "Service#dispatch" do
       ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => any("y")})
       service.dispatch(ctx)
 
-      ctx.error.not_nil!.status.should eq(404)
+      error = ctx.error
+      error.should_not be_nil
+      if error
+        error.status.should eq(404)
+      end
     end
 
     it "sets ctx.phase to Error" do

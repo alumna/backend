@@ -79,8 +79,12 @@ describe Alumna::Orchestrator do
       rule = Alumna::Rule.new { |ctx| Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized("no token")) }
       ctx = make_ctx
       Alumna::Orchestrator.run([rule], ctx)
-      ctx.error.not_nil!.message.should eq("no token")
-      ctx.error.not_nil!.status.should eq(401)
+      error = ctx.error
+      error.should_not be_nil
+      if error
+        error.message.should eq("no token")
+        error.status.should eq(401)
+      end
     end
 
     it "sets ctx.phase to Error" do
@@ -109,7 +113,11 @@ describe Alumna::Orchestrator do
       ]
       ctx = make_ctx
       Alumna::Orchestrator.run(rules, ctx)
-      ctx.error.not_nil!.message.should eq("error-one")
+      error = ctx.error
+      error.should_not be_nil
+      if error
+        error.message.should eq("error-one")
+      end
       log.should eq(["first"])
     end
   end

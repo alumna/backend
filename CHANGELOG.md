@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.2.5 - 2026-04-20
+
+* Test: Flow typing in spec tests
+
 ## 0.2.4 - 2026-04-18
 
 * Test: covered `src/schema/base.cr`

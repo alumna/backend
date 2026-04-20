@@ -75,7 +75,11 @@ describe Alumna::MemoryAdapter do
       adapter = Alumna::MemoryAdapter.new("/items")
       insert(adapter, {"name" => any("Alice")})
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
-      adapter.get(get_ctx).not_nil!["name"].as_s.should eq("Alice")
+      record = adapter.get(get_ctx)
+      record.should_not be_nil
+      if record
+        record["name"].as_s.should eq("Alice")
+      end
     end
   end
 
@@ -135,7 +139,9 @@ describe Alumna::MemoryAdapter do
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(ctx)
       record.should_not be_nil
-      record.not_nil!["name"].as_s.should eq("Alice")
+      if record
+        record["name"].as_s.should eq("Alice")
+      end
     end
 
     it "returns nil for an unknown id" do
@@ -177,7 +183,11 @@ describe Alumna::MemoryAdapter do
       update_ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")})
       adapter.update(update_ctx)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
-      adapter.get(get_ctx).not_nil!["name"].as_s.should eq("Alice Smith")
+      record = adapter.get(get_ctx)
+      record.should_not be_nil
+      if record
+        record["name"].as_s.should eq("Alice Smith")
+      end
     end
 
     it "raises a 404 error when the id does not exist" do
@@ -214,9 +224,12 @@ describe Alumna::MemoryAdapter do
       patch_ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")})
       adapter.patch(patch_ctx)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
-      record = adapter.get(get_ctx).not_nil!
-      record["name"].as_s.should eq("Alice")
-      record["role"].as_s.should eq("admin")
+      record = adapter.get(get_ctx)
+      record.should_not be_nil
+      if record
+        record["name"].as_s.should eq("Alice")
+        record["role"].as_s.should eq("admin")
+      end
     end
 
     it "raises a 404 error when the id does not exist" do
@@ -305,16 +318,19 @@ describe Alumna::MemoryAdapter do
         spawn do
           # each fiber reads, increments, patches — without mutex this races
           get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: id)
-          current = adapter.get(get_ctx).not_nil!
-          val = current["counter"].as_i64
+          current = adapter.get(get_ctx)
+          current.should_not be_nil
+          if current
+            val = current["counter"].as_i64
 
-          patch_ctx = make_ctx(
-            adapter,
-            Alumna::ServiceMethod::Patch,
-            id: id,
-            data: {"counter" => any(val + 1)}
-          )
-          adapter.patch(patch_ctx)
+            patch_ctx = make_ctx(
+              adapter,
+              Alumna::ServiceMethod::Patch,
+              id: id,
+              data: {"counter" => any(val + 1)}
+            )
+            adapter.patch(patch_ctx)
+          end
           done.send(nil)
         end
         # force a yield so fibers interleave
@@ -323,13 +339,16 @@ describe Alumna::MemoryAdapter do
 
       writers.times { done.receive }
 
-      final = adapter.get(make_ctx(adapter, Alumna::ServiceMethod::Get, id: id)).not_nil!
-      # With mutex, each patch is atomic — we won't lose writes entirely,
-      # but because read-modify-write isn't atomic across calls, the final
-      # value will be <= writers. The important assertion is no corruption:
-      final["counter"].as_i64.should be >= 1
-      final["counter"].as_i64.should be <= writers
-      final["id"].as_s.should eq(id) # record still intact
+      final = adapter.get(make_ctx(adapter, Alumna::ServiceMethod::Get, id: id))
+      final.should_not be_nil
+      if final
+        # With mutex, each patch is atomic — we won't lose writes entirely,
+        # but because read-modify-write isn't atomic across calls, the final
+        # value will be <= writers. The important assertion is no corruption:
+        final["counter"].as_i64.should be >= 1
+        final["counter"].as_i64.should be <= writers
+        final["id"].as_s.should eq(id) # record still intact
+      end
     end
 
     it "allows concurrent finds while writing" do
