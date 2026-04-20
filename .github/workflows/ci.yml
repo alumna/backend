@@ -29,9 +29,7 @@ jobs:
       - run: crystal tool format --check
 
   coverage:
-      runs-on: ubuntu-latest
-      container:
-        image: debian:13
+      runs-on: ubuntu-22.04
       permissions:
         contents: read
         pull-requests: write
@@ -47,14 +45,14 @@ jobs:
         - name: Install kcov
           run: |
             sudo apt-get update
-            sudo apt-get install -y kcov libdw-dev libelf-dev
+            sudo apt-get install -y kcov
 
         - uses: actions/cache@v4
           with:
             path: |
               lib
               ~/.cache/shards
-            key: ubuntu-crystal-latest-shards-${{ hashFiles('shard.yml') }}
+            key: ubuntu-22.04-crystal-latest-shards-${{ hashFiles('shard.yml') }}
 
         - run: shards install
 
@@ -85,10 +83,3 @@ jobs:
             flags: unittests
             fail_ci_if_error: true
             verbose: true
-
-        - name: Upload HTML report
-          uses: actions/upload-artifact@v4
-          with:
-            name: kcov-html
-            path: coverage/
-            retention-days: 7
