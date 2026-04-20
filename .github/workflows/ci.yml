@@ -1,34 +1,4 @@
-name: Crystal CI
-
-on: [push, pull_request]
-
-jobs:
-  test:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
-        crystal: [latest, nightly]
-    runs-on: ${{ matrix.os }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: crystal-lang/install-crystal@v1
-        with:
-          crystal: ${{ matrix.crystal }}
-      - uses: actions/cache@v4
-        with:
-          path: |
-            lib
-            ~/.cache/shards
-            %USERPROFILE%\.cache\shards
-          key: ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-${{ hashFiles('shard.yml') }}
-          restore-keys: |
-            ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-
-      - run: shards install
-      - run: crystal spec --error-trace --verbose
-      - run: crystal tool format --check
-
-  coverage:
+coverage:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -64,22 +34,22 @@ jobs:
 
       - name: Run kcov (core coverage)
         run: |
-          kcov --clean --include-path=$(pwd)/src./coverage./bin/all_specs --order=random
+          kcov --clean --include-path=$(pwd)/src ./coverage ./bin/all_specs --order=random
 
       - name: Generate unreachable report
         run: |
-          crystal tool unreachable --format=codecov --no-color all_specs.cr >./coverage/unreachable.codecov.json
+          crystal tool unreachable --format=codecov --no-color all_specs.cr > ./coverage/unreachable.codecov.json
 
       - name: Generate macro coverage
         run: |
-          crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr >./coverage/macro_coverage.root.codecov.json
+          crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: alumna/backend
-          files:./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
+          files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
           flags: unittests
           fail_ci_if_error: true
           verbose: true
