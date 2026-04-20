@@ -7,16 +7,16 @@ module Alumna
 
     class Router
       def initialize(@app : App)
+        # cache the services hash – App builds it before the server starts
+        @services = @app.services
       end
 
       def handle(http_ctx : HTTP::Server::Context) : Nil
         request = http_ctx.request
         response = http_ctx.response
 
-        # Input and output serializers are resolved independently
         input_serializer = resolve_input_serializer(request) || @app.serializer
         output_serializer = resolve_output_serializer(request) || input_serializer
-
         response.content_type = output_serializer.content_type
 
         match = resolve_service(request.path)
@@ -26,7 +26,6 @@ module Alumna
         end
 
         service, id = match
-
         method = resolve_method(request.method, id)
         unless method
           Responder.write_error(response, ServiceError.new("Method not allowed", 405), output_serializer)
@@ -50,19 +49,27 @@ module Alumna
         )
 
         service.dispatch(ctx)
-
         Responder.write(response, ctx, output_serializer)
       end
 
       private def resolve_service(path : String) : {Service, String?}?
-        @app.services.each do |registered_path, service|
-          return {service, nil} if path == registered_path
+        # 1. exact match – constant time
+        if service = @services[path]?
+          return {service, nil}
+        end
 
-          prefix = registered_path.rstrip('/')
-          if path.starts_with?(prefix + "/")
-            id = path[(prefix.size + 1)..]
-            return {service, id} unless id.empty? || id.includes?('/')
-          end
+        # 2. id match – split on last slash only
+        slash = path.rindex('/')
+        return nil if slash.nil? || slash == 0
+
+        base = path[0...slash]
+        id = path[slash + 1..]
+
+        # reject empty id and nested segments – matches current spec
+        return nil if id.empty? || id.includes?('/')
+
+        if service = @services[base]?
+          return {service, id}
         end
 
         nil
