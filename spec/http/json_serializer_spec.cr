@@ -108,14 +108,9 @@ describe Alumna::Http::JsonSerializer do
   # ── decode: malformed input ───────────────────────────────────────────────────
 
   describe "#decode with malformed input" do
-    it "returns an empty hash for invalid JSON" do
+    it "raises ServiceError for invalid JSON" do
       io = IO::Memory.new("not valid json")
-      json_serializer.decode(io).should be_empty
-    end
-
-    it "returns an empty hash for a JSON array (not an object)" do
-      io = IO::Memory.new("[1, 2, 3]")
-      json_serializer.decode(io).should be_empty
+      expect_raises(Alumna::ServiceError) { json_serializer.decode(io) }
     end
 
     it "returns an empty hash for an empty body" do

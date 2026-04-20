@@ -16,6 +16,9 @@ module Alumna
       end
 
       def decode(io : IO) : Hash(String, AnyData)
+        peeked = io.peek
+        return {} of String => AnyData if peeked.nil? || peeked.empty?
+
         unpacker = MessagePack::IOUnpacker.new(io)
         result = Hash(String, AnyData).new
         unpacker.consume_table do |key|
@@ -23,7 +26,7 @@ module Alumna
         end
         result
       rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
-        {} of String => AnyData
+        raise ServiceError.new("Malformed MessagePack", 400)
       end
 
       private def to_msgpack_type(hash : Hash(String, AnyData)) : Hash(String, MessagePack::Type)

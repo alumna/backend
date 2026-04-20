@@ -7,7 +7,6 @@ module Alumna
 
     class Router
       def initialize(@app : App)
-        # cache the services hash – App builds it before the server starts
         @services = @app.services
       end
 
@@ -18,6 +17,13 @@ module Alumna
         input_serializer = resolve_input_serializer(request) || @app.serializer
         output_serializer = resolve_output_serializer(request) || input_serializer
         response.content_type = output_serializer.content_type
+
+        begin
+          data = parse_body(request, input_serializer)
+        rescue ex : ServiceError
+          Responder.write_error(response, ex, output_serializer)
+          return
+        end
 
         match = resolve_service(request.path)
         unless match
@@ -33,7 +39,6 @@ module Alumna
         end
 
         params = parse_query(request)
-        data = parse_body(request, input_serializer)
         headers = parse_headers(request)
 
         ctx = RuleContext.new(
@@ -53,25 +58,17 @@ module Alumna
       end
 
       private def resolve_service(path : String) : {Service, String?}?
-        # 1. exact match – constant time
         if service = @services[path]?
           return {service, nil}
         end
-
-        # 2. id match – split on last slash only
         slash = path.rindex('/')
         return nil if slash.nil? || slash == 0
-
         base = path[0...slash]
         id = path[slash + 1..]
-
-        # reject empty id and nested segments – matches current spec
         return nil if id.empty? || id.includes?('/')
-
         if service = @services[base]?
           return {service, id}
         end
-
         nil
       end
 
