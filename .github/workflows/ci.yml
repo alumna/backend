@@ -1,62 +1,92 @@
-coverage:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
+name: Crystal CI
+
+on: [push, pull_request]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        crystal: [latest, nightly]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
       - uses: crystal-lang/install-crystal@v1
         with:
-          crystal: latest
-
-      - name: Install kcov
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y kcov libdw-dev libelf-dev
-
+          crystal: ${{ matrix.crystal }}
       - uses: actions/cache@v4
         with:
           path: |
             lib
             ~/.cache/shards
-          key: ubuntu-crystal-latest-shards-${{ hashFiles('shard.yml') }}
-
+            %USERPROFILE%\.cache\shards
+          key: ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-${{ hashFiles('shard.yml') }}
+          restore-keys: |
+            ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-
       - run: shards install
+      - run: crystal spec --error-trace --verbose
+      - run: crystal tool format --check
 
-      - name: Build specs binary
-        run: |
-          echo 'require "./spec/**"' > all_specs.cr
-          mkdir -p bin coverage
-          crystal build all_specs.cr -o bin/all_specs --debug
+  coverage:
+      runs-on: ubuntu-latest
+      permissions:
+        contents: read
+        pull-requests: write
+      steps:
+        - uses: actions/checkout@v4
+          with:
+            fetch-depth: 0
 
-      - name: Run kcov (core coverage)
-        run: |
-          kcov --clean --include-path=$(pwd)/src ./coverage ./bin/all_specs --order=random
+        - uses: crystal-lang/install-crystal@v1
+          with:
+            crystal: latest
 
-      - name: Generate unreachable report
-        run: |
-          crystal tool unreachable --format=codecov --no-color all_specs.cr > ./coverage/unreachable.codecov.json
+        - name: Install kcov
+          run: |
+            sudo apt-get update
+            sudo apt-get install -y kcov libdw-dev libelf-dev
 
-      - name: Generate macro coverage
-        run: |
-          crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
+        - uses: actions/cache@v4
+          with:
+            path: |
+              lib
+              ~/.cache/shards
+            key: ubuntu-crystal-latest-shards-${{ hashFiles('shard.yml') }}
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
-        with:
-          token: ${{ secrets.CODECOV_TOKEN }}
-          slug: alumna/backend
-          files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
-          flags: unittests
-          fail_ci_if_error: true
-          verbose: true
+        - run: shards install
 
-      - name: Upload HTML report
-        uses: actions/upload-artifact@v4
-        with:
-          name: kcov-html
-          path: coverage/
-          retention-days: 7
+        - name: Build specs binary
+          run: |
+            echo 'require "./spec/**"' > all_specs.cr
+            mkdir -p bin coverage
+            crystal build all_specs.cr -o bin/all_specs --debug
+
+        - name: Run kcov (core coverage)
+          run: |
+            kcov --clean --include-path=$(pwd)/src ./coverage ./bin/all_specs --order=random
+
+        - name: Generate unreachable report
+          run: |
+            crystal tool unreachable --format=codecov --no-color all_specs.cr > ./coverage/unreachable.codecov.json
+
+        - name: Generate macro coverage
+          run: |
+            crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
+
+        - name: Upload coverage reports to Codecov
+          uses: codecov/codecov-action@v5
+          with:
+            token: ${{ secrets.CODECOV_TOKEN }}
+            slug: alumna/backend
+            files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
+            flags: unittests
+            fail_ci_if_error: true
+            verbose: true
+
+        - name: Upload HTML report
+          uses: actions/upload-artifact@v4
+          with:
+            name: kcov-html
+            path: coverage/
+            retention-days: 7
