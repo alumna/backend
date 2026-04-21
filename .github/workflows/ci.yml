@@ -56,23 +56,6 @@ jobs:
 
         - run: shards install
 
-        - name: Run specs and generate JUnit XML for Test Analytics
-          run: |
-            mkdir -p junit
-            crystal spec --junit_output ./junit --error-trace
-
-        - name: Upload test results to Codecov (Test Analytics)
-          if: ${{ !cancelled() }}
-          uses: codecov/codecov-action@v5
-          with:
-            token: ${{ secrets.CODECOV_TOKEN }}
-            slug: alumna/backend
-            report-type: test_results
-            files: ./junit/**/*.xml
-            flags: unittests
-            fail_ci_if_error: true
-            verbose: true
-
         - name: Build specs binary
           run: |
             echo 'require "./spec/**"' > all_specs.cr
@@ -97,6 +80,23 @@ jobs:
             token: ${{ secrets.CODECOV_TOKEN }}
             slug: alumna/backend
             files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
+            flags: unittests
+            fail_ci_if_error: true
+            verbose: true
+
+        - name: Run specs and generate JUnit XML for Test Analytics
+          run: |
+            mkdir -p junit
+            crystal spec --junit_output ./junit --error-trace
+
+        - name: Upload test results to Codecov (Test Analytics)
+          if: ${{ !cancelled() }}
+          uses: codecov/codecov-action@v5
+          with:
+            token: ${{ secrets.CODECOV_TOKEN }}
+            slug: alumna/backend
+            report_type: test_results
+            files: ./junit/**/*.xml
             flags: unittests
             fail_ci_if_error: true
             verbose: true
