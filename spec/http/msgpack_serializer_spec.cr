@@ -110,4 +110,70 @@ describe Alumna::Http::MsgpackSerializer do
       expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
     end
   end
+
+  # Nested structures
+
+  describe "nested structures (covers lines 44,46,48,62,63)" do
+    it "preserves an array value inside a hash" do
+      input = {
+        "tags" => Alumna::AnyData.new([
+          Alumna::AnyData.new("a"),
+          Alumna::AnyData.new("b"),
+          Alumna::AnyData.new(1_i64),
+        ]),
+      }
+      result = roundtrip(input)
+
+      result["tags"].as_a[0].as_s.should eq("a")
+      result["tags"].as_a[1].as_s.should eq("b")
+      result["tags"].as_a[2].as_i64.should eq(1_i64)
+    end
+
+    it "preserves a hash value inside a hash" do
+      input = {
+        "meta" => Alumna::AnyData.new({
+          "x" => Alumna::AnyData.new(10_i64),
+          "y" => Alumna::AnyData.new(true),
+        }),
+      }
+      result = roundtrip(input)
+
+      result["meta"].as_h["x"].as_i64.should eq(10_i64)
+      result["meta"].as_h["y"].as_bool.should be_true
+    end
+
+    it "preserves mixed nested arrays and hashes" do
+      # Build via JSON.parse so we get real nested JSON::Any structures
+      json = JSON.parse(%({
+        "user": {
+          "name": "Bob",
+          "tags": ["x", "y"],
+          "scores": [1, 2.5, null],
+          "meta": { "active": true, "nested": { "a": 1 } }
+        }
+      }))
+      input = json.as_h.transform_values { |v| v.as(Alumna::AnyData) }
+
+      result = roundtrip(input)
+
+      user = result["user"].as_h
+      user["name"].as_s.should eq("Bob")
+      user["tags"].as_a.map(&.as_s).should eq(["x", "y"])
+      user["scores"].as_a[1].as_f.should be_close(2.5, 0.0001)
+      user["scores"].as_a[2].raw.should be_nil
+      user["meta"].as_h["active"].as_bool.should be_true
+      user["meta"].as_h["nested"].as_h["a"].as_i64.should eq(1_i64)
+    end
+
+    it "encodes an array of hashes that contain nested values" do
+      input = [
+        {"a" => Alumna::AnyData.new([Alumna::AnyData.new("z")])},
+        {"b" => Alumna::AnyData.new({"k" => Alumna::AnyData.new(5_i64)})},
+      ]
+      io = IO::Memory.new
+      msgpack_serializer.encode(input, io)
+      io.size.should be > 0
+      # decode isn't supported for top-level arrays, but encode hits to_msgpack_type
+    end
+  end
 end
