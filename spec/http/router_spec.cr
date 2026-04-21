@@ -47,6 +47,25 @@ class ItemService < Alumna::MemoryAdapter
   end
 end
 
+# a tiny IO that does not report its size → client uses chunked encoding
+class UnsizeableIO < IO
+  def initialize(@data : Bytes)
+    @pos = 0
+  end
+
+  def read(slice : Bytes) : Int32
+    return 0 if @pos >= @data.size
+    n = Math.min(slice.size, @data.size - @pos)
+    slice.to_unsafe.copy_from(@data.to_unsafe + @pos, n)
+    @pos += n
+    n
+  end
+
+  def write(slice : Bytes) : Nil
+    raise "not supported"
+  end
+end
+
 # ── Server lifecycle ──────────────────────────────────────────────────────────
 
 app = Alumna::App.new
@@ -284,7 +303,7 @@ describe "Router integration" do
     end
   end
 
-  # ── Body parsing edge cases ────────────────────────────────────────────────────
+  # ── Body parsing edge cases ────────────────────────────────────────────────
 
   describe "body parsing" do
     it "treats missing body as empty hash, not nil" do
@@ -297,6 +316,79 @@ describe "Router integration" do
       response = client.post("/items", headers: headers)
       response.status_code.should eq(422)
       JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
+    end
+
+    it "returns 413 when body exceeds limit" do
+      app.max_body_size = 10
+      response = post("/items", %|{"name":"1234567890"}|, AUTH)
+      response.status_code.should eq(413)
+    ensure
+      app.max_body_size = 1_048_576_i64
+    end
+  end
+
+  describe "malformed body" do
+    it "returns 400 for invalid JSON" do
+      response = post("/items", "not json", AUTH)
+      response.status_code.should eq(400)
+      JSON.parse(response.body)["error"].as_s.should eq("Malformed JSON")
+    end
+
+    it "returns 400 for JSON array instead of object" do
+      response = post("/items", "[1,2]", AUTH)
+      response.status_code.should eq(400)
+      JSON.parse(response.body)["error"].as_s.should eq("Request body must be a JSON object")
+    end
+
+    it "returns 413 when a chunked body exceeds the limit (covers IO::Error rescue)" do
+      app.max_body_size = 10_i64
+
+      client = HTTP::Client.new("127.0.0.1", PORT)
+      headers = HTTP::Headers{
+        "Authorization" => "valid-token",
+        "Content-Type"  => "application/json",
+      }
+      # no Content-Length → chunked
+      body = UnsizeableIO.new(%|{"name":"1234567890"}|.to_slice)
+
+      response = client.post("/items", headers: headers, body: body)
+      response.status_code.should eq(413)
+      JSON.parse(response.body)["error"].as_s.should eq("Payload Too Large")
+    ensure
+      app.max_body_size = 1_048_576_i64
+    end
+  end
+
+  # ── LimitedIO testing ──────────────────────────────────────────────────────
+
+  describe Alumna::Http::LimitedIO do
+    it "reads up to the limit" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      buf = Bytes.new(5)
+      n = limited.read(buf)
+
+      n.should eq(3)
+      String.new(buf[0, n]).should eq("123")
+    end
+
+    it "raises IO::Error when the limit is exceeded" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+      limited.read(Bytes.new(2)) # consume limit
+
+      expect_raises(IO::Error, "exceeded") do
+        limited.read(Bytes.new(1))
+      end
+    end
+
+    it "raises on write because it is read-only" do
+      limited = Alumna::Http::LimitedIO.new(IO::Memory.new, 10)
+
+      expect_raises(IO::Error, "write not supported") do
+        limited.write("x".to_slice)
+      end
     end
   end
 end

@@ -15,9 +15,13 @@ module Alumna
 
       def decode(io : IO) : Hash(String, AnyData)
         parsed = JSON.parse(io)
-        parsed.as_h? || {} of String => AnyData
+        hash = parsed.as_h?
+        unless hash
+          raise ServiceError.new("Request body must be a JSON object", 400)
+        end
+        hash
       rescue JSON::ParseException
-        {} of String => AnyData
+        raise ServiceError.new("Malformed JSON", 400)
       end
     end
   end

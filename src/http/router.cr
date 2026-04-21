@@ -5,9 +5,26 @@ module Alumna
     JSON_SERIALIZER    = JsonSerializer.new
     MSGPACK_SERIALIZER = MsgpackSerializer.new
 
+    class LimitedIO < IO
+      def initialize(@io : IO, @limit : Int64)
+        @read = 0_i64
+      end
+
+      def read(slice : Bytes) : Int32
+        raise IO::Error.new("exceeded") if @read >= @limit
+        to_read = Math.min(slice.size, @limit - @read).to_i
+        n = @io.read(slice[0, to_read])
+        @read += n
+        n
+      end
+
+      def write(slice : Bytes) : Nil
+        raise IO::Error.new("write not supported")
+      end
+    end
+
     class Router
       def initialize(@app : App)
-        # cache the services hash – App builds it before the server starts
         @services = @app.services
       end
 
@@ -18,6 +35,13 @@ module Alumna
         input_serializer = resolve_input_serializer(request) || @app.serializer
         output_serializer = resolve_output_serializer(request) || input_serializer
         response.content_type = output_serializer.content_type
+
+        begin
+          data = parse_body(request, input_serializer)
+        rescue ex : ServiceError
+          Responder.write_error(response, ex, output_serializer)
+          return
+        end
 
         match = resolve_service(request.path)
         unless match
@@ -33,7 +57,6 @@ module Alumna
         end
 
         params = parse_query(request)
-        data = parse_body(request, input_serializer)
         headers = parse_headers(request)
 
         ctx = RuleContext.new(
@@ -53,25 +76,17 @@ module Alumna
       end
 
       private def resolve_service(path : String) : {Service, String?}?
-        # 1. exact match – constant time
         if service = @services[path]?
           return {service, nil}
         end
-
-        # 2. id match – split on last slash only
         slash = path.rindex('/')
         return nil if slash.nil? || slash == 0
-
         base = path[0...slash]
         id = path[slash + 1..]
-
-        # reject empty id and nested segments – matches current spec
         return nil if id.empty? || id.includes?('/')
-
         if service = @services[base]?
           return {service, id}
         end
-
         nil
       end
 
@@ -111,7 +126,22 @@ module Alumna
       private def parse_body(request : HTTP::Request, serializer : Serializer) : Hash(String, AnyData)
         body = request.body
         return {} of String => AnyData if body.nil?
+
+        # empty body → {} (preserves the existing spec)
+        if (len = request.content_length) && len == 0
+          return {} of String => AnyData
+        end
+
+        if limit = @app.max_body_size
+          if (len = request.content_length) && len > limit
+            raise ServiceError.new("Payload Too Large", 413)
+          end
+          body = LimitedIO.new(body, limit)
+        end
+
         serializer.decode(body)
+      rescue IO::Error
+        raise ServiceError.new("Payload Too Large", 413)
       end
 
       private def parse_headers(request : HTTP::Request) : Hash(String, String)

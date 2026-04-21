@@ -23,7 +23,7 @@ module Alumna
         end
         result
       rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
-        {} of String => AnyData
+        raise ServiceError.new("Malformed MessagePack", 400)
       end
 
       private def to_msgpack_type(hash : Hash(String, AnyData)) : Hash(String, MessagePack::Type)
