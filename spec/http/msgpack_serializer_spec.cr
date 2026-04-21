@@ -105,9 +105,9 @@ describe Alumna::Http::MsgpackSerializer do
       expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
     end
 
-    it "returns an empty hash for an empty body" do
+    it "raises ServiceError for an empty body" do
       io = IO::Memory.new
-      msgpack_serializer.decode(io).should be_empty
+      expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
     end
   end
 end

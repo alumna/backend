@@ -5,6 +5,9 @@ module Alumna
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
 
+    # Defaults
+    property max_body_size : Int64 = 1_048_576 # 1 MB default
+
     def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
     end

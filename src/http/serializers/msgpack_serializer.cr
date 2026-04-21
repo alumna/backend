@@ -16,9 +16,6 @@ module Alumna
       end
 
       def decode(io : IO) : Hash(String, AnyData)
-        peeked = io.peek
-        return {} of String => AnyData if peeked.nil? || peeked.empty?
-
         unpacker = MessagePack::IOUnpacker.new(io)
         result = Hash(String, AnyData).new
         unpacker.consume_table do |key|

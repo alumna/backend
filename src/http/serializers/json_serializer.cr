@@ -14,9 +14,6 @@ module Alumna
       end
 
       def decode(io : IO) : Hash(String, AnyData)
-        peeked = io.peek
-        return {} of String => AnyData if peeked.nil? || peeked.empty?
-
         parsed = JSON.parse(io)
         hash = parsed.as_h?
         unless hash

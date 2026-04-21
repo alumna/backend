@@ -5,6 +5,24 @@ module Alumna
     JSON_SERIALIZER    = JsonSerializer.new
     MSGPACK_SERIALIZER = MsgpackSerializer.new
 
+    class LimitedIO < IO
+      def initialize(@io : IO, @limit : Int64)
+        @read = 0_i64
+      end
+
+      def read(slice : Bytes) : Int32
+        raise IO::Error.new("exceeded") if @read >= @limit
+        to_read = Math.min(slice.size, @limit - @read).to_i
+        n = @io.read(slice[0, to_read])
+        @read += n
+        n
+      end
+
+      def write(slice : Bytes) : Nil
+        raise IO::Error.new("write not supported")
+      end
+    end
+
     class Router
       def initialize(@app : App)
         @services = @app.services
@@ -108,7 +126,22 @@ module Alumna
       private def parse_body(request : HTTP::Request, serializer : Serializer) : Hash(String, AnyData)
         body = request.body
         return {} of String => AnyData if body.nil?
+
+        # empty body → {} (preserves the existing spec)
+        if (len = request.content_length) && len == 0
+          return {} of String => AnyData
+        end
+
+        if limit = @app.max_body_size
+          if (len = request.content_length) && len > limit
+            raise ServiceError.new("Payload Too Large", 413)
+          end
+          body = LimitedIO.new(body, limit)
+        end
+
         serializer.decode(body)
+      rescue IO::Error
+        raise ServiceError.new("Payload Too Large", 413)
       end
 
       private def parse_headers(request : HTTP::Request) : Hash(String, String)

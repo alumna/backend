@@ -298,5 +298,25 @@ describe "Router integration" do
       response.status_code.should eq(422)
       JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
     end
+
+    it "returns 413 when body exceeds limit" do
+      app.max_body_size = 10
+      response = post("/items", %|{"name":"1234567890"}|, AUTH)
+      response.status_code.should eq(413)
+    end
+  end
+
+  describe "malformed body" do
+    it "returns 400 for invalid JSON" do
+      response = post("/items", "not json", AUTH)
+      response.status_code.should eq(400)
+      JSON.parse(response.body)["error"].as_s.should eq("Malformed JSON")
+    end
+
+    it "returns 400 for JSON array instead of object" do
+      response = post("/items", "[1,2]", AUTH)
+      response.status_code.should eq(400)
+      JSON.parse(response.body)["error"].as_s.should eq("Request body must be a JSON object")
+    end
   end
 end
