@@ -284,7 +284,7 @@ describe "Router integration" do
     end
   end
 
-  # ── Body parsing edge cases ────────────────────────────────────────────────────
+  # ── Body parsing edge cases ────────────────────────────────────────────────
 
   describe "body parsing" do
     it "treats missing body as empty hash, not nil" do
@@ -317,6 +317,39 @@ describe "Router integration" do
       response = post("/items", "[1,2]", AUTH)
       response.status_code.should eq(400)
       JSON.parse(response.body)["error"].as_s.should eq("Request body must be a JSON object")
+    end
+  end
+
+  # ── LimitedIO testing ──────────────────────────────────────────────────────
+
+  describe Alumna::Http::LimitedIO do
+    it "reads up to the limit" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      buf = Bytes.new(5)
+      n = limited.read(buf)
+
+      n.should eq(3)
+      String.new(buf[0, n]).should eq("123")
+    end
+
+    it "raises IO::Error when the limit is exceeded" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+      limited.read(Bytes.new(2)) # consume limit
+
+      expect_raises(IO::Error, "exceeded") do
+        limited.read(Bytes.new(1))
+      end
+    end
+
+    it "raises on write because it is read-only" do
+      limited = Alumna::Http::LimitedIO.new(IO::Memory.new, 10)
+
+      expect_raises(IO::Error, "write not supported") do
+        limited.write("x".to_slice)
+      end
     end
   end
 end
