@@ -36,10 +36,6 @@ Add Alumna to your `shard.yml`:
 dependencies:
   alumna:
     github: alumna/backend
-
-  # Optional: only required if you want MessagePack support
-  msgpack:
-    github: crystal-community/msgpack-crystal
 ```
 
 Then run:
@@ -54,7 +50,7 @@ Require it in your project:
 require "alumna"
 ```
 
-Crystal 1.9 or later is required.
+Crystal 1.19.1 or later is required.
 
 ---
 
@@ -65,17 +61,17 @@ Crystal 1.9 or later is required.
 A schema describes the fields a service works with. It is used by rules for input validation and by adapters to understand the record structure.
 
 ```crystal
-# Type helpers
+# Type helpers - required is true by default
 UserSchema = Alumna::Schema.new
-  .str("name",  required: true,  min_length: 2, max_length: 100)
-  .str("email", required: true,  format: :email)
+  .str("name",  min_length: 2, max_length: 100)
+  .str("email", format: :email)
   .int("age")
-  .bool("admin", required: false)
+  .bool("admin", required: false) # only specify when field is optional
 
 # More explicit with `field` helper
 UserSchema = Alumna::Schema.new
-  .field("name",  :str, required: true,  min_length: 2, max_length: 100)
-  .field("email", :str, required: true,  format: :email)
+  .field("name",  :str, min_length: 2, max_length: 100)
+  .field("email", :str, format: :email)
   .field("age",   :int)
   .field("admin", :bool, required: false)
 ```
@@ -94,13 +90,17 @@ PostSchema = Alumna::Schema.new
   .str("body",  required_on: [:create, :update], min_length: 1)
 ```
 
-Schemas are plain objects. Call `schema.validate(data, method)` to get back an `Array(Alumna::FieldError)`. Pass the current `ctx.method` so `required_on` is respected:
+**Required by default**
 
-```crystal
-errors = PostSchema.validate(ctx.data, ctx.method)
-```
+All fields are required unless you pass `required: false` or limit them with `required_on`. This matches Crystal's philosophy of failing fast — you opt out of validation, not into it.
 
-### Built-in validation rule
+| Declaration | Result |
+|---|---|
+| `.str("title")` | required on every method |
+| `.str("title", required: false)` | optional on every method |
+| `.str("title", required_on: [:create, :update])` | required only for create and update, optional for patch |
+
+### Validation: Built-in validation rule
 
 Most services validate the same way, so Alumna ships a helper that builds the rule for you:
 
@@ -130,7 +130,15 @@ class UserService < Alumna::MemoryAdapter
 end
 ```
 
-You still keep full control — write your own rule when you need custom messages, transformations, or conditional validation. `Alumna.validate` is just a zero-magic shortcut for the 90% case.
+You still keep full control - write your own rule when you need custom messages, transformations, or conditional validation. `Alumna.validate` is just a zero-magic shortcut for the 90% case.
+
+### Validation: custom validator
+
+Schemas are plain objects. When needed, inside your own rule, call `schema.validate(data, method)` to get back an `Array(Alumna::FieldError)`. Pass the current `ctx.method` so `required_on` is respected:
+
+```crystal
+errors = PostSchema.validate(ctx.data, ctx.method)
+```
 
 ---
 
@@ -238,8 +246,8 @@ app.listen(3000)
 require "alumna"
 
 UserSchema = Alumna::Schema.new
-  .str("name",  required: true, min_length: 2, max_length: 100)
-  .str("email", required: true, format: :email)
+  .str("name",  min_length: 2, max_length: 100)
+  .str("email", format: :email)
   .int("age")
 
 PostSchema = Alumna::Schema.new
