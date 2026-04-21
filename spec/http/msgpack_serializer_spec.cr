@@ -102,12 +102,12 @@ describe Alumna::Http::MsgpackSerializer do
   describe "#decode with malformed input" do
     it "returns an empty hash for garbage bytes" do
       io = IO::Memory.new(Bytes[0xFF, 0xFE, 0x00, 0x01])
-      msgpack_serializer.decode(io).should be_empty
+      expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
     end
 
-    it "returns an empty hash for an empty body" do
+    it "raises ServiceError for an empty body" do
       io = IO::Memory.new
-      msgpack_serializer.decode(io).should be_empty
+      expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
     end
   end
 end
