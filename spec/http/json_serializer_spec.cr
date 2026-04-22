@@ -61,7 +61,7 @@ describe Alumna::Http::JsonSerializer do
 
     it "preserves nil" do
       result = roundtrip({"note" => Alumna::AnyData.new(nil)})
-      result["note"].should be_nil
+      result["note"].raw.should be_nil
     end
 
     it "preserves multiple fields in a single hash" do
