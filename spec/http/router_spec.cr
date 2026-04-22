@@ -153,7 +153,7 @@ describe "Router integration" do
     it "returns 401 with an error body" do
       response = get("/items")
       body = JSON.parse(response.body)
-      body["error"].as_s.should eq("Invalid or missing token")
+      body["error"].as(String).should eq("Invalid or missing token")
     end
   end
 
@@ -163,7 +163,7 @@ describe "Router integration" do
     it "GET /items maps to find (returns an array)" do
       response = get("/items", AUTH)
       response.status_code.should eq(200)
-      JSON.parse(response.body).as_a?.should_not be_nil
+      JSON.parse(response.body).as_a.should_not be_nil
     end
 
     it "POST /items maps to create (returns 201)" do
@@ -176,30 +176,30 @@ describe "Router integration" do
       post("/items", %|{"name":"Gadget"}|, AUTH)
       response = get("/items/1", AUTH)
       response.status_code.should eq(200)
-      JSON.parse(response.body)["name"].as_s.should eq("Widget")
+      JSON.parse(response.body)["name"].as(String).should eq("Widget")
     end
 
     it "PUT /items/:id maps to update" do
       response = put("/items/1", %|{"name":"Widget Pro"}|, AUTH)
       response.status_code.should eq(200)
-      JSON.parse(response.body)["name"].as_s.should eq("Widget Pro")
+      JSON.parse(response.body)["name"].as(String).should eq("Widget Pro")
     end
 
     it "PATCH /items/:id maps to patch" do
       response = patch("/items/1", %|{"role":"admin"}|, AUTH)
       response.status_code.should eq(200)
       body = JSON.parse(response.body)
-      body["name"].as_s.should eq("Widget Pro") # original field preserved
-      body["role"].as_s.should eq("admin")      # new field added
+      body["name"].as(String).should eq("Widget Pro") # original field preserved
+      body["role"].as(String).should eq("admin")      # new field added
     end
 
     it "DELETE /items/:id maps to remove" do
       # create a fresh record to delete so we don't depend on id "1" still existing
       created = post("/items", %|{"name":"ToDelete"}|, AUTH)
-      id = JSON.parse(created.body)["id"].as_s
+      id = JSON.parse(created.body)["id"].as(String)
       response = delete("/items/#{id}", AUTH)
       response.status_code.should eq(200)
-      JSON.parse(response.body)["removed"].as_bool.should be_true
+      JSON.parse(response.body)["removed"].as(Bool).should be_true
     end
   end
 
@@ -242,7 +242,7 @@ describe "Router integration" do
     it "returns an error body with field-level details" do
       response = post("/items", %|{"name":""}|, AUTH)
       body = JSON.parse(response.body)
-      body["error"].as_s.should eq("Validation failed")
+      body["error"].as(String).should eq("Validation failed")
       body["details"].as_h.has_key?("name").should be_true
     end
   end
@@ -265,7 +265,7 @@ describe "Router integration" do
       headers = HTTP::Headers{"Authorization" => "valid-token"}
       response = client.post("/items", headers: headers, body: %|{"name":"NoCT"}|)
       response.status_code.should eq(201)
-      JSON.parse(response.body)["name"].as_s.should eq("NoCT")
+      JSON.parse(response.body)["name"].as(String).should eq("NoCT")
     end
 
     it "uses input serializer for output when Accept is missing" do
@@ -315,7 +315,7 @@ describe "Router integration" do
       # POST with headers but no body — should hit validation, not crash
       response = client.post("/items", headers: headers)
       response.status_code.should eq(422)
-      JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
+      JSON.parse(response.body)["error"].as(String).should eq("Validation failed")
     end
 
     it "returns 413 when body exceeds limit" do
@@ -331,13 +331,13 @@ describe "Router integration" do
     it "returns 400 for invalid JSON" do
       response = post("/items", "not json", AUTH)
       response.status_code.should eq(400)
-      JSON.parse(response.body)["error"].as_s.should eq("Malformed JSON")
+      JSON.parse(response.body)["error"].as(String).should eq("Malformed JSON")
     end
 
     it "returns 400 for JSON array instead of object" do
       response = post("/items", "[1,2]", AUTH)
       response.status_code.should eq(400)
-      JSON.parse(response.body)["error"].as_s.should eq("Request body must be a JSON object")
+      JSON.parse(response.body)["error"].as(String).should eq("Request body must be a JSON object")
     end
 
     it "returns 413 when a chunked body exceeds the limit (covers IO::Error rescue)" do
@@ -353,7 +353,7 @@ describe "Router integration" do
 
       response = client.post("/items", headers: headers, body: body)
       response.status_code.should eq(413)
-      JSON.parse(response.body)["error"].as_s.should eq("Payload Too Large")
+      JSON.parse(response.body)["error"].as(String).should eq("Payload Too Large")
     ensure
       app.max_body_size = 1_048_576_i64
     end

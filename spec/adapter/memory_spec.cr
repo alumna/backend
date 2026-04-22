@@ -2,16 +2,16 @@ require "../spec_helper"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-private def any(v : String)
-  JSON::Any.new(v)
+private def any(v : String) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any(v : Bool)
-  JSON::Any.new(v)
+private def any(v : Bool) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any(v : Int64)
-  JSON::Any.new(v)
+private def any(v : Int64) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
 # Builds a RuleContext wired to the given adapter.
@@ -52,23 +52,23 @@ describe Alumna::MemoryAdapter do
       adapter = Alumna::MemoryAdapter.new("/items")
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"name" => any("Alice")})
       record = adapter.create(ctx)
-      record["id"].as_s.should eq("1")
-      record["name"].as_s.should eq("Alice")
+      record["id"].raw.as(String).should eq("1")
+      record["name"].raw.as(String).should eq("Alice")
     end
 
     it "auto-increments ids across successive calls" do
       adapter = Alumna::MemoryAdapter.new("/items")
       r1 = insert(adapter, {"x" => any("a")})
       r2 = insert(adapter, {"x" => any("b")})
-      r1["id"].as_s.should eq("1")
-      r2["id"].as_s.should eq("2")
+      r1["id"].raw.as(String).should eq("1")
+      r2["id"].raw.as(String).should eq("2")
     end
 
     it "overrides any id supplied in the input data with its own counter" do
       adapter = Alumna::MemoryAdapter.new("/items")
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"id" => any("999"), "name" => any("Bob")})
       record = adapter.create(ctx)
-      record["id"].as_s.should eq("1")
+      record["id"].raw.as(String).should eq("1")
     end
 
     it "persists the record so it can be retrieved afterwards" do
@@ -78,7 +78,7 @@ describe Alumna::MemoryAdapter do
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
+        record["name"].raw.as(String).should eq("Alice")
       end
     end
   end
@@ -107,7 +107,7 @@ describe Alumna::MemoryAdapter do
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
       results = adapter.find(ctx)
       results.size.should eq(1)
-      results.first["role"].as_s.should eq("admin")
+      results.first["role"].raw.as(String).should eq("admin")
     end
 
     it "applies AND semantics when multiple params are given" do
@@ -118,8 +118,8 @@ describe Alumna::MemoryAdapter do
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin", "active" => "true"})
       results = adapter.find(ctx)
       results.size.should eq(1)
-      results.first["role"].as_s.should eq("admin")
-      results.first["active"].as_s.should eq("true")
+      results.first["role"].raw.as(String).should eq("admin")
+      results.first["active"].raw.as(String).should eq("true")
     end
 
     it "returns an empty array when no records match the filter" do
@@ -140,7 +140,7 @@ describe Alumna::MemoryAdapter do
       record = adapter.get(ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
+        record["name"].raw.as(String).should eq("Alice")
       end
     end
 
@@ -165,8 +165,8 @@ describe Alumna::MemoryAdapter do
       insert(adapter, {"name" => any("Alice"), "role" => any("user")})
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")})
       record = adapter.update(ctx)
-      record["id"].as_s.should eq("1")
-      record["name"].as_s.should eq("Alice Smith")
+      record["id"].raw.as(String).should eq("1")
+      record["name"].raw.as(String).should eq("Alice Smith")
     end
 
     it "drops fields from the old record that are absent from the new data" do
@@ -186,7 +186,7 @@ describe Alumna::MemoryAdapter do
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice Smith")
+        record["name"].raw.as(String).should eq("Alice Smith")
       end
     end
 
@@ -213,9 +213,9 @@ describe Alumna::MemoryAdapter do
       insert(adapter, {"name" => any("Alice"), "role" => any("user")})
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")})
       record = adapter.patch(ctx)
-      record["name"].as_s.should eq("Alice") # original field preserved
-      record["role"].as_s.should eq("admin") # field updated
-      record["id"].as_s.should eq("1")
+      record["name"].raw.as(String).should eq("Alice") # original field preserved
+      record["role"].raw.as(String).should eq("admin") # field updated
+      record["id"].raw.as(String).should eq("1")
     end
 
     it "persists the merge so a subsequent get reflects it" do
@@ -227,8 +227,8 @@ describe Alumna::MemoryAdapter do
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
-        record["role"].as_s.should eq("admin")
+        record["name"].raw.as(String).should eq("Alice")
+        record["role"].raw.as(String).should eq("admin")
       end
     end
 
@@ -302,14 +302,14 @@ describe Alumna::MemoryAdapter do
       records = adapter.find(ctx)
 
       records.size.should eq(count)
-      ids = records.map { |r| r["id"].as_s.to_i64 }.sort
+      ids = records.map { |r| r["id"].raw.as(String).to_i64 }.sort
       ids.should eq((1_i64..count.to_i64).to_a)
     end
 
     it "does not lose updates under concurrent patches to the same record" do
       adapter = Alumna::MemoryAdapter.new("/items")
       base = insert(adapter, {"counter" => any(0_i64)})
-      id = base["id"].as_s
+      id = base["id"].raw.as(String)
 
       writers = 50
       done = Channel(Nil).new(writers)
@@ -321,7 +321,7 @@ describe Alumna::MemoryAdapter do
           current = adapter.get(get_ctx)
           current.should_not be_nil
           if current
-            val = current["counter"].as_i64
+            val = current["counter"].raw.as(Int64)
 
             patch_ctx = make_ctx(
               adapter,
@@ -345,9 +345,9 @@ describe Alumna::MemoryAdapter do
         # With mutex, each patch is atomic — we won't lose writes entirely,
         # but because read-modify-write isn't atomic across calls, the final
         # value will be <= writers. The important assertion is no corruption:
-        final["counter"].as_i64.should be >= 1
-        final["counter"].as_i64.should be <= writers
-        final["id"].as_s.should eq(id) # record still intact
+        final["counter"].raw.as(Int64).should be >= 1
+        final["counter"].raw.as(Int64).should be <= writers
+        final["id"].raw.as(String).should eq(id) # record still intact
       end
     end
 

@@ -78,7 +78,7 @@ describe Alumna::Http::Responder do
     end
 
     it "uses ctx.http.status when set" do
-      ctx = build_ctx(result: {"a" => Alumna::AnyData.new(1)})
+      ctx = build_ctx(result: {"a" => Alumna::AnyData.new(1_i64)})
       ctx.http.status = 202
       resp = fake_response
 
@@ -105,7 +105,7 @@ describe Alumna::Http::Responder do
     end
 
     it "encodes Array results" do
-      ctx = build_ctx(result: [{"x" => Alumna::AnyData.new(1)}])
+      ctx = build_ctx(result: [{"x" => Alumna::AnyData.new(1_i64)}])
       resp = fake_response
 
       Alumna::Http::Responder.write(resp, ctx, json_serializer)

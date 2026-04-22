@@ -30,27 +30,27 @@ describe Alumna::Http::MsgpackSerializer do
   describe "encode/decode round-trip" do
     it "preserves a String value" do
       result = roundtrip({"name" => Alumna::AnyData.new("Alice")})
-      result["name"].as_s.should eq("Alice")
+      result["name"].raw.as(String).should eq("Alice")
     end
 
     it "preserves an Int64 value" do
       result = roundtrip({"count" => Alumna::AnyData.new(42_i64)})
-      result["count"].as_i64.should eq(42_i64)
+      result["count"].raw.as(Int64).should eq(42_i64)
     end
 
     it "preserves a Float64 value" do
       result = roundtrip({"score" => Alumna::AnyData.new(3.14)})
-      result["score"].as_f.should be_close(3.14, 0.0001)
+      result["score"].raw.as(Float64).should be_close(3.14, 0.0001)
     end
 
     it "preserves a true Bool value" do
       result = roundtrip({"active" => Alumna::AnyData.new(true)})
-      result["active"].as_bool.should be_true
+      result["active"].raw.as(Bool).should be_true
     end
 
     it "preserves a false Bool value" do
       result = roundtrip({"active" => Alumna::AnyData.new(false)})
-      result["active"].as_bool.should be_false
+      result["active"].raw.as(Bool).should be_false
     end
 
     it "preserves a nil value" do
@@ -66,10 +66,10 @@ describe Alumna::Http::MsgpackSerializer do
         "active" => Alumna::AnyData.new(true),
       }
       result = roundtrip(input)
-      result["name"].as_s.should eq("Bob")
-      result["age"].as_i64.should eq(30_i64)
-      result["score"].as_f.should be_close(9.5, 0.0001)
-      result["active"].as_bool.should be_true
+      result["name"].raw.as(String).should eq("Bob")
+      result["age"].raw.as(Int64).should eq(30_i64)
+      result["score"].raw.as(Float64).should be_close(9.5, 0.0001)
+      result["active"].raw.as(Bool).should be_true
     end
 
     it "returns an empty hash when the input hash is empty" do
@@ -111,7 +111,7 @@ describe Alumna::Http::MsgpackSerializer do
     end
   end
 
-  # Nested structures
+  # ── Nested structures ─────────────────────────────────────────────────────────
 
   describe "nested structures (covers lines 44,46,48,62,63)" do
     it "preserves an array value inside a hash" do
@@ -120,13 +120,13 @@ describe Alumna::Http::MsgpackSerializer do
           Alumna::AnyData.new("a"),
           Alumna::AnyData.new("b"),
           Alumna::AnyData.new(1_i64),
-        ]),
+        ] of Alumna::AnyData),
       }
       result = roundtrip(input)
 
-      result["tags"].as_a[0].as_s.should eq("a")
-      result["tags"].as_a[1].as_s.should eq("b")
-      result["tags"].as_a[2].as_i64.should eq(1_i64)
+      result["tags"].raw.as(Array(Alumna::AnyData))[0].raw.as(String).should eq("a")
+      result["tags"].raw.as(Array(Alumna::AnyData))[1].raw.as(String).should eq("b")
+      result["tags"].raw.as(Array(Alumna::AnyData))[2].raw.as(Int64).should eq(1_i64)
     end
 
     it "preserves a hash value inside a hash" do
@@ -134,46 +134,56 @@ describe Alumna::Http::MsgpackSerializer do
         "meta" => Alumna::AnyData.new({
           "x" => Alumna::AnyData.new(10_i64),
           "y" => Alumna::AnyData.new(true),
-        }),
+        } of String => Alumna::AnyData),
       }
       result = roundtrip(input)
 
-      result["meta"].as_h["x"].as_i64.should eq(10_i64)
-      result["meta"].as_h["y"].as_bool.should be_true
+      result["meta"].raw.as(Hash(String, Alumna::AnyData))["x"].raw.as(Int64).should eq(10_i64)
+      result["meta"].raw.as(Hash(String, Alumna::AnyData))["y"].raw.as(Bool).should be_true
     end
 
     it "preserves mixed nested arrays and hashes" do
-      # Build via JSON.parse so we get real nested JSON::Any structures
-      json = JSON.parse(%({
-        "user": {
-          "name": "Bob",
-          "tags": ["x", "y"],
-          "scores": [1, 2.5, null],
-          "meta": { "active": true, "nested": { "a": 1 } }
-        }
-      }))
-      input = json.as_h.transform_values { |v| v.as(Alumna::AnyData) }
+      nested = Alumna::AnyData.new({"a" => Alumna::AnyData.new(1_i64)} of String => Alumna::AnyData)
+      meta = Alumna::AnyData.new({
+        "active" => Alumna::AnyData.new(true),
+        "nested" => nested,
+      } of String => Alumna::AnyData)
+      scores = Alumna::AnyData.new([
+        Alumna::AnyData.new(1_i64),
+        Alumna::AnyData.new(2.5),
+        Alumna::AnyData.new(nil),
+      ] of Alumna::AnyData)
+      tags = Alumna::AnyData.new([
+        Alumna::AnyData.new("x"),
+        Alumna::AnyData.new("y"),
+      ] of Alumna::AnyData)
+      user = Alumna::AnyData.new({
+        "name"   => Alumna::AnyData.new("Bob"),
+        "tags"   => tags,
+        "scores" => scores,
+        "meta"   => meta,
+      } of String => Alumna::AnyData)
+      input = {"user" => user}
 
       result = roundtrip(input)
 
-      user = result["user"].as_h
-      user["name"].as_s.should eq("Bob")
-      user["tags"].as_a.map(&.as_s).should eq(["x", "y"])
-      user["scores"].as_a[1].as_f.should be_close(2.5, 0.0001)
-      user["scores"].as_a[2].raw.should be_nil
-      user["meta"].as_h["active"].as_bool.should be_true
-      user["meta"].as_h["nested"].as_h["a"].as_i64.should eq(1_i64)
+      u = result["user"].raw.as(Hash(String, Alumna::AnyData))
+      u["name"].raw.as(String).should eq("Bob")
+      u["tags"].raw.as(Array(Alumna::AnyData)).map(&.raw.as(String)).should eq(["x", "y"])
+      u["scores"].raw.as(Array(Alumna::AnyData))[1].raw.as(Float64).should be_close(2.5, 0.0001)
+      u["scores"].raw.as(Array(Alumna::AnyData))[2].raw.should be_nil
+      u["meta"].raw.as(Hash(String, Alumna::AnyData))["active"].raw.as(Bool).should be_true
+      u["meta"].raw.as(Hash(String, Alumna::AnyData))["nested"].raw.as(Hash(String, Alumna::AnyData))["a"].raw.as(Int64).should eq(1_i64)
     end
 
     it "encodes an array of hashes that contain nested values" do
       input = [
-        {"a" => Alumna::AnyData.new([Alumna::AnyData.new("z")])},
-        {"b" => Alumna::AnyData.new({"k" => Alumna::AnyData.new(5_i64)})},
+        {"a" => Alumna::AnyData.new([Alumna::AnyData.new("z")] of Alumna::AnyData)},
+        {"b" => Alumna::AnyData.new({"k" => Alumna::AnyData.new(5_i64)} of String => Alumna::AnyData)},
       ]
       io = IO::Memory.new
       msgpack_serializer.encode(input, io)
       io.size.should be > 0
-      # decode isn't supported for top-level arrays, but encode hits to_msgpack_type
     end
   end
 end

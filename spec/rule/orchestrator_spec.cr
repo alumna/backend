@@ -31,7 +31,7 @@ end
 private def result_setting_rule(log : Array(String), label : String) : Alumna::Rule
   Alumna::Rule.new do |ctx|
     log << label
-    ctx.result = {"cached" => JSON::Any.new(true)}
+    ctx.result = {"cached" => Alumna::AnyData.new(true)} of String => Alumna::AnyData
     Alumna::RuleResult.continue
   end
 end
@@ -144,7 +144,7 @@ describe Alumna::Orchestrator do
       ctx = make_ctx(Alumna::RulePhase::Before)
       Alumna::Orchestrator.run([result_setting_rule([] of String, "r")], ctx)
       ctx.result_set?.should be_true
-      ctx.result.as(Hash)["cached"].as_bool.should be_true
+      ctx.result.as(Hash(String, Alumna::AnyData))["cached"].raw.as(Bool).should be_true
     end
   end
 

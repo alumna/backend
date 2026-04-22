@@ -17,8 +17,7 @@ module Alumna
         return records.to_a if ctx.params.empty?
         records.select do |record|
           ctx.params.all? do |key, value|
-            # use as_s? to avoid the extra quotes JSON::Any#to_s adds
-            record[key]?.try(&.as_s?) == value
+            record[key]?.try(&.raw.as?(String)) == value
           end
         end.to_a
       end

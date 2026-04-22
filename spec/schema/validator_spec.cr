@@ -1,28 +1,27 @@
 require "../spec_helper"
 
-# Helpers to build AnyData values without boilerplate
-private def any(v : String)
-  JSON::Any.new(v)
+private def any(v : String) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any(v : Int64)
-  JSON::Any.new(v)
+private def any(v : Int64) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any(v : Float64)
-  JSON::Any.new(v)
+private def any(v : Float64) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any(v : Bool)
-  JSON::Any.new(v)
+private def any(v : Bool) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
-private def any_nil
-  JSON::Any.new(nil)
+private def any_nil : Alumna::AnyData
+  Alumna::AnyData.new(nil)
 end
 
 private def empty_data
-  Hash(String, Alumna::AnyData).new
+  {} of String => Alumna::AnyData
 end
 
 private def errors_for(schema : Alumna::Schema, input : Hash(String, Alumna::AnyData), method : Alumna::ServiceMethod? = nil)

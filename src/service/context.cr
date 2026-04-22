@@ -1,8 +1,6 @@
 require "json"
 
 module Alumna
-  alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
-
   class RuleContext
     # --- Read-only ---
     getter app : App
@@ -52,7 +50,7 @@ module Alumna
 
     def initialize
       @status = nil
-      @headers = {} of String => String
+      @headers = Hash(String, String).new
       @location = nil
     end
   end

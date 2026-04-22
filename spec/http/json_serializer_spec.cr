@@ -6,8 +6,7 @@ private def json_serializer
   Alumna::Http::JsonSerializer.new
 end
 
-# Encodes a hash, rewinds the IO, then decodes it back.
-private def roundtrip(hash : Hash(String, Alumna::AnyData)) : Hash(String, Alumna::AnyData)
+private def roundtrip(hash : Hash(String, Alumna::AnyData))
   io = IO::Memory.new
   json_serializer.encode(hash, io)
   io.rewind
@@ -37,32 +36,32 @@ describe Alumna::Http::JsonSerializer do
   describe "encode/decode round-trip" do
     it "preserves a String value" do
       result = roundtrip({"name" => Alumna::AnyData.new("Alice")})
-      result["name"].as_s.should eq("Alice")
+      result["name"].raw.as(String).should eq("Alice")
     end
 
     it "preserves an Int64 value" do
       result = roundtrip({"count" => Alumna::AnyData.new(42_i64)})
-      result["count"].as_i64.should eq(42_i64)
+      result["count"].raw.as(Int64).should eq(42_i64)
     end
 
     it "preserves a Float64 value" do
       result = roundtrip({"score" => Alumna::AnyData.new(3.14)})
-      result["score"].as_f.should be_close(3.14, 0.0001)
+      result["score"].raw.as(Float64).should be_close(3.14, 0.0001)
     end
 
     it "preserves a true Bool value" do
       result = roundtrip({"active" => Alumna::AnyData.new(true)})
-      result["active"].as_bool.should be_true
+      result["active"].raw.as(Bool).should be_true
     end
 
     it "preserves a false Bool value" do
       result = roundtrip({"active" => Alumna::AnyData.new(false)})
-      result["active"].as_bool.should be_false
+      result["active"].raw.as(Bool).should be_false
     end
 
-    it "preserves a nil value" do
+    it "preserves nil" do
       result = roundtrip({"note" => Alumna::AnyData.new(nil)})
-      result["note"].raw.should be_nil
+      result["note"].should be_nil
     end
 
     it "preserves multiple fields in a single hash" do
@@ -72,9 +71,9 @@ describe Alumna::Http::JsonSerializer do
         "active" => Alumna::AnyData.new(true),
       }
       result = roundtrip(input)
-      result["name"].as_s.should eq("Bob")
-      result["age"].as_i64.should eq(30_i64)
-      result["active"].as_bool.should be_true
+      result["name"].raw.as(String).should eq("Bob")
+      result["age"].raw.as(Int64).should eq(30_i64)
+      result["active"].raw.as(Bool).should be_true
     end
 
     it "returns an empty hash when the input hash is empty" do

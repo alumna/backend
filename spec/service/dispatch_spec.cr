@@ -31,8 +31,8 @@ end
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-private def any(v : String)
-  JSON::Any.new(v)
+private def any(v : String) : Alumna::AnyData
+  Alumna::AnyData.new(v)
 end
 
 # Builds a RuleContext for a given service and method.
@@ -283,7 +283,7 @@ describe "Service#dispatch" do
       service.dispatch(ctx)
 
       result = ctx.result.as(Hash(String, Alumna::AnyData))
-      result["shortcut"].as_s.should eq("from-cache")
+      result["shortcut"].raw.as(String).should eq("from-cache")
     end
   end
 

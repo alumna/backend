@@ -128,7 +128,7 @@ describe Alumna::Schema do
   describe "validator integration (kept from your original)" do
     it "validates format when given as symbol" do
       schema = Alumna::Schema.new.str("email", format: :email)
-      errors = schema.validate({"email" => JSON::Any.new("not-an-email")})
+      errors = schema.validate({"email" => Alumna::AnyData.new("not-an-email")})
       errors.first.message.should eq("must be a valid email address")
     end
   end

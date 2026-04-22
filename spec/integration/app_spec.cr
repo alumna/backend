@@ -120,12 +120,12 @@ describe "Alumna System Integration" do
 
   it "deletes and returns removed:true" do
     id = json(authenticated_client.post("/test", body: %({"title":"Del"})).body)["id"].as_s
-    json(authenticated_client.delete("/test/#{id}").body)["removed"].as_bool.should be_true
+    json(authenticated_client.delete("/test/#{id}").body)["removed"].as(Bool).should be_true
     authenticated_client.get("/test/#{id}").status_code.should eq(404)
   end
 
   it "delete non-existent returns removed:false" do
-    json(authenticated_client.delete("/test/99999").body)["removed"].as_bool.should be_false
+    json(authenticated_client.delete("/test/99999").body)["removed"].as(Bool).should be_false
   end
 
   it "rejects missing token" do

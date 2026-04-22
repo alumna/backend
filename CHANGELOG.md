@@ -23,8 +23,8 @@
 ## 0.2.0 - 2026-04-17
 
 * Optimizations:
-  * `src/http/router.cr` - avoiding repeated intantiation of serializers
-  * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
+  * `src/http/router.cr` - avoiding repeated instantiation of serializers
+  * `src/schema/validator.cr` - avoiding repeated instantiation of regexes
   * `src/rule/orchestrator.cr` - changing it to a module
   * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocations and method instantiations
 
