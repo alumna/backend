@@ -70,12 +70,7 @@ module Alumna
       case field.type
       when .str?
         value.is_a?(String) ? nil : "must be a string"
-      when .int?
-        if value.is_a?(Int64)
-          nil
-        else
-          "must be an integer"
-        end
+      when .int? then value.is_a?(Int64) ? nil : "must be an integer"
       when .float?
         (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
       when .bool?
