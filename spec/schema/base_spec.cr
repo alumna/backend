@@ -33,24 +33,29 @@ describe Alumna::Schema do
   describe "format" do
     it "accepts :email, :url, :uuid" do
       s = Alumna::Schema.new.str("e", format: :email)
-      s.fields.first.format.should eq(Alumna::FieldFormat::Email)
+      fd = s.fields.first
+      fd.format_name.should eq("email")
+      fd.format_validator.should_not be_nil
+      fd.format_message.should eq("must be a valid email address")
     end
 
-    it "accepts enum directly and capitalized symbols" do
-      s1 = Alumna::Schema.new.field("x", :str, format: Alumna::FieldFormat::Url)
-      s1.fields.first.format.should eq(Alumna::FieldFormat::Url)
+    it "normalizes strings and capitalized symbols" do
+      s1 = Alumna::Schema.new.field("x", :str, format: :url)
+      s1.fields.first.format_name.should eq("url")
 
-      s2 = Alumna::Schema.new.str("y", format: :Uuid)
-      s2.fields.first.format.should eq(Alumna::FieldFormat::Uuid)
+      s2 = Alumna::Schema.new.str("y", format: "Uuid")
+      s2.fields.first.format_name.should eq("uuid")
     end
 
     it "allows nil" do
-      Alumna::Schema.new.str("n").fields.first.format.should be_nil
+      fd = Alumna::Schema.new.str("n").fields.first
+      fd.format_name.should be_nil
+      fd.format_validator.should be_nil
+      fd.format_message.should be_nil
     end
 
-    # FIXED: Crystal's message is "Unknown enum...", not "Invalid FieldFormat"
     it "raises for unknown format" do
-      expect_raises(ArgumentError, /Unknown enum Alumna::FieldFormat/) do
+      expect_raises(ArgumentError, /Unknown format/) do
         Alumna::Schema.new.str("x", format: :not_a_format)
       end
     end

@@ -8,10 +8,6 @@ module Alumna
   end
 
   class Schema
-    EMAIL_REGEX = /\A[^@\s]+@[^@\s]+\.[^@\s]+\z/
-    URL_REGEX   = /\Ahttps?:\/\/[^\s]+\z/
-    UUID_REGEX  = /\A[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\z/i
-
     def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
       errors = [] of FieldError
 
@@ -55,9 +51,9 @@ module Alumna
               errors << FieldError.new(field.name, "must be at most #{max} character#{max == 1 ? "" : "s"}")
             end
           end
-          if fmt = field.format
-            unless valid_format?(str, fmt)
-              errors << FieldError.new(field.name, format_message(fmt))
+          if validator = field.format_validator
+            unless validator.call(str)
+              errors << FieldError.new(field.name, field.format_message || "has an invalid format")
             end
           end
         end
@@ -77,24 +73,6 @@ module Alumna
         value.is_a?(Bool) ? nil : "must be true or false"
       else
         nil
-      end
-    end
-
-    private def valid_format?(value : String, format : FieldFormat) : Bool
-      case format
-      when .email? then !!(value =~ EMAIL_REGEX)
-      when .url?   then !!(value =~ URL_REGEX)
-      when .uuid?  then !!(value =~ UUID_REGEX)
-      else              true
-      end
-    end
-
-    private def format_message(format : FieldFormat) : String
-      case format
-      when .email? then "must be a valid email address"
-      when .url?   then "must be a valid URL (http or https)"
-      when .uuid?  then "must be a valid UUID"
-      else              "has an invalid format"
       end
     end
   end

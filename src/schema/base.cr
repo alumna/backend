@@ -6,7 +6,9 @@ module Alumna
     getter required_on : Array(ServiceMethod)?
     getter min_length : Int32?
     getter max_length : Int32?
-    getter format : FieldFormat?
+    getter format_name : String?
+    getter format_validator : Proc(String, Bool)?
+    getter format_message : String?
 
     def initialize(
       @name : String,
@@ -14,14 +16,12 @@ module Alumna
       @required : Bool = true,
       @min_length : Int32? = nil,
       @max_length : Int32? = nil,
-      @format : FieldFormat? = nil,
+      @format_name : String? = nil,
+      @format_validator : Proc(String, Bool)? = nil,
+      @format_message : String? = nil,
       @required_on : Array(ServiceMethod)? = nil,
     )
     end
-  end
-
-  enum FieldFormat
-    Email; Url; Uuid
   end
 
   enum FieldType
@@ -42,14 +42,32 @@ module Alumna
       required : Bool = true,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
-      format : FieldFormat | Symbol | Nil = nil,
+      format : Symbol | String | Nil = nil,
       required_on : Array(ServiceMethod | Symbol) | Nil = nil,
     ) : self
       # normalize :str → FieldType::Str
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
 
-      # normalize :email → FieldFormat::Email   ← NEW
-      norm_format = format.is_a?(Symbol) ? FieldFormat.parse(format.to_s.capitalize) : format
+      # normalize format to downcased string, resolve validator once
+      format_name = nil
+      format_validator = nil
+      format_message = nil
+
+      if format
+        format_name = case format
+                      when Symbol then format.to_s.downcase
+                      when String then format.downcase
+                      end
+
+        if format_name
+          if entry = Formats.fetch(format_name)
+            format_validator = entry.validator
+            format_message = entry.message
+          else
+            raise ArgumentError.new("Unknown format: #{format_name}")
+          end
+        end
+      end
 
       # normalize :create → ServiceMethod::Create
       norm_required_on = required_on.try &.map do |m|
@@ -62,7 +80,9 @@ module Alumna
         required: required,
         min_length: min_length,
         max_length: max_length,
-        format: norm_format,
+        format_name: format_name,
+        format_validator: format_validator,
+        format_message: format_message,
         required_on: norm_required_on,
       )
       self
