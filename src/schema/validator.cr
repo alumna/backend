@@ -71,7 +71,11 @@ module Alumna
       when .str?
         value.is_a?(String) ? nil : "must be a string"
       when .int?
-        value.is_a?(Int64) ? nil : "must be an integer"
+        if value.is_a?(Int64)
+          nil
+        else
+          "must be an integer"
+        end
       when .float?
         (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
       when .bool?
