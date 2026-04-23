@@ -33,7 +33,7 @@ class ItemService < Alumna::MemoryAdapter
         if errors.empty?
           Alumna::RuleResult.continue
         else
-          details = errors.each_with_object({} of String => String) do |e, h|
+          details = errors.each_with_object({} of String => Alumna::AnyData) do |e, h|
             h[e.field] = e.message
           end
           Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))

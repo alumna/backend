@@ -1,13 +1,14 @@
 module Alumna
   class ServiceError < Exception
     getter status : Int32
-    getter details : Hash(String, String)
+    getter details : Hash(String, AnyData)
 
-    def initialize(message : String, @status : Int32 = 400, @details = {} of String => String)
+    def initialize(message : String, @status : Int32 = 400, details : Hash(String, AnyData) = {} of String => AnyData)
+      @details = details
       super(message)
     end
 
-    def self.bad_request(message : String, details = {} of String => String)
+    def self.bad_request(message : String, details = {} of String => AnyData)
       new(message, 400, details)
     end
 
@@ -23,7 +24,7 @@ module Alumna
       new(message, 404)
     end
 
-    def self.unprocessable(message : String, details = {} of String => String)
+    def self.unprocessable(message : String, details = {} of String => AnyData)
       new(message, 422, details)
     end
 

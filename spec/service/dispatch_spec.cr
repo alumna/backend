@@ -31,10 +31,6 @@ end
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-private def any(v : String)
-  JSON::Any.new(v)
-end
-
 # Builds a RuleContext for a given service and method.
 private def make_ctx(
   service : Alumna::Service,
@@ -71,7 +67,7 @@ end
 
 private def result_setting_rule(label : String) : Alumna::Rule
   Alumna::Rule.new do |ctx|
-    ctx.result = {"shortcut" => Alumna::AnyData.new(label)}
+    ctx.result = {"shortcut" => label} of String => Alumna::AnyData
     Alumna::RuleResult.continue
   end
 end
@@ -150,7 +146,7 @@ describe "Service#dispatch" do
       log.should be_empty
 
       # Create SHOULD trigger it
-      create_ctx = make_ctx(service, Alumna::ServiceMethod::Create, data: {"x" => any("y")})
+      create_ctx = make_ctx(service, Alumna::ServiceMethod::Create, data: {"x" => "y"} of String => Alumna::AnyData)
       service.dispatch(create_ctx)
       log.should eq(["create-only"])
     end
@@ -165,7 +161,7 @@ describe "Service#dispatch" do
       )
 
       # Create should NOT trigger the find-scoped after rule
-      create_ctx = make_ctx(service, Alumna::ServiceMethod::Create, data: {"x" => any("y")})
+      create_ctx = make_ctx(service, Alumna::ServiceMethod::Create, data: {"x" => "y"} of String => Alumna::AnyData)
       service.dispatch(create_ctx)
       log.should be_empty
     end
@@ -283,7 +279,7 @@ describe "Service#dispatch" do
       service.dispatch(ctx)
 
       result = ctx.result.as(Hash(String, Alumna::AnyData))
-      result["shortcut"].as_s.should eq("from-cache")
+      result["shortcut"].should eq("from-cache")
     end
   end
 
@@ -294,7 +290,7 @@ describe "Service#dispatch" do
       service = TrackedService.new
 
       # update on a non-existent id raises a 404 from MemoryAdapter
-      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => any("y")})
+      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => "y"} of String => Alumna::AnyData)
       service.dispatch(ctx)
 
       error = ctx.error
@@ -306,7 +302,7 @@ describe "Service#dispatch" do
 
     it "sets ctx.phase to Error" do
       service = TrackedService.new
-      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => any("y")})
+      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => "y"} of String => Alumna::AnyData)
       service.dispatch(ctx)
 
       ctx.phase.should eq(Alumna::RulePhase::Error)
@@ -317,7 +313,7 @@ describe "Service#dispatch" do
       service = TrackedService.new
       service.after(continuing_rule(log, "after"))
 
-      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => any("y")})
+      ctx = make_ctx(service, Alumna::ServiceMethod::Update, id: "999", data: {"x" => "y"} of String => Alumna::AnyData)
       service.dispatch(ctx)
 
       log.should be_empty

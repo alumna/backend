@@ -23,16 +23,16 @@ module Alumna
         when Hash
           serializer.encode(result, response)
         when Nil
-          serializer.encode({"success" => AnyData.new(true)}, response)
+          serializer.encode({"success" => true} of String => AnyData, response)
         end
       end
 
       def self.write_error(response : HTTP::Server::Response, err : ServiceError, serializer : Serializer) : Nil
         response.status_code = err.status
         payload = {
-          "error"   => AnyData.new(err.message || "Error"),
-          "details" => AnyData.new(err.details.transform_values { |v| AnyData.new(v) }),
-        }
+          "error"   => err.message || "Error",
+          "details" => err.details,
+        } of String => AnyData
         serializer.encode(payload, response)
       end
 

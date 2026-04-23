@@ -1,3 +1,5 @@
+require "json"
+
 module Alumna
   module Http
     class JsonSerializer < Serializer
@@ -15,13 +17,32 @@ module Alumna
 
       def decode(io : IO) : Hash(String, AnyData)
         parsed = JSON.parse(io)
-        hash = parsed.as_h?
-        unless hash
+        result = convert(parsed)
+
+        unless result.is_a?(Hash)
           raise ServiceError.new("Request body must be a JSON object", 400)
         end
-        hash
+
+        result.as(Hash(String, AnyData))
       rescue JSON::ParseException
         raise ServiceError.new("Malformed JSON", 400)
+      end
+
+      private def convert(value : JSON::Any) : AnyData
+        case raw = value.raw
+        when Hash
+          raw.each_with_object({} of String => AnyData) do |(k, v), memo|
+            memo[k.to_s] = convert(v)
+          end
+        when Array
+          raw.map { |v| convert(v) }
+        when Int32
+          raw.to_i64
+        when Int64, Float64, String, Bool, Nil
+          raw
+        else
+          nil
+        end
       end
     end
   end
