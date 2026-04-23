@@ -17,8 +17,7 @@ module Alumna
         return records.to_a if ctx.params.empty?
         records.select do |record|
           ctx.params.all? do |key, value|
-            # use as_s? to avoid the extra quotes JSON::Any#to_s adds
-            record[key]?.try(&.as_s?) == value
+            record[key]?.as?(String) == value
           end
         end.to_a
       end
@@ -36,7 +35,8 @@ module Alumna
       @mutex.synchronize do
         id = @next_id.to_s
         @next_id += 1
-        record = ctx.data.merge({"id" => AnyData.new(id)})
+        record = ctx.data.dup
+        record["id"] = id
         @store[id] = record
         record
       end
@@ -46,7 +46,8 @@ module Alumna
       @mutex.synchronize do
         id = ctx.id || raise ServiceError.bad_request("ID required for update")
         raise ServiceError.not_found unless @store.has_key?(id)
-        record = ctx.data.merge({"id" => AnyData.new(id)})
+        record = ctx.data.dup
+        record["id"] = id
         @store[id] = record
         record
       end
@@ -56,7 +57,8 @@ module Alumna
       @mutex.synchronize do
         id = ctx.id || raise ServiceError.bad_request("ID required for patch")
         existing = @store[id]? || raise ServiceError.not_found
-        record = existing.merge(ctx.data).merge({"id" => AnyData.new(id)})
+        record = existing.merge(ctx.data)
+        record["id"] = id
         @store[id] = record
         record
       end

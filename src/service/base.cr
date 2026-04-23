@@ -85,7 +85,7 @@ module Alumna
       when .remove?
         # remove returns Bool — translate to a minimal result hash
         removed = remove(ctx)
-        result = {"removed" => AnyData.new(removed)} of String => AnyData
+        result = {"removed" => removed} of String => AnyData
         {result, nil}
       else
         {nil, ServiceError.internal("Unknown service method")}

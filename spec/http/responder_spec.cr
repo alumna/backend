@@ -43,7 +43,7 @@ describe Alumna::Http::Responder do
     end
 
     it "copies ctx.http.headers to the response" do
-      ctx = build_ctx(result: {"ok" => Alumna::AnyData.new(true)})
+      ctx = build_ctx(result: {"ok" => true} of String => Alumna::AnyData)
       ctx.http.headers["X-Custom"] = "abc"
       resp = fake_response
 
@@ -78,7 +78,7 @@ describe Alumna::Http::Responder do
     end
 
     it "uses ctx.http.status when set" do
-      ctx = build_ctx(result: {"a" => Alumna::AnyData.new(1)})
+      ctx = build_ctx(result: {"a" => 1_i64} of String => Alumna::AnyData)
       ctx.http.status = 202
       resp = fake_response
 
@@ -89,7 +89,7 @@ describe Alumna::Http::Responder do
     end
 
     it "defaults to 201 for create and 200 otherwise" do
-      create_ctx = build_ctx(method: Alumna::ServiceMethod::Create, result: {"id" => Alumna::AnyData.new("1")})
+      create_ctx = build_ctx(method: Alumna::ServiceMethod::Create, result: {"id" => "1"} of String => Alumna::AnyData)
       find_ctx = build_ctx(method: Alumna::ServiceMethod::Find, result: [] of Hash(String, Alumna::AnyData))
 
       create_resp = fake_response
@@ -105,7 +105,7 @@ describe Alumna::Http::Responder do
     end
 
     it "encodes Array results" do
-      ctx = build_ctx(result: [{"x" => Alumna::AnyData.new(1)}])
+      ctx = build_ctx(result: [{"x" => 1_i64} of String => Alumna::AnyData])
       resp = fake_response
 
       Alumna::Http::Responder.write(resp, ctx, json_serializer)
@@ -115,7 +115,7 @@ describe Alumna::Http::Responder do
     end
 
     it "encodes Hash results" do
-      ctx = build_ctx(result: {"ok" => Alumna::AnyData.new(true)})
+      ctx = build_ctx(result: {"ok" => true} of String => Alumna::AnyData)
       resp = fake_response
 
       Alumna::Http::Responder.write(resp, ctx, json_serializer)
@@ -138,7 +138,7 @@ describe Alumna::Http::Responder do
 
   describe ".write_error" do
     it "sets status and encodes error with details" do
-      err = Alumna::ServiceError.unprocessable("bad", {"field" => "required"})
+      err = Alumna::ServiceError.unprocessable("bad", {"field" => "required"} of String => Alumna::AnyData)
       resp = fake_response
 
       Alumna::Http::Responder.write_error(resp, err, json_serializer)

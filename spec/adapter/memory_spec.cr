@@ -2,16 +2,16 @@ require "../spec_helper"
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-private def any(v : String)
-  JSON::Any.new(v)
+private def any(v : String) : Alumna::AnyData
+  v
 end
 
-private def any(v : Bool)
-  JSON::Any.new(v)
+private def any(v : Bool) : Alumna::AnyData
+  v
 end
 
-private def any(v : Int64)
-  JSON::Any.new(v)
+private def any(v : Int) : Alumna::AnyData
+  v.to_i64
 end
 
 # Builds a RuleContext wired to the given adapter.
@@ -50,35 +50,35 @@ describe Alumna::MemoryAdapter do
   describe "#create" do
     it "returns the record with an auto-assigned id" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"name" => any("Alice")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"name" => any("Alice")} of String => Alumna::AnyData)
       record = adapter.create(ctx)
-      record["id"].as_s.should eq("1")
-      record["name"].as_s.should eq("Alice")
+      record["id"].should eq("1")
+      record["name"].should eq("Alice")
     end
 
     it "auto-increments ids across successive calls" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      r1 = insert(adapter, {"x" => any("a")})
-      r2 = insert(adapter, {"x" => any("b")})
-      r1["id"].as_s.should eq("1")
-      r2["id"].as_s.should eq("2")
+      r1 = insert(adapter, {"x" => any("a")} of String => Alumna::AnyData)
+      r2 = insert(adapter, {"x" => any("b")} of String => Alumna::AnyData)
+      r1["id"].should eq("1")
+      r2["id"].should eq("2")
     end
 
     it "overrides any id supplied in the input data with its own counter" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"id" => any("999"), "name" => any("Bob")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"id" => any("999"), "name" => any("Bob")} of String => Alumna::AnyData)
       record = adapter.create(ctx)
-      record["id"].as_s.should eq("1")
+      record["id"].should eq("1")
     end
 
     it "persists the record so it can be retrieved afterwards" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
+        record["name"].should eq("Alice")
       end
     end
   end
@@ -94,37 +94,37 @@ describe Alumna::MemoryAdapter do
 
     it "returns all records when no params are given" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
-      insert(adapter, {"name" => any("Bob")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
+      insert(adapter, {"name" => any("Bob")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find)
       adapter.find(ctx).size.should eq(2)
     end
 
     it "filters records by a single query param" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"role" => any("admin")})
-      insert(adapter, {"role" => any("user")})
+      insert(adapter, {"role" => any("admin")} of String => Alumna::AnyData)
+      insert(adapter, {"role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
       results = adapter.find(ctx)
       results.size.should eq(1)
-      results.first["role"].as_s.should eq("admin")
+      results.first["role"].should eq("admin")
     end
 
     it "applies AND semantics when multiple params are given" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"role" => any("admin"), "active" => any("true")})
-      insert(adapter, {"role" => any("admin"), "active" => any("false")})
-      insert(adapter, {"role" => any("user"), "active" => any("true")})
+      insert(adapter, {"role" => any("admin"), "active" => any("true")} of String => Alumna::AnyData)
+      insert(adapter, {"role" => any("admin"), "active" => any("false")} of String => Alumna::AnyData)
+      insert(adapter, {"role" => any("user"), "active" => any("true")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin", "active" => "true"})
       results = adapter.find(ctx)
       results.size.should eq(1)
-      results.first["role"].as_s.should eq("admin")
-      results.first["active"].as_s.should eq("true")
+      results.first["role"].should eq("admin")
+      results.first["active"].should eq("true")
     end
 
     it "returns an empty array when no records match the filter" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"role" => any("user")})
+      insert(adapter, {"role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
       adapter.find(ctx).should be_empty
     end
@@ -135,12 +135,12 @@ describe Alumna::MemoryAdapter do
   describe "#get" do
     it "returns the record for a known id" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
+        record["name"].should eq("Alice")
       end
     end
 
@@ -162,44 +162,44 @@ describe Alumna::MemoryAdapter do
   describe "#update" do
     it "replaces the record entirely and returns it with the same id" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice"), "role" => any("user")})
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")})
+      insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")} of String => Alumna::AnyData)
       record = adapter.update(ctx)
-      record["id"].as_s.should eq("1")
-      record["name"].as_s.should eq("Alice Smith")
+      record["id"].should eq("1")
+      record["name"].should eq("Alice Smith")
     end
 
     it "drops fields from the old record that are absent from the new data" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice"), "role" => any("user")})
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")})
+      insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")} of String => Alumna::AnyData)
       record = adapter.update(ctx)
       record["role"]?.should be_nil
     end
 
     it "persists the replacement so a subsequent get reflects it" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
-      update_ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
+      update_ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice Smith")} of String => Alumna::AnyData)
       adapter.update(update_ctx)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice Smith")
+        record["name"].should eq("Alice Smith")
       end
     end
 
     it "raises a 404 error when the id does not exist" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "99", data: {"name" => any("Ghost")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "99", data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.update(ctx) }
       error.status.should eq(404)
     end
 
     it "raises a 400 error when ctx.id is nil" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: nil, data: {"name" => any("Ghost")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: nil, data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.update(ctx) }
       error.status.should eq(400)
     end
@@ -210,38 +210,38 @@ describe Alumna::MemoryAdapter do
   describe "#patch" do
     it "merges the new data onto the existing record" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice"), "role" => any("user")})
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")})
+      insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")} of String => Alumna::AnyData)
       record = adapter.patch(ctx)
-      record["name"].as_s.should eq("Alice") # original field preserved
-      record["role"].as_s.should eq("admin") # field updated
-      record["id"].as_s.should eq("1")
+      record["name"].should eq("Alice") # original field preserved
+      record["role"].should eq("admin") # field updated
+      record["id"].should eq("1")
     end
 
     it "persists the merge so a subsequent get reflects it" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice"), "role" => any("user")})
-      patch_ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")})
+      insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
+      patch_ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")} of String => Alumna::AnyData)
       adapter.patch(patch_ctx)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(get_ctx)
       record.should_not be_nil
       if record
-        record["name"].as_s.should eq("Alice")
-        record["role"].as_s.should eq("admin")
+        record["name"].should eq("Alice")
+        record["role"].should eq("admin")
       end
     end
 
     it "raises a 404 error when the id does not exist" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "99", data: {"name" => any("Ghost")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "99", data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.patch(ctx) }
       error.status.should eq(404)
     end
 
     it "raises a 400 error when ctx.id is nil" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: nil, data: {"name" => any("Ghost")})
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: nil, data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.patch(ctx) }
       error.status.should eq(400)
     end
@@ -252,14 +252,14 @@ describe Alumna::MemoryAdapter do
   describe "#remove" do
     it "deletes the record and returns true" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: "1")
       adapter.remove(ctx).should be_true
     end
 
     it "makes the record unretrievable after deletion" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      insert(adapter, {"name" => any("Alice")})
+      insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       remove_ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: "1")
       adapter.remove(remove_ctx)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
@@ -290,7 +290,7 @@ describe Alumna::MemoryAdapter do
 
       count.times do
         spawn do
-          ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"x" => any("v")})
+          ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"x" => any("v")} of String => Alumna::AnyData)
           adapter.create(ctx)
           done.send(nil)
         end
@@ -302,14 +302,14 @@ describe Alumna::MemoryAdapter do
       records = adapter.find(ctx)
 
       records.size.should eq(count)
-      ids = records.map { |r| r["id"].as_s.to_i64 }.sort
+      ids = records.map { |r| r["id"].as(String).to_i64 }.sort
       ids.should eq((1_i64..count.to_i64).to_a)
     end
 
     it "does not lose updates under concurrent patches to the same record" do
       adapter = Alumna::MemoryAdapter.new("/items")
-      base = insert(adapter, {"counter" => any(0_i64)})
-      id = base["id"].as_s
+      base = insert(adapter, {"counter" => any(0_i64)} of String => Alumna::AnyData)
+      id = base["id"].as(String)
 
       writers = 50
       done = Channel(Nil).new(writers)
@@ -321,13 +321,13 @@ describe Alumna::MemoryAdapter do
           current = adapter.get(get_ctx)
           current.should_not be_nil
           if current
-            val = current["counter"].as_i64
+            val = current["counter"].as(Int64)
 
             patch_ctx = make_ctx(
               adapter,
               Alumna::ServiceMethod::Patch,
               id: id,
-              data: {"counter" => any(val + 1)}
+              data: {"counter" => any(val + 1)} of String => Alumna::AnyData
             )
             adapter.patch(patch_ctx)
           end
@@ -345,9 +345,9 @@ describe Alumna::MemoryAdapter do
         # With mutex, each patch is atomic — we won't lose writes entirely,
         # but because read-modify-write isn't atomic across calls, the final
         # value will be <= writers. The important assertion is no corruption:
-        final["counter"].as_i64.should be >= 1
-        final["counter"].as_i64.should be <= writers
-        final["id"].as_s.should eq(id) # record still intact
+        final["counter"].as(Int64).should be >= 1
+        final["counter"].as(Int64).should be <= writers
+        final["id"].as(String).should eq(id) # record still intact
       end
     end
 
@@ -357,7 +357,7 @@ describe Alumna::MemoryAdapter do
 
       spawn do
         50.times do |i|
-          insert(adapter, {"n" => any(i.to_i64)})
+          insert(adapter, {"n" => any(i.to_i64)} of String => Alumna::AnyData)
           Fiber.yield
         end
         done.send(nil)

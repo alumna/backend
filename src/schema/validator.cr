@@ -16,53 +16,45 @@ module Alumna
       errors = [] of FieldError
 
       @fields.each do |field|
+        has_key = data.has_key?(field.name)
         value = data[field.name]?
 
         # --- Presence check ---
-        if value.nil?
+        unless has_key
           req_on = field.required_on
           should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
-
           errors << FieldError.new(field.name, "is required") if should_require
           next
         end
 
         # --- Explicit null ---
-        if value.raw.nil?
+        if value.nil?
           next if field.type.nullable?
-
           req_on = field.required_on
           should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
-
           errors << FieldError.new(field.name, "is required") if should_require
           next
         end
 
         # --- Type check ---
-        type_error = check_type(field, value)
-        if type_error
+        if type_error = check_type(field, value)
           errors << FieldError.new(field.name, type_error)
-          # Skip constraint checks when the type is already wrong —
-          # length/format errors on a mis-typed value are misleading
           next
         end
 
-        # --- Constraint checks (only meaningful for strings) ---
-        if field.type.str?
-          str = value.as_s
-
+        # --- Constraint checks (only for strings) ---
+        if field.type.str? && value.is_a?(String)
+          str = value
           if min = field.min_length
             if str.size < min
               errors << FieldError.new(field.name, "must be at least #{min} character#{min == 1 ? "" : "s"}")
             end
           end
-
           if max = field.max_length
             if str.size > max
               errors << FieldError.new(field.name, "must be at most #{max} character#{max == 1 ? "" : "s"}")
             end
           end
-
           if fmt = field.format
             unless valid_format?(str, fmt)
               errors << FieldError.new(field.name, format_message(fmt))
@@ -77,14 +69,13 @@ module Alumna
     private def check_type(field : FieldDescriptor, value : AnyData) : String?
       case field.type
       when .str?
-        value.as_s? ? nil : "must be a string"
+        value.is_a?(String) ? nil : "must be a string"
       when .int?
-        # JSON integers arrive as Int64 inside AnyData
-        value.as_i64? || value.as_i? ? nil : "must be an integer"
+        value.is_a?(Int64) ? nil : "must be an integer"
       when .float?
-        value.as_f? || value.as_i? ? nil : "must be a number"
+        (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
       when .bool?
-        !value.as_bool?.nil? ? nil : "must be true or false"
+        value.is_a?(Bool) ? nil : "must be true or false"
       else
         nil
       end
@@ -92,16 +83,10 @@ module Alumna
 
     private def valid_format?(value : String, format : FieldFormat) : Bool
       case format
-      when .email?
-        # Intentionally simple: local@domain.tld — not RFC 5322 complete,
-        # which is the right pragmatic choice for a framework validator
-        !!(value =~ EMAIL_REGEX)
-      when .url?
-        !!(value =~ URL_REGEX)
-      when .uuid?
-        !!(value =~ UUID_REGEX)
-      else
-        true
+      when .email? then !!(value =~ EMAIL_REGEX)
+      when .url?   then !!(value =~ URL_REGEX)
+      when .uuid?  then !!(value =~ UUID_REGEX)
+      else              true
       end
     end
 

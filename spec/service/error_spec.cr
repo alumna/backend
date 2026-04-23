@@ -3,10 +3,10 @@ require "../spec_helper"
 describe Alumna::ServiceError do
   describe "initialization" do
     it "stores message, status, and details" do
-      err = Alumna::ServiceError.new("boom", 418, {"field" => "bad"})
+      err = Alumna::ServiceError.new("boom", 418, {"field" => "bad"} of String => Alumna::AnyData)
       err.message.should eq("boom")
       err.status.should eq(418)
-      err.details.should eq({"field" => "bad"})
+      err.details.should eq({"field" => "bad"} of String => Alumna::AnyData)
     end
 
     it "defaults status to 400 and details to empty hash" do
@@ -40,7 +40,7 @@ describe Alumna::ServiceError do
     end
 
     it "accepts details hash" do
-      err = Alumna::ServiceError.bad_request("invalid", {"id" => "required"})
+      err = Alumna::ServiceError.bad_request("invalid", {"id" => "required"} of String => Alumna::AnyData)
       err.details["id"].should eq("required")
     end
   end
@@ -88,7 +88,7 @@ describe Alumna::ServiceError do
 
   describe ".unprocessable" do
     it "returns 422 with message and details" do
-      details = {"title" => "is required", "email" => "must be a valid email address"}
+      details = {"title" => "is required", "email" => "must be a valid email address"} of String => Alumna::AnyData
       err = Alumna::ServiceError.unprocessable("Validation failed", details)
       err.status.should eq(422)
       err.message.should eq("Validation failed")
