@@ -69,17 +69,13 @@ module Alumna
     private def check_type(field : FieldDescriptor, value : AnyData) : String?
       case field.type
       when .str?
-        return nil if value.is_a?(String)
-        return "must be a string"
+        value.is_a?(String) ? nil : "must be a string"
       when .int?
-        return nil if value.is_a?(Int64)
-        return "must be an integer"
+        value.is_a?(Int64) ? nil : "must be an integer"
       when .float?
-        return nil if value.is_a?(Float64) || value.is_a?(Int64)
-        return "must be a number"
+        (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
       when .bool?
-        return nil if value.is_a?(Bool)
-        return "must be true or false"
+        value.is_a?(Bool) ? nil : "must be true or false"
       else
         nil
       end
