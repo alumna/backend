@@ -179,24 +179,25 @@ describe Alumna::Schema do
   # ── Format constraints ────────────────────────────────────────────────────────
 
   describe "Email format" do
-    schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str, format: Alumna::FieldFormat::Email)
+    schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str, format: :email)
 
     it "accepts a valid email" { errors_for(schema, {"email" => any("alice@example.com")}).should be_empty }
     it "rejects missing @" { error_on(schema, {"email" => any("notanemail")}, "email").should eq("must be a valid email address") }
   end
 
   describe "Url format" do
-    schema = Alumna::Schema.new.field("url", Alumna::FieldType::Str, format: Alumna::FieldFormat::Url)
+    schema = Alumna::Schema.new.field("url", Alumna::FieldType::Str, format: :url)
 
     it "accepts https URL" { errors_for(schema, {"url" => any("https://example.com/path?q=1")}).should be_empty }
     it "rejects plain domain" { error_on(schema, {"url" => any("example.com")}, "url").should eq("must be a valid URL (http or https)") }
   end
 
   describe "Uuid format" do
-    schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: Alumna::FieldFormat::Uuid)
+    schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: :uuid)
 
     it "accepts a lowercase UUID" { errors_for(schema, {"id" => any("550e8400-e29b-41d4-a716-446655440000")}).should be_empty }
-    it "rejects missing hyphens" { error_on(schema, {"id" => any("550e8400e29b41d4a716446655440000")}, "id").should eq("must be a valid UUID") }
+    it "accepts UUID without hyphens" { errors_for(schema, {"id" => any("550e8400e29b41d4a716446655440000")}).should be_empty }
+    it "rejects invalid UUID" { error_on(schema, {"id" => any("550e8400e29b41d4a71644665544")}, "id").should eq("must be a valid UUID") }
   end
 
   # ── Constraint skipping on type error ────────────────────────────────────────
@@ -204,7 +205,7 @@ describe Alumna::Schema do
   describe "skipping length/format checks when type is wrong" do
     schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str,
       min_length: 5,
-      format: Alumna::FieldFormat::Email
+      format: :email
     )
 
     it "reports only the type error" do
@@ -234,7 +235,7 @@ describe Alumna::Schema do
     it "returns multiple errors for one field" do
       schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str,
         min_length: 10,
-        format: Alumna::FieldFormat::Email
+        format: :email
       )
       # "a@b" is too short AND fails the email regex (no TLD)
       errs = errors_for(schema, {"email" => any("a@b")})
@@ -249,13 +250,18 @@ describe Alumna::Schema do
     end
 
     it "accepts uppercase UUID" do
-      schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: Alumna::FieldFormat::Uuid)
+      schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: :uuid)
       errors_for(schema, {"id" => any("550E8400-E29B-41D4-A716-446655440000")}).should be_empty
     end
 
-    it "rejects URL with trailing space" do
-      schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: Alumna::FieldFormat::Url)
-      error_on(schema, {"u" => any("https://example.com ")}, "u").should eq("must be a valid URL (http or https)")
+    it "accepts URL with surrounding whitespace" do
+      schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: :url)
+      errors_for(schema, {"u" => any("  https://example.com  ")}).should be_empty
+    end
+
+    it "rejects URL with internal space" do
+      schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: :url)
+      error_on(schema, {"u" => any("https://exa mple.com")}, "u").should eq("must be a valid URL (http or https)")
     end
 
     it "required_on implies presence even when required: false" do

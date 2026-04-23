@@ -13,7 +13,7 @@ Most backend frameworks ask you to learn their full architecture before you can 
 The entire model fits in your head at once:
 
 - A **Service** exposes a standard set of methods (`find`, `get`, `create`, `update`, `patch`, `remove`) and is automatically mounted as a RESTful HTTP API at a given path.
-- A **Rule** is a single-responsibility function that receives a request context, applies one concern — authentication, validation, rate limiting, logging — and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them.
+- A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them.
 - A **Schema** describes the shape of a service's data. It is used for input validation inside rules and as a structural hint for storage adapters.
 
 There is no magic, no dependency injection container, no decorator metadata, no resolver chain. Every moving piece is visible and explicit. A developer new to the codebase can read a service definition and understand the full execution path in minutes.
@@ -24,7 +24,9 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in active early development. The HTTP layer, rule pipeline, schema validation, in-memory adapter, and JSON/MessagePack serialization are complete and tested. See the [Roadmap](#roadmap) for what is coming next.
+Alumna is in active early development. The HTTP layer, rule pipeline, schema validation (now with pluggable formats resolved at definition time), in-memory adapter, and JSON/MessagePack serialization are complete and tested.
+
+See the [Roadmap](#roadmap) for what is coming next.
 
 ---
 
@@ -78,11 +80,11 @@ UserSchema = Alumna::Schema.new
 
 **Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable` (or `Alumna::FieldType::Str`, etc.)
 
-**Supported formats:** `:email`, `:url`, `:uuid`
+**Supported formats:** `:email`, `:url`, `:uuid` - these are built-in and backed by Crystal's stdlib (`URI.parse`, `UUID.parse`). Formats are resolved once when the schema is defined, so validation is a direct Proc call with no hash lookups at runtime.
 
 **Supported constraints:** `required`, `required_on`, `min_length`, `max_length`, `format`
 
-`required_on` lets a field be required only for specific operations — perfect for PATCH:
+`required_on` lets a field be required only for specific operations - perfect for PATCH:
 
 ```crystal
 PostSchema = Alumna::Schema.new
@@ -90,9 +92,27 @@ PostSchema = Alumna::Schema.new
   .str("body",  required_on: [:create, :update], min_length: 1)
 ```
 
+#### Pluggable formats
+
+Formats are not hard-coded. Alumna ships with `:email`, `:url`, and `:uuid`, but you can register your own once at application boot:
+
+```crystal
+Alumna::Formats.register("hex_color", "must be a valid hex color") do |v|
+  v.matches?(/\A#(?:[0-9a-fA-F]{3}){1,2}\z/)
+end
+
+ProductSchema = Alumna::Schema.new
+  .str("name")
+  .str("color", format: :hex_color)
+```
+
+- Registration happens before schemas are built; the validator Proc is stored in the field descriptor
+- Unknown formats raise `ArgumentError` at schema definition time (fail-fast)
+- Built-in formats follow real-world behavior: UUIDs accept both hyphenated and compact forms, URLs accept surrounding whitespace and require `http` or `https`
+
 **Required by default**
 
-All fields are required unless you pass `required: false` or limit them with `required_on`. This matches Crystal's philosophy of failing fast — you opt out of validation, not into it.
+All fields are required unless you pass `required: false` or limit them with `required_on`. This matches Crystal's philosophy of failing fast - you opt out of validation, not into it.
 
 | Declaration | Result |
 |---|---|
@@ -144,7 +164,7 @@ errors = PostSchema.validate(ctx.data, ctx.method)
 
 ### Rules
 
-A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes — they are defined once and registered on one or more services.
+A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes - they are defined once and registered on one or more services.
 
 ```crystal
 # A rule that checks for a valid bearer token
@@ -359,19 +379,19 @@ end
 
 ## Roadmap
 
-### v0.3 — First real database adapter: SQLite
+### v0.3 - First real database adapter: SQLite
 - SQLite adapter for lightweight single-file deployments
 - Using [crystal-sqlite3](https://github.com/crystal-lang/crystal-sqlite3)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.4 — MySQl and PostgreSQL database adapters
+### v0.4 - MySQl and PostgreSQL database adapters
 - MySQl adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-mysql](https://github.com/crystal-lang/crystal-mysql)
 - PostgreSQL adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-pg](https://github.com/will/crystal-pg)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.5 — Real-time events via WebSocket
+### v0.5 - Real-time events via WebSocket
 - Emit service events automatically after successful mutations (`created`, `updated`, `patched`, `removed`)
 - Allow clients to subscribe to specific service paths over a WebSocket connection
 - Rules gain access to an `event` field on the context to suppress or transform events before they are emitted
@@ -380,15 +400,15 @@ end
 ### v0.6 - Redis adapter for cache
 - Redis adapter using [jgaskins/redis](https://github.com/jgaskins/redis)
 
-### v0.6 — NATS integration for horizontal scaling
+### v0.6 - NATS integration for horizontal scaling
 - Stateless service instances publish events to NATS subjects mirroring the service path and method (e.g. `alumna.users.created`)
 - WebSocket gateway subscribes to NATS and fans events out to connected clients
 - Enables multiple Alumna instances behind a load balancer to correctly propagate real-time events across all nodes
 - NATS chosen over AMQP for operational simplicity and natural subject-based routing
 
-### v0.7 — Automated test helpers
-- `Alumna::Testing::ServiceClient` — call service methods directly without an HTTP layer, for fast unit tests
-- `Alumna::Testing::RuleRunner` — execute a single rule against a fabricated context and assert on the result
+### v0.7 - Automated test helpers
+- `Alumna::Testing::ServiceClient` - call service methods directly without an HTTP layer, for fast unit tests
+- `Alumna::Testing::RuleRunner` - execute a single rule against a fabricated context and assert on the result
 - Spec helpers for asserting on context state after dispatch
 
 
@@ -407,7 +427,16 @@ end
 
 **Why no resolvers?** FeathersJS resolvers automatically transform the result payload based on the requesting context. Alumna omits them in favour of explicit after-rules that transform `ctx.result` directly. This is slightly more code in trivial cases but significantly easier to debug and reason about when something goes wrong.
 
-**Why `ServiceResult` instead of `JSON::Any` for the result type?** A typed union of `Hash | Array | Nil` lets the responder dispatch on the actual type rather than inspecting a wrapped value at runtime. It also removes the dependency on `JSON::Any` internals from the context, making the context format-agnostic.
+**Why `ServiceResult` uses `AnyData` instead of `JSON::Any`?** 
+
+Alumna defines its own recursive union:
+
+```crystal
+alias AnyData = Nil | Bool | Int64 | Float64 | String | Array(AnyData) | Hash(String, AnyData)
+alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
+```
+
+This lets every layer - context, services, rules, and serializers - work with native Crystal values instead of a wrapper type. The responder can dispatch on the actual type, MessagePack serializes without unwrapping, and validation errors flow through as plain hashes. It removes the `JSON::Any` dependency from the core, makes the context format-agnostic, and gives the compiler full visibility into data shapes for better errors and zero-cost abstractions.
 
 **Why Crystal?** Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. AOT compilation and a single binary output that eliminates runtime dependency management at deploy time. Performance that competes with Go, C and Rust _(see [LangArena](https://kostya.github.io/LangArena/))_ without sacrificing readability. The type system catches a large class of bugs at compile time that dynamic languages surface only in production.
 

@@ -21,6 +21,10 @@ require "./service/error"
 
 # Schema — depends only on primitives
 require "./schema/base"
+require "./schema/formats/registry"
+require "./schema/formats/email"
+require "./schema/formats/url"
+require "./schema/formats/uuid"
 require "./schema/validator"
 
 # Rule — depends on phase; context not yet defined, Rule is just a Proc alias
