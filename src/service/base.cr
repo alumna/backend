@@ -18,7 +18,11 @@ module Alumna
     def dispatch(ctx : RuleContext) : RuleContext
       # 1. before
       Orchestrator.run(collect_rules(ctx.method, RulePhase::Before), ctx)
-      return ctx if ctx.error
+      if ctx.error
+        ctx.phase = RulePhase::Error
+        Orchestrator.run(collect_rules(ctx.method, RulePhase::Error), ctx)
+        return ctx
+      end
 
       # 2. service method — only if no result yet
       unless ctx.result_set?
@@ -27,6 +31,7 @@ module Alumna
         if error
           ctx.error = error
           ctx.phase = RulePhase::Error
+          Orchestrator.run(collect_rules(ctx.method, RulePhase::Error), ctx)
           return ctx
         end
         ctx.result = result

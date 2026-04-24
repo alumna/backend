@@ -126,6 +126,33 @@ describe "Service#dispatch" do
       # find on an empty store returns [] — result must be set (not nil)
       observed_result.should_not be_nil
     end
+
+    it "runs error rules when before stops" do
+      log = [] of String
+      svc = TrackedService.new
+      svc.before(stopping_rule("boom"))
+      svc.error(Alumna::Rule.new { log << "error"; Alumna::RuleResult.continue })
+
+      ctx = make_ctx(svc, Alumna::ServiceMethod::Find)
+      svc.dispatch(ctx)
+
+      log.should eq(["error"])
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+
+    it "runs app error rules when service errors" do
+      log = [] of String
+      app = Alumna::App.new
+      svc = TrackedService.new
+
+      app.error(Alumna::Rule.new { log << "app-error"; Alumna::RuleResult.continue })
+      app.use("/x", svc)
+
+      ctx = Alumna::RuleContext.new(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Update, phase: Alumna::RulePhase::Before, id: "999")
+      app.dispatch(svc, ctx)
+
+      log.should eq(["app-error"])
+    end
   end
 
   # ── only: scoping ─────────────────────────────────────────────────────────────

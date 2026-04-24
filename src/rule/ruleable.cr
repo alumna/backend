@@ -24,6 +24,15 @@ module Alumna
       self
     end
 
+    def error(rule : Rule, only : ServiceMethod | Symbol) : self
+      error(rule, only: [only])
+    end
+
+    def error(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
+      register_rule(RulePhase::Error, normalize_methods(only), rule)
+      self
+    end
+
     # --- used by dispatch ---
 
     def collect_rules(method : ServiceMethod, phase : RulePhase) : Array(Rule)

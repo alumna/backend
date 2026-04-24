@@ -25,12 +25,12 @@ module Alumna
       # 1. app before
       ctx.phase = RulePhase::Before
       Orchestrator.run(collect_rules(ctx.method, RulePhase::Before), ctx)
-      return ctx if ctx.error
+      return error_rules(ctx) if ctx.error
 
       # 2. service (includes its own before/after)
       unless ctx.result_set?
         service.dispatch(ctx)
-        return ctx if ctx.error
+        return error_rules(ctx) if ctx.error
       end
 
       # 3. app after
@@ -44,6 +44,12 @@ module Alumna
       server = HTTP::Server.new { |ctx| router.handle(ctx) }
       puts "Listening on http://0.0.0.0:#{port}"
       server.listen("0.0.0.0", port)
+    end
+
+    private def error_rules(ctx : RuleContext)
+      ctx.phase = RulePhase::Error
+      Orchestrator.run(collect_rules(ctx.method, RulePhase::Error), ctx)
+      ctx
     end
   end
 end
