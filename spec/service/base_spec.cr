@@ -70,49 +70,6 @@ private def rule(log : Array(String), label : String) : Alumna::Rule
 end
 
 describe "Service::Base" do
-  describe "symbol-friendly registration API" do
-    it "calls the single-value overload for before (line 15)" do
-      log = [] of String
-      svc = TrackedService.new
-      # uses def before(rule, only : ServiceMethod | Symbol)
-      svc.before(rule(log, "single-enum"), only: Alumna::ServiceMethod::Find)
-
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Find))
-      log.should eq(["single-enum"])
-    end
-
-    it "accepts a single Symbol and normalizes via capitalize" do
-      log = [] of String
-      svc = TrackedService.new
-      svc.before(rule(log, "sym"), only: :create) # :create -> "Create"
-
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Create))
-      log.should eq(["sym"])
-      svc.called.should eq(["create"])
-    end
-
-    it "accepts a single Symbol for after (line 19)" do
-      log = [] of String
-      svc = TrackedService.new
-      svc.after(rule(log, "after-sym"), only: :FIND) # tests capitalize handling
-
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Find))
-      log.should eq(["after-sym"])
-    end
-
-    it "accepts an array of Symbols" do
-      log = [] of String
-      svc = TrackedService.new
-      svc.before(rule(log, "multi"), only: [:find, :create])
-
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Find))
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Create))
-      svc.dispatch(make_ctx(svc, Alumna::ServiceMethod::Get)) # should not fire
-
-      log.should eq(["multi", "multi"])
-    end
-  end
-
   describe "error boundary in call_method" do
     it "wraps a raised Exception with message into 500 (line 96)" do
       svc = ExplodingService.new

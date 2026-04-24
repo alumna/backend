@@ -13,7 +13,7 @@ Most backend frameworks ask you to learn their full architecture before you can 
 The entire model fits in your head at once:
 
 - A **Service** exposes a standard set of methods (`find`, `get`, `create`, `update`, `patch`, `remove`) and is automatically mounted as a RESTful HTTP API at a given path.
-- A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them.
+- A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them. Rules can be registered globally on the app or per-service.
 - A **Schema** describes the shape of a service's data. It is used for input validation inside rules and as a structural hint for storage adapters.
 
 There is no magic, no dependency injection container, no decorator metadata, no resolver chain. Every moving piece is visible and explicit. A developer new to the codebase can read a service definition and understand the full execution path in minutes.
@@ -164,7 +164,7 @@ errors = PostSchema.validate(ctx.data, ctx.method)
 
 ### Rules
 
-A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes - they are defined once and registered on one or more services.
+A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes - they are defined once and registered globally on the application or on individual services.
 
 ```crystal
 # A rule that checks for a valid bearer token
@@ -193,7 +193,7 @@ end
 | `ctx.headers` | `Hash(String, String)` | Request headers, lowercased |
 | `ctx.id` | `String?` | Record ID from the URL, if present |
 | `ctx.data` | `Hash(String, AnyData)` | Parsed request body |
-| `ctx.result` | `ServiceResult` | Response payload; set this in a before-rule to skip the service call entirely |
+| `ctx.result` | `ServiceResult` | Response payload; set this in a before-rule to skip the service method (after-rules still run) |
 | `ctx.error` | `ServiceError?` | Present when the pipeline is in the error phase |
 | `ctx.http.status` | `Int32?` | Override the HTTP response status code |
 | `ctx.http.headers` | `Hash(String, String)` | Add custom HTTP response headers |
@@ -248,12 +248,31 @@ end
 | `patch` | `PATCH` | `/users/:id` |
 | `remove` | `DELETE` | `/users/:id` |
 
+
+**Execution order:**
+
+When a request arrives, rules run in this exact sequence:
+
+1. `app.before` rules
+2. `service.before` rules
+3. service method (`find`, `get`, etc.) — skipped if a before-rule set `ctx.result`
+4. `service.after` rules
+5. `app.after` rules
+
+After-rules always run when there is no error, even if a before-rule short-circuited the service method. This makes logging, metrics, and response headers reliable.
+
 ---
 
 ### Application
 
 ```crystal
 app = Alumna::App.new
+
+# Global rules run for every service
+app.before CORS
+app.before RateLimit
+app.after Logger
+
 app.use("/users", UserService.new)
 app.listen(3000)
 ```
