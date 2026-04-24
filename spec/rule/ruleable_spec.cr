@@ -98,4 +98,9 @@ describe Alumna::Ruleable do
     app.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
     svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
   end
+
+  it "registers error rules" do
+    r = DummyRuleable.new.error(rule)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
+  end
 end

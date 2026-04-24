@@ -2,16 +2,17 @@ module Alumna
   module Http
     module Responder
       def self.write(response : HTTP::Server::Response, ctx : RuleContext, serializer : Serializer) : Nil
-        if err = ctx.error
-          write_error(response, err, serializer)
-          return
-        end
-
+        # Always apply headers and location first — works for success and error
         ctx.http.headers.each { |k, v| response.headers[k] = v }
 
         if location = ctx.http.location
           response.headers["Location"] = location
           response.status_code = ctx.http.status || 302
+          return
+        end
+
+        if err = ctx.error
+          write_error(response, err, serializer)
           return
         end
 

@@ -8,10 +8,6 @@ TestSchema = Alumna::Schema.new
   .str("title", required_on: [:create, :update], min_length: 1, max_length: 100)
   .str("content", required: false)
 
-# TestSchema = Alumna::Schema.new
-#   .field("title", :str, required_on: [:create, :update], min_length: 1, max_length: 100)
-#   .field("content", :str, required: false)
-
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
   token == "Bearer test-token" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
@@ -19,6 +15,11 @@ end
 
 AfterLogger = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
+  Alumna::RuleResult.continue
+end
+
+ErrorLogger = Alumna::Rule.new do |ctx|
+  ctx.http.headers["X-Error-ID"] = "err-123"
   Alumna::RuleResult.continue
 end
 
@@ -46,7 +47,10 @@ end
 
 describe "Alumna System Integration" do
   before_all do
-    spawn { Alumna::App.new.use("/test", TestService.new).listen(TEST_PORT) }
+    app = Alumna::App.new
+    app.error ErrorLogger
+    app.use("/test", TestService.new)
+    spawn { app.listen(TEST_PORT) }
     sleep 0.3.seconds
   end
 
@@ -183,5 +187,16 @@ describe "Alumna System Integration" do
     res = authenticated_client.get("/test")
     res.headers["X-Request-ID"]?.should_not be_nil
     res.headers["X-Request-ID"].size.should eq(16)
+  end
+
+  it "error-rule adds X-Error-ID header on auth failure" do
+    res = HTTP::Client.new("localhost", TEST_PORT).get("/test")
+    res.status_code.should eq(401)
+    res.headers["X-Error-ID"]?.should eq("err-123")
+  end
+
+  it "after-rule does not run on error" do
+    res = HTTP::Client.new("localhost", TEST_PORT).get("/test")
+    res.headers["X-Request-ID"]?.should be_nil
   end
 end

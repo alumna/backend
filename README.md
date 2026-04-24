@@ -178,6 +178,13 @@ AddRequestId = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
   Alumna::RuleResult.continue
 end
+
+# An error-rule that logs failures
+LogError = Alumna::Rule.new do |ctx|
+  Log.error { "Request failed: #{ctx.error.not_nil!.message}" }
+  ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
+  Alumna::RuleResult.continue
+end
 ```
 
 **What is available on the context:**
@@ -198,6 +205,8 @@ end
 | `ctx.http.status` | `Int32?` | Override the HTTP response status code |
 | `ctx.http.headers` | `Hash(String, String)` | Add custom HTTP response headers |
 | `ctx.http.location` | `String?` | Set to trigger an HTTP redirect |
+
+> `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design — rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
 
 **Signalling outcomes:**
 
@@ -233,6 +242,7 @@ class UserService < Alumna::MemoryAdapter
     before Authenticate
     before Alumna.validate(UserSchema), only: [:create, :update, :patch]
     after AddRequestId
+    error LogError
   end
 end
 ```
@@ -259,7 +269,12 @@ When a request arrives, rules run in this exact sequence:
 4. `service.after` rules
 5. `app.after` rules
 
-After-rules always run when there is no error, even if a before-rule short-circuited the service method. This makes logging, metrics, and response headers reliable.
+If any rule returns `RuleResult.stop`, the pipeline jumps immediately to error rules:
+
+6. `service.error` rules
+7. `app.error` rules
+
+After-rules always run when there is no error, even if a before-rule short-circuited the service method. Error-rules always run when there is an error, even if it occurred in a before-rule. This makes logging, metrics, and response headers reliable for both success and failure paths.
 
 ---
 
@@ -272,6 +287,7 @@ app = Alumna::App.new
 app.before CORS
 app.before RateLimit
 app.after Logger
+app.error LogError
 
 app.use("/users", UserService.new)
 app.listen(3000)
@@ -442,7 +458,7 @@ end
 
 ## Design decisions and trade-offs
 
-**Why rules instead of middleware?** Middleware in most frameworks is a general-purpose mechanism with implicit ordering and no declared intent. A rule has an explicit phase (`before` or `after`), an explicit target (all methods or a named subset), and a contract that returns a typed result. The intent is visible from the registration site.
+**Why rules instead of middleware?** Middleware in most frameworks is a general-purpose mechanism with implicit ordering and no declared intent. A rule has an explicit phase (`before`, `after`, or `error`), an explicit target (all methods or a named subset), and a contract that returns a typed result. The intent is visible from the registration site.
 
 **Why no resolvers?** FeathersJS resolvers automatically transform the result payload based on the requesting context. Alumna omits them in favour of explicit after-rules that transform `ctx.result` directly. This is slightly more code in trivial cases but significantly easier to debug and reason about when something goes wrong.
 
