@@ -103,4 +103,16 @@ describe Alumna::Ruleable do
     r = DummyRuleable.new.error(rule)
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
   end
+
+  it "accepts single enum overload for error" do
+    r = DummyRuleable.new
+    r.error(rule, only: Alumna::ServiceMethod::Find)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
+  end
+
+  it "accepts single symbol for error and normalizes" do
+    r = DummyRuleable.new
+    r.error(rule, only: :create)
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).size.should eq(1)
+  end
 end
