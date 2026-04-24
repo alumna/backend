@@ -2,6 +2,9 @@ require "http/server"
 
 module Alumna
   class App
+    # before and after rules can be applied at the app (global) level
+    include Ruleable
+
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
 
@@ -15,6 +18,25 @@ module Alumna
     def use(path : String, service : Service) : self
       @services[path] = service
       self
+    end
+
+    # central dispatch that wraps service dispatch
+    def dispatch(service : Service, ctx : RuleContext) : RuleContext
+      # 1. app before
+      ctx.phase = RulePhase::Before
+      Orchestrator.run(collect_rules(ctx.method, RulePhase::Before), ctx)
+      return ctx if ctx.error
+
+      # 2. service (includes its own before/after)
+      unless ctx.result_set?
+        service.dispatch(ctx)
+        return ctx if ctx.error
+      end
+
+      # 3. app after
+      ctx.phase = RulePhase::After
+      Orchestrator.run(collect_rules(ctx.method, RulePhase::After), ctx)
+      ctx
     end
 
     def listen(port : Int32 = 3000)

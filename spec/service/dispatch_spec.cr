@@ -167,39 +167,86 @@ describe "Service#dispatch" do
     end
   end
 
-  # ── Global vs method-specific ordering ───────────────────────────────────────
+  # ── Global vs method-specific rules ───────────────────────────────────────
 
-  describe "global vs method-specific rule ordering" do
-    it "runs global before rules ahead of method-specific before rules" do
+  describe "global vs method-specific rules" do
+    it "runs app rules around service rules" do
       log = [] of String
-      service = TrackedService.new
 
-      service.before(
-        continuing_rule(log, "specific"),
-        only: [Alumna::ServiceMethod::Find]
+      app = Alumna::App.new
+      svc = Alumna::MemoryAdapter.new("/ordered")
+
+      app.before(Alumna::Rule.new { log << "app-before"; Alumna::RuleResult.continue })
+      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+
+      svc.before(Alumna::Rule.new { log << "svc-before"; Alumna::RuleResult.continue })
+      svc.after(Alumna::Rule.new { log << "svc-after"; Alumna::RuleResult.continue })
+
+      app.use("/ordered", svc)
+
+      ctx = Alumna::RuleContext.new(
+        app: app,
+        service: svc,
+        path: "/ordered",
+        method: Alumna::ServiceMethod::Find,
+        phase: Alumna::RulePhase::Before
       )
-      service.before(continuing_rule(log, "global"))
 
-      ctx = make_ctx(service, Alumna::ServiceMethod::Find)
-      service.dispatch(ctx)
+      app.dispatch(svc, ctx) # use the new App#dispatch, not svc.dispatch
 
-      log.should eq(["global", "specific"])
+      log.should eq(["app-before", "svc-before", "svc-after", "app-after"])
     end
 
-    it "runs global after rules ahead of method-specific after rules" do
+    it "skips service and app.after when app.before stops" do
       log = [] of String
-      service = TrackedService.new
+      app = Alumna::App.new
+      svc = TrackedService.new
 
-      service.after(
-        continuing_rule(log, "specific"),
-        only: [Alumna::ServiceMethod::Find]
-      )
-      service.after(continuing_rule(log, "global"))
+      app.before(Alumna::Rule.new { log << "app-before"; Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized) })
+      svc.before(Alumna::Rule.new { log << "svc-before"; Alumna::RuleResult.continue })
+      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
 
-      ctx = make_ctx(service, Alumna::ServiceMethod::Find)
-      service.dispatch(ctx)
+      ctx = make_ctx(svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::RuleContext.new(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find, phase: Alumna::RulePhase::Before)
 
-      log.should eq(["global", "specific"])
+      app.dispatch(svc, ctx)
+      log.should eq(["app-before"])
+      svc.called.should be_empty
+    end
+
+    it "skips service but still runs app.after when app.before sets result" do
+      # this documents current behavior: result_set stops service, not app.after
+      log = [] of String
+      app = Alumna::App.new
+      svc = TrackedService.new
+
+      app.before(Alumna::Rule.new { |c|
+        c.result = {"cached" => true} of String => Alumna::AnyData
+        log << "app-before"
+        Alumna::RuleResult.continue
+      })
+      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+
+      ctx = Alumna::RuleContext.new(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find, phase: Alumna::RulePhase::Before)
+      app.dispatch(svc, ctx)
+
+      log.should eq(["app-before", "app-after"])
+      svc.called.should be_empty
+    end
+
+    it "skips app.after when service errors" do
+      log = [] of String
+      app = Alumna::App.new
+      svc = TrackedService.new
+
+      svc.before(stopping_rule("boom"))
+      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+
+      ctx = make_ctx(svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::RuleContext.new(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find, phase: Alumna::RulePhase::Before)
+
+      app.dispatch(svc, ctx)
+      log.should be_empty
     end
   end
 
@@ -258,7 +305,7 @@ describe "Service#dispatch" do
       service.called.should be_empty
     end
 
-    it "does not run after rules" do
+    it "run after rules even with result already set" do
       log = [] of String
       service = TrackedService.new
 
@@ -268,7 +315,7 @@ describe "Service#dispatch" do
       ctx = make_ctx(service, Alumna::ServiceMethod::Find)
       service.dispatch(ctx)
 
-      log.should be_empty
+      log.should eq(["after"])
     end
 
     it "preserves the result set by the before rule" do

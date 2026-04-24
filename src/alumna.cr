@@ -1,8 +1,6 @@
 module Alumna
   VERSION = "0.2.5"
 
-  # Returns a ready-to-use validation rule for a schema.
-  # Usage: before Alumna.validate(UserSchema), only: [:create, :update, :patch]
   def self.validate(schema : Schema) : Rule
     Rule.new do |ctx|
       errors = schema.validate(ctx.data, ctx.method)
@@ -13,11 +11,20 @@ module Alumna
   end
 end
 
-# Core enums and primitives first — no dependencies
+# Core enums and primitives — no dependencies
 require "./core/types"
 require "./service/method"
 require "./rule/phase"
 require "./service/error"
+
+# --- Solving a circular dependency ---
+# RuleContext needs App and Service as types, but App/Service need Rule.
+# Forward-declare them so context can compile.
+module Alumna
+  class App; end
+
+  abstract class Service; end
+end
 
 # Schema — depends only on primitives
 require "./schema/base"
@@ -27,18 +34,16 @@ require "./schema/formats/url"
 require "./schema/formats/uuid"
 require "./schema/validator"
 
-# Rule — depends on phase; context not yet defined, Rule is just a Proc alias
-require "./rule/base"
-
-# Context — depends on App, Service, ServiceMethod, RulePhase, ServiceError, HttpOverrides
-# App and Service are forward-referenced here, so they must be required immediately after
+# Context — now safe because App and Service exist as forward declarations
 require "./service/context"
-require "./app"
 
-# Orchestrator — depends on Rule, RuleContext
+# Rule — now safe because RuleContext exists
+require "./rule/base"
 require "./rule/orchestrator"
+require "./rule/ruleable"
 
-# Service base — depends on everything above
+# Full implementations — these reopen the forward-declared classes
+require "./app"
 require "./service/base"
 
 # Adapter — depends on Service base

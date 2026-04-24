@@ -71,7 +71,7 @@ module Alumna
           data: data
         )
 
-        service.dispatch(ctx)
+        ctx.app.dispatch(service, ctx)
         Responder.write(response, ctx, output_serializer)
       end
 
