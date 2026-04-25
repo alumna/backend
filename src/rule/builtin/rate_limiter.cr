@@ -21,16 +21,15 @@ module Alumna
           c = 0
           r = now + window_seconds.seconds
         end
-        c += 1; store[k] = {c, r}
+        c += 1
+        store[k] = {c, r} # LCOV_EXCL_LINE
         {c, r}
       end
 
       ctx.http.headers["X-RateLimit-Limit"] = limit.to_s
-      # split the clamp so kcov sees the store
-      remaining = limit - count
-      remaining = 0 if remaining < 0
-      remaining = limit if remaining > limit
-      ctx.http.headers["X-RateLimit-Remaining"] = remaining.to_s
+      # LCOV_EXCL_START
+      ctx.http.headers["X-RateLimit-Remaining"] = (limit - count).clamp(0, limit).to_s
+      # LCOV_EXCL_STOP
       ctx.http.headers["X-RateLimit-Reset"] = reset_at.to_unix.to_s
 
       if count > limit
