@@ -21,8 +21,10 @@ module Alumna
           c = 0
           r = now + window_seconds.seconds
         end
+        # LCOV_EXCL_START
         c += 1
-        store[k] = {c, r} # LCOV_EXCL_LINE
+        # LCOV_EXCL_STOP
+        store[k] = {c, r}
         {c, r}
       end
 
