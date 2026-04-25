@@ -21,7 +21,7 @@ module Alumna
           c = 0
           r = now + window_seconds.seconds
         end
-        # LCOV_EXCL_START
+        # LCOV_EXCL_START - kcov misses compound assign in Mutex block, covered by spec
         c += 1
         # LCOV_EXCL_STOP
         store[k] = {c, r}
@@ -29,7 +29,7 @@ module Alumna
       end
 
       ctx.http.headers["X-RateLimit-Limit"] = limit.to_s
-      # LCOV_EXCL_START
+      # LCOV_EXCL_START - kcov misses chained clamp, covered by spec
       ctx.http.headers["X-RateLimit-Remaining"] = (limit - count).clamp(0, limit).to_s
       # LCOV_EXCL_STOP
       ctx.http.headers["X-RateLimit-Reset"] = reset_at.to_unix.to_s
