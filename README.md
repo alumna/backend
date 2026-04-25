@@ -24,7 +24,7 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in active early development. The HTTP layer, rule pipeline, schema validation (now with pluggable formats resolved at definition time), in-memory adapter, and JSON/MessagePack serialization are complete and tested.
+Alumna is in active early development. The HTTP layer, rule pipeline, schema validation (now with pluggable formats resolved at definition time), in-memory adapter, JSON/MessagePack serialization, and a set of production-ready built-in rules (CORS, logging, rate limiting, and validation) are complete and tested.
 
 See the [Roadmap](#roadmap) for what is coming next.
 
@@ -160,6 +160,54 @@ Schemas are plain objects. When needed, inside your own rule, call `schema.valid
 errors = PostSchema.validate(ctx.data, ctx.method)
 ```
 
+### Built-in rules
+
+Alumna ships with four zero-dependency rules that cover the most common production needs. They live in `src/rule/builtin/` and are exposed as simple factory methods:
+
+```crystal
+Alumna.validate(schema)                    # schema validation
+Alumna.cors(origins: ["*"])                # CORS headers
+Alumna.logger(io = STDOUT)                 # request logging
+Alumna.rate_limit(limit: 100, window_seconds: 60) # in-memory rate limiting
+```
+
+**1. Validation**
+```crystal
+before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+```
+Returns 422 with per-field details when validation fails. Respects `required_on`.
+
+**2. CORS**
+```crystal
+before Alumna.cors(origins: ["https://app.example.com"], methods: ["GET","POST"])
+```
+- Sets `Access-Control-Allow-Origin`, `Vary`, and related headers
+- Handles preflight `OPTIONS` automatically with a 204 response
+- Use `origins: ["*"]` for public APIs
+
+**3. Logger**
+```crystal
+before Alumna.logger
+after Alumna.logger
+```
+Logs in combined format using the monotonic clock:
+```
+5.5.5.5 "GET /users/123" 200 2.3ms
+```
+- Uses `ctx.remote_ip`, `ctx.http_method`, and `ctx.store` to correlate before/after phases
+- Works with any `IO` — pass `File.open("access.log", "a")` for file logging
+
+**4. Rate limiter**
+```crystal
+before Alumna.rate_limit(limit: 60, window_seconds: 60)
+```
+- In-memory sliding window per IP + service path
+- Sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
+- Returns 429 with `Retry-After` when exceeded
+- Skips `OPTIONS` requests automatically
+
+All four are regular `Rule` objects — you can compose them with your own rules, limit them with `only:`/`except:`, and test them with `RuleRunner` like any custom rule.
+
 ---
 
 ### Rules
@@ -196,12 +244,16 @@ end
 | `ctx.path` | `String` | The service path, e.g. `"/users"` |
 | `ctx.method` | `ServiceMethod` | `Find`, `Get`, `Create`, `Update`, `Patch`, `Remove` |
 | `ctx.phase` | `RulePhase` | `Before`, `After`, or `Error` |
+| `ctx.http_method` | `String` | Original HTTP verb (`GET`, `POST`, etc.) |
+| `ctx.remote_ip` | `String` | Client IP address, or Unix socket path when applicable |
+| `ctx.provider` | `String` | Transport that invoked the service (`"rest"` today, `"websocket"` in future) |
 | `ctx.params` | `Hash(String, String)` | Query string parameters |
 | `ctx.headers` | `Hash(String, String)` | Request headers, lowercased |
 | `ctx.id` | `String?` | Record ID from the URL, if present |
 | `ctx.data` | `Hash(String, AnyData)` | Parsed request body |
 | `ctx.result` | `ServiceResult` | Response payload; set this in a before-rule to skip the service method (after-rules still run) |
 | `ctx.error` | `ServiceError?` | Present when the pipeline is in the error phase |
+| `ctx.store` | `Hash(String, AnyData)` | Per-request scratch space for sharing data between before/after rules |
 | `ctx.http.status` | `Int32?` | Override the HTTP response status code |
 | `ctx.http.headers` | `Hash(String, String)` | Add custom HTTP response headers |
 | `ctx.http.location` | `String?` | Set to trigger an HTTP redirect |
@@ -450,7 +502,6 @@ end
 
 ### Future
 - MongoDB adapter using [cryomongo](https://github.com/elbywan/cryomongo) or [moongoon](https://github.com/elbywan/moongoon)
-- Rate limiting rule built into the framework core
 - JWT authentication helper rule
 - CLI scaffolding tool (`alumna new`, `alumna generate service`)
 

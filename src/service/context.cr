@@ -10,6 +10,8 @@ module Alumna
     getter path : String
     getter method : ServiceMethod
     getter phase : RulePhase
+    getter http_method : String
+    getter remote_ip : String
 
     # --- Writable ---
     property params : Hash(String, String)
@@ -20,6 +22,7 @@ module Alumna
     property error : ServiceError?
     property http : HttpOverrides
     property headers : Hash(String, String)
+    property store : Hash(String, AnyData)
 
     protected setter phase
 
@@ -29,6 +32,8 @@ module Alumna
       @path : String,
       @method : ServiceMethod,
       @phase : RulePhase,
+      @http_method : String = "GET",
+      @remote_ip : String = "",
       @params : Hash(String, String) = {} of String => String,
       @provider : String = "rest",
       @id : String? = nil,
@@ -38,6 +43,7 @@ module Alumna
       @result = nil
       @error = nil
       @http = HttpOverrides.new
+      @store = {} of String => AnyData
     end
 
     def result_set? : Bool
