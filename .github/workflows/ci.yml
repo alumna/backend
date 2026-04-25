@@ -29,74 +29,74 @@ jobs:
       - run: crystal tool format --check
 
   coverage:
-      runs-on: ubuntu-22.04
-      permissions:
-        contents: read
-        pull-requests: write
-      steps:
-        - uses: actions/checkout@v4
-          with:
-            fetch-depth: 0
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-        - uses: crystal-lang/install-crystal@v1
-          with:
-            crystal: latest
+      - uses: crystal-lang/install-crystal@v1
+        with:
+          crystal: latest
 
-        - name: Install kcov
-          run: |
-            sudo apt-get update
-            sudo apt-get install -y kcov
+      - name: Install kcov
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y kcov
 
-        - uses: actions/cache@v4
-          with:
-            path: |
-              lib
-              ~/.cache/shards
-            key: ubuntu-22.04-crystal-latest-shards-${{ hashFiles('shard.yml') }}
+      - uses: actions/cache@v4
+        with:
+          path: |
+            lib
+            ~/.cache/shards
+          key: ubuntu-22.04-crystal-latest-shards-${{ hashFiles('shard.yml') }}
 
-        - run: shards install
+      - run: shards install
 
-        - name: Build specs binary
-          run: |
-            echo 'require "./spec/**"' > all_specs.cr
-            mkdir -p bin coverage
-            crystal build all_specs.cr -o bin/all_specs --debug
+      - name: Build specs binary
+        run: |
+          echo 'require "./spec/**"' > all_specs.cr
+          mkdir -p bin coverage
+          crystal build all_specs.cr -o bin/all_specs --debug
 
-        - name: Run kcov (core coverage)
-          run: |
-            kcov --clean --include-path=$(pwd)/src ./coverage ./bin/all_specs
+      - name: Run kcov (core coverage)
+        run: |
+          kcov --clean --include-path=$(pwd)/src ./coverage ./bin/all_specs
 
-        - name: Generate unreachable report
-          run: |
-            crystal tool unreachable --format=codecov --no-color all_specs.cr > ./coverage/unreachable.codecov.json
+      - name: Generate unreachable report
+        run: |
+          crystal tool unreachable --format=codecov --no-color --exclude spec all_specs.cr > ./coverage/unreachable.codecov.json
 
-        - name: Generate macro coverage
-          run: |
-            crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
+      - name: Generate macro coverage
+        run: |
+          crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
 
-        - name: Upload coverage reports to Codecov
-          uses: codecov/codecov-action@v5
-          with:
-            token: ${{ secrets.CODECOV_TOKEN }}
-            slug: alumna/backend
-            files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
-            flags: unittests
-            fail_ci_if_error: true
-            verbose: true
+      - name: Upload coverage reports to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: alumna/backend
+          files: ./coverage/**/cobertura.xml,./coverage/**/cov.xml,./coverage/unreachable.codecov.json,./coverage/macro_coverage.*.codecov.json
+          flags: unittests
+          fail_ci_if_error: true
+          verbose: true
 
-        - name: Run specs and generate JUnit XML for Test Analytics
-          run: |
-            mkdir -p junit
-            crystal spec --junit_output ./junit --error-trace
+      - name: Run specs and generate JUnit XML for Test Analytics
+        run: |
+          mkdir -p junit
+          crystal spec --junit_output ./junit --error-trace
 
-        - name: Upload test results to Codecov (Test Analytics)
-          if: ${{ !cancelled() }}
-          uses: codecov/codecov-action@v5
-          with:
-            token: ${{ secrets.CODECOV_TOKEN }}
-            slug: alumna/backend
-            report_type: test_results
-            files: ./junit/output.xml
-            flags: unittests
-            fail_ci_if_error: false
-            verbose: true
+      - name: Upload test results to Codecov (Test Analytics)
+        if: ${{ !cancelled() }}
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          slug: alumna/backend
+          report_type: test_results
+          files: ./junit/output.xml
+          flags: unittests
+          fail_ci_if_error: false
+          verbose: true
