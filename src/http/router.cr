@@ -65,6 +65,8 @@ module Alumna
           path: service.path,
           method: method,
           phase: RulePhase::Before,
+          http_method: request.method,
+          remote_ip: remote_ip(http_ctx),
           params: params,
           headers: headers,
           id: id,
@@ -99,6 +101,7 @@ module Alumna
         when {"PUT", true}    then ServiceMethod::Update
         when {"PATCH", true}  then ServiceMethod::Patch
         when {"DELETE", true} then ServiceMethod::Remove
+        when {"OPTIONS", _}   then ServiceMethod::Find
         else                       nil
         end
       end
@@ -150,6 +153,16 @@ module Alumna
           headers[name.downcase] = values.first
         end
         headers
+      end
+
+      private def remote_ip(http_ctx : HTTP::Server::Context) : String
+        case addr = http_ctx.request.remote_address
+        when Socket::IPAddress
+          # prefer X-Forwarded-For when behind a proxy, fallback to socket
+          http_ctx.request.headers["x-forwarded-for"]?.try(&.split(',').first.strip) || addr.address
+        else
+          "-"
+        end
       end
     end
   end
