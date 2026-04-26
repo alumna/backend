@@ -1,5 +1,15 @@
 # Alumna Backend changelog
 
+## 0.2.6 - 2026-04-26
+
+* Now the essential contract is practically validated
+* feat: built-in rules (#12)
+* feat: error phase rules (#11)
+* feat: global app rules (#10)
+* refactor/feat: pluggable schema formats (#9)
+* refactor: complete type-agnostic implementation, fully tested (#8)
+* time to polish the many rough edges on v0.3.x
+
 ## 0.2.5 - 2026-04-20
 
 * Test: Flow typing in spec tests
@@ -23,12 +33,12 @@
 ## 0.2.0 - 2026-04-17
 
 * Optimizations:
-  * `src/http/router.cr` - avoiding repeated intantiation of serializers
-  * `src/schema/validator.cr` - avoiding repeated intantiation of regexes
+  * `src/http/router.cr` - avoiding repeated instantiation of serializers
+  * `src/schema/validator.cr` - avoiding repeated instantiation of regexes
   * `src/rule/orchestrator.cr` - changing it to a module
   * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocations and method instantiations
 
-* Simplification of syntax allowing symbos for HTTP verbs like `:create`, `:update`, `:patch`, etc
+* Simplification of syntax allowing symbols for HTTP verbs like `:create`, `:update`, `:patch`, etc
 * `Alumna.validate(<Schema>)` for cleaner validations
 * First comprehensive integration test
 
