@@ -4,6 +4,38 @@
 
 A minimalist, service-oriented backend framework for [Crystal](https://crystal-lang.org), inspired by the core architecture of [FeathersJS](https://feathersjs.com) and designed around three ideas: simplicity, explicitness, and performance.
 
+## Backend can be simple
+
+```crystal
+require "../src/alumna"
+
+# Schema definition
+MessageSchema = Alumna::Schema.new
+  .str("body", required: true, min_length: 1, max_length: 500)
+  .str("author", required: true, min_length: 1)
+  .bool("read", required: false)
+
+# Authentication rule
+Authenticate = Alumna::Rule.new do |ctx|
+  token = ctx.headers["authorization"]?
+  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+end
+
+# Built-in adapters
+class MessageService < Alumna::MemoryAdapter
+  def initialize
+    super("/messages", MessageSchema)
+    before Authenticate
+    before Alumna.validate(MessageSchema), only: [:create, :update]
+  end
+end
+
+# Done
+app = Alumna::App.new
+app.use("/messages", MessageService.new)
+app.listen(3000)
+```
+
 ---
 
 ## Philosophy
@@ -330,7 +362,7 @@ After-rules always run when there is no error, even if a before-rule short-circu
 
 ---
 
-### Application
+### Example of global rules in an application
 
 ```crystal
 app = Alumna::App.new
