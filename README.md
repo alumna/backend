@@ -56,7 +56,16 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in active early development. The HTTP layer, rule pipeline, schema validation (now with pluggable formats resolved at definition time), in-memory adapter, JSON/MessagePack serialization, and a set of production-ready built-in rules (CORS, logging, rate limiting, and validation) are complete and tested.
+Alumna is in active early development. The following core pieces are complete and tested:
+
+- ✅ HTTP layer with RESTful routing and content negotiation
+- ✅ Rule pipeline with explicit before, after, and error phases
+- ✅ Schema validation with pluggable formats resolved at definition time (`:email`, `:url`, `:uuid`, and custom)
+- ✅ In-memory adapter implementing the full service interface
+- ✅ JSON and MessagePack serialization
+- ✅ Production-ready built-in rules: CORS, request logging, rate limiting, and validation
+- ✅ Rich `RuleContext` with `store`, `remote_ip`, `http_method`, `headers`, and `provider`
+- ✅ Cross-platform CI with full test coverage
 
 See the [Roadmap](#roadmap) for what is coming next.
 
