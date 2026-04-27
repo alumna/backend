@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.3.1 - 2026-04-27
+
+* fix: improved rate limiting rule
+
 ## 0.3.0 - 2026-04-27
 
 * fix: solidified the proxy handling logic for real_ip reading

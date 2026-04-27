@@ -63,9 +63,15 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Schema validation with pluggable formats resolved at definition time (`:email`, `:url`, `:uuid`, and custom)
 - ✅ In-memory adapter implementing the full service interface
 - ✅ JSON and MessagePack serialization
-- ✅ Production-ready built-in rules: CORS, request logging, rate limiting, and validation
 - ✅ Rich `RuleContext` with `store`, `remote_ip` (with trusted proxy support), `http_method`, `headers`, and `provider`
 - ✅ Cross-platform CI with full test coverage
+
+Production-ready built-in rules:
+
+- ✅ CORS
+- ✅ request logging
+- ✅ rate limiting (memory-bounded, monotonic clock)
+- ✅ validation
 
 See the [Roadmap](#roadmap) for what is coming next.
 
@@ -236,18 +242,20 @@ Logs in combined format using the monotonic clock:
 5.5.5.5 "GET /users/123" 200 2.3ms
 ```
 - Uses `ctx.remote_ip`, `ctx.http_method`, and `ctx.store` to correlate before/after phases
-- Works with any `IO` — pass `File.open("access.log", "a")` for file logging
+- Works with any `IO` - pass `File.open("access.log", "a")` for file logging
 
 **4. Rate limiter**
 ```crystal
 before Alumna.rate_limit(limit: 60, window_seconds: 60)
 ```
-- In-memory sliding window per IP + service path
+- In-memory fixed-window limiter per key (defaults to client IP; override with `key: ->(ctx) { ... }`)
+- Uses a monotonic clock (`Time::Instant`) for expiry, so limits stay accurate across system clock changes
+- Memory-bounded store: entries expire after their window and are pruned by an amortized in-request cleanup - no unbounded Hash growth, no background fiber
 - Sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`
-- Returns 429 with `Retry-After` when exceeded
+- Returns 429 when exceeded
 - Skips `OPTIONS` requests automatically
 
-All four are regular `Rule` objects — you can compose them with your own rules, limit them with `only:`, and test them with `RuleRunner` like any custom rule.
+All four are regular `Rule` objects - you can compose them with your own rules, limit them with `only:`, and test them with `RuleRunner` like any custom rule.
 
 ---
 
@@ -299,7 +307,7 @@ end
 | `ctx.http.headers` | `Hash(String, String)` | Add custom HTTP response headers |
 | `ctx.http.location` | `String?` | Set to trigger an HTTP redirect |
 
-> `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design — rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
+> `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design - rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
 
 ### Headers, params, and client IP
 
@@ -315,7 +323,7 @@ ctx.headers["x-request-id"] = Random::Secure.hex(8)
 ctx.params["locale"] = "en" unless ctx.params["locale"]?
 ```
 
-The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response — copy values to `ctx.http.headers` if you need to send them back.
+The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response - copy values to `ctx.http.headers` if you need to send them back.
 
 **Trusted proxies**
 
@@ -395,7 +403,7 @@ When a request arrives, rules run in this exact sequence:
 
 1. `app.before` rules
 2. `service.before` rules
-3. service method (`find`, `get`, etc.) — skipped if a before-rule set `ctx.result`
+3. service method (`find`, `get`, etc.) - skipped if a before-rule set `ctx.result`
 4. `service.after` rules
 5. `app.after` rules
 
