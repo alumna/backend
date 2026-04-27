@@ -100,7 +100,9 @@ module Alumna
       count, reset_at = store.hit(key.call(ctx))
 
       ctx.http.headers["X-RateLimit-Limit"] = limit.to_s
+      # LCOV_EXCL_START - kcov misses chained clamp, covered by spec
       ctx.http.headers["X-RateLimit-Remaining"] = (limit - count).clamp(0, limit).to_s
+      # LCOV_EXCL_STOP
       ctx.http.headers["X-RateLimit-Reset"] = reset_at.to_unix.to_s
 
       if count > limit
