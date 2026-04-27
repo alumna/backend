@@ -1,5 +1,9 @@
 # Alumna Backend changelog
 
+## 0.3.2 - 2026-04-27
+
+* fix: improved CORS rule
+
 ## 0.3.1 - 2026-04-27
 
 * fix: improved rate limiting rule

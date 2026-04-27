@@ -1,6 +1,6 @@
 require "../../spec_helper"
 
-private def build_ctx(app : Alumna::App, service : Alumna::Service, ip : String, method = "GET") : Alumna::RuleContext
+private def build_ctx_rate_limiter(app : Alumna::App, service : Alumna::Service, ip : String, method = "GET") : Alumna::RuleContext
   Alumna::RuleContext.new(
     app: app, service: service, path: "/test",
     method: Alumna::ServiceMethod::Find, phase: Alumna::RulePhase::Before,
@@ -42,12 +42,17 @@ module Alumna
   end
 
   describe "Rules::RateLimiter" do
-    app = App.new
-    service = TestService.new
+    app = uninitialized App
+    service = uninitialized TestService
+
+    before_each do
+      app = App.new
+      service = TestService.new
+    end
 
     it "allows requests under limit" do
       rule = Alumna.rate_limit(limit: 2, window_seconds: 60)
-      ctx = build_ctx(app, service, "2.2.2")
+      ctx = build_ctx_rate_limiter(app, service, "2.2.2")
       rule.call(ctx)
       ctx.http.headers["X-RateLimit-Remaining"].should eq("1")
       rule.call(ctx)
@@ -58,7 +63,7 @@ module Alumna
 
     it "blocks over limit with 429" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
-      ctx = build_ctx(app, service, "3.3.3")
+      ctx = build_ctx_rate_limiter(app, service, "3.3.3")
       rule.call(ctx)
       result = rule.call(ctx)
       result.stop?.should be_true
@@ -68,7 +73,7 @@ module Alumna
 
     it "resets count after window expires" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 0)
-      ctx = build_ctx(app, service, "5.5.5.5")
+      ctx = build_ctx_rate_limiter(app, service, "5.5.5.5")
       first = rule.call(ctx)
       first.continue?.should be_true
       ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
@@ -80,7 +85,7 @@ module Alumna
 
     it "skips OPTIONS" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
-      ctx = build_ctx(app, service, "4.4.4.4", "OPTIONS")
+      ctx = build_ctx_rate_limiter(app, service, "4.4.4.4", "OPTIONS")
       result = rule.call(ctx)
       result.continue?.should be_true
       ctx.http.headers.has_key?("X-RateLimit-Limit").should be_false
@@ -90,8 +95,8 @@ module Alumna
 
     it "isolates counts per key" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60, key: ->(ctx : RuleContext) { ctx.remote_ip })
-      ctx_a = build_ctx(app, service, "10.0.0.1")
-      ctx_b = build_ctx(app, service, "10.0.0.2")
+      ctx_a = build_ctx_rate_limiter(app, service, "10.0.0.1")
+      ctx_b = build_ctx_rate_limiter(app, service, "10.0.0.2")
 
       rule.call(ctx_a).continue?.should be_true
       rule.call(ctx_b).continue?.should be_true
