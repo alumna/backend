@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## 0.3.0 - 2026-04-27
+
+* fix: solidified the proxy handling logic for real_ip reading
+* fix: make http headers and params available with zero-allocation views
+
 ## 0.2.6 - 2026-04-26
 
 * Now the essential contract is practically validated
