@@ -1,10 +1,17 @@
 require "json"
+require "http"
 
 module Alumna
+  # forward declarations — full bodies live in http/router.cr
+  module Http
+    struct ParamsView; end
+
+    struct HeadersView; end
+  end
+
   alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
 
   class RuleContext
-    # --- Read-only ---
     getter app : App
     getter service : Service
     getter path : String
@@ -13,15 +20,14 @@ module Alumna
     getter http_method : String
     getter remote_ip : String
 
-    # --- Writable ---
-    property params : Hash(String, String)
+    property params : Http::ParamsView
     property provider : String
     property id : String?
     property data : Hash(String, AnyData)
     property result : ServiceResult
     property error : ServiceError?
     property http : HttpOverrides
-    property headers : Hash(String, String)
+    property headers : Http::HeadersView
     property store : Hash(String, AnyData)
 
     protected setter phase
@@ -32,13 +38,13 @@ module Alumna
       @path : String,
       @method : ServiceMethod,
       @phase : RulePhase,
+      @params : Http::ParamsView,
+      @headers : Http::HeadersView,
       @http_method : String = "GET",
       @remote_ip : String = "",
-      @params : Hash(String, String) = {} of String => String,
       @provider : String = "rest",
       @id : String? = nil,
       @data : Hash(String, AnyData) = {} of String => AnyData,
-      @headers : Hash(String, String) = {} of String => String,
     )
       @result = nil
       @error = nil

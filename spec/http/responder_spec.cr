@@ -18,7 +18,9 @@ private def build_ctx(
     service: service,
     path: "/test",
     method: method,
-    phase: Alumna::RulePhase::After
+    phase: Alumna::RulePhase::After,
+    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
+    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
   )
   ctx.result = result
   ctx.error = error
@@ -39,7 +41,6 @@ describe Alumna::Http::Responder do
       resp.close
 
       resp.status_code.should eq(404)
-      # error path skips header copying and result encoding
     end
 
     it "copies ctx.http.headers to the response" do
@@ -131,7 +132,6 @@ describe Alumna::Http::Responder do
       Alumna::Http::Responder.write(resp, ctx, json_serializer)
       resp.close
 
-      # branch is hit; body would be {"success":true}
       resp.status_code.should eq(200)
     end
   end

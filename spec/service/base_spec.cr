@@ -1,7 +1,5 @@
 require "../spec_helper"
 
-# ── Test doubles ──────────────────────────────────────────────────────────────
-
 private class TrackedService < Alumna::MemoryAdapter
   getter called : Array(String)
 
@@ -21,7 +19,6 @@ private class TrackedService < Alumna::MemoryAdapter
   end
 end
 
-# Service that raises plain Exceptions, not ServiceError
 private class ExplodingService < Alumna::Service
   def initialize
     super("/boom")
@@ -32,7 +29,7 @@ private class ExplodingService < Alumna::Service
   end
 
   def get(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)?
-    raise Exception.new # message is nil
+    raise Exception.new
   end
 
   def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
@@ -58,7 +55,9 @@ private def make_ctx(service : Alumna::Service, method : Alumna::ServiceMethod) 
     service: service,
     path: service.path,
     method: method,
-    phase: Alumna::RulePhase::Before
+    phase: Alumna::RulePhase::Before,
+    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
+    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
   )
 end
 

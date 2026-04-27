@@ -42,27 +42,23 @@ module Alumna
       ctx = RuleContext.new(
         app: app, service: service, path: "/test",
         method: ServiceMethod::Find, phase: RulePhase::Before,
+        params: Http::ParamsView.new(HTTP::Params.new),
+        headers: Http::HeadersView.new(HTTP::Headers.new),
         http_method: "GET", remote_ip: "5.5.5.5"
       )
       ctx.id = "123"
 
-      rule.call(ctx) # before
-
-      sleep 5.milliseconds # long enough to be >0.0ms on CI
-
+      rule.call(ctx)
+      sleep 5.milliseconds
       ctx.phase = RulePhase::After
       ctx.http.status = 200
-      rule.call(ctx) # after
+      rule.call(ctx)
 
       log = io.to_s.strip
-
-      # full format check
-      log.should match(/5\.5\.5\.5 "GET \/test\/123" 200 \d+\.\d+ms/)
-
-      # extract ms and assert it's actually measured
+      log.should match(/5\.5\.5 "GET \/test\/123" 200 \d+\.\d+ms/)
       ms = log.split(' ').last.rchop("ms").to_f
       ms.should be > 0.0
-      ms.should be < 100.0 # sanity bound for test
+      ms.should be < 100.0
     end
 
     it "logs errors" do
@@ -72,12 +68,12 @@ module Alumna
       ctx = RuleContext.new(
         app: app, service: service, path: "/test",
         method: ServiceMethod::Find, phase: RulePhase::Before,
+        params: Http::ParamsView.new(HTTP::Params.new),
+        headers: Http::HeadersView.new(HTTP::Headers.new),
         http_method: "POST", remote_ip: "6.6.6.6"
       )
       rule.call(ctx)
-
       sleep 2.milliseconds
-
       ctx.phase = RulePhase::Error
       ctx.error = ServiceError.not_found
       rule.call(ctx)
@@ -87,7 +83,6 @@ module Alumna
       log.should contain(%("POST /test"))
       log.should contain("404")
       log.should match(/\d+\.\d+ms$/)
-
       ms = log.split(' ').last.rchop("ms").to_f
       ms.should be > 0.0
     end

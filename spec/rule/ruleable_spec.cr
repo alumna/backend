@@ -4,18 +4,6 @@ class DummyRuleable
   include Alumna::Ruleable
 end
 
-private def dummy_context : Alumna::RuleContext
-  app = Alumna::App.new
-  service = Alumna::MemoryAdapter.new("/dummy")
-  Alumna::RuleContext.new(
-    app: app,
-    service: service,
-    path: "/dummy",
-    method: Alumna::ServiceMethod::Find,
-    phase: Alumna::RulePhase::Before
-  )
-end
-
 describe Alumna::Ruleable do
   rule = ->(ctx : Alumna::RuleContext) { Alumna::RuleResult.continue }
 
@@ -73,7 +61,7 @@ describe Alumna::Ruleable do
     r.before(specific, only: :get)
 
     rules = r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before)
-    Alumna::Orchestrator.run(rules, dummy_context)
+    Alumna::Orchestrator.run(rules, test_ctx(method: Alumna::ServiceMethod::Get))
 
     order.should eq(["global", "specific"])
   end

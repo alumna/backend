@@ -36,11 +36,13 @@ module Alumna
     service = TestService.new
 
     it "sets allow-origin for whitelisted origin" do
+      headers = HTTP::Headers{"origin" => "https://example.com"}
       ctx = RuleContext.new(
         app: app, service: service, path: "/test",
         method: ServiceMethod::Find, phase: RulePhase::Before,
-        http_method: "GET", remote_ip: "1.1.1.1",
-        headers: {"origin" => "https://example.com"}
+        params: Http::ParamsView.new(HTTP::Params.new),
+        headers: Http::HeadersView.new(headers),
+        http_method: "GET", remote_ip: "1.1.1.1"
       )
       rule = Alumna.cors(origins: ["https://example.com"])
       rule.call(ctx)
@@ -50,22 +52,26 @@ module Alumna
     end
 
     it "allows wildcard" do
+      headers = HTTP::Headers{"origin" => "https://any.com"}
       ctx = RuleContext.new(
         app: app, service: service, path: "/test",
         method: ServiceMethod::Find, phase: RulePhase::Before,
-        http_method: "GET", remote_ip: "1.1.1.1",
-        headers: {"origin" => "https://any.com"}
+        params: Http::ParamsView.new(HTTP::Params.new),
+        headers: Http::HeadersView.new(headers),
+        http_method: "GET", remote_ip: "1.1.1.1"
       )
       Alumna.cors(origins: ["*"]).call(ctx)
       ctx.http.headers["Access-Control-Allow-Origin"].should eq("*")
     end
 
     it "short-circuits OPTIONS preflight" do
+      headers = HTTP::Headers{"origin" => "https://example.com"}
       ctx = RuleContext.new(
         app: app, service: service, path: "/test",
         method: ServiceMethod::Find, phase: RulePhase::Before,
-        http_method: "OPTIONS", remote_ip: "1.1.1.1",
-        headers: {"origin" => "https://example.com"}
+        params: Http::ParamsView.new(HTTP::Params.new),
+        headers: Http::HeadersView.new(headers),
+        http_method: "OPTIONS", remote_ip: "1.1.1.1"
       )
       Alumna.cors.call(ctx)
 
