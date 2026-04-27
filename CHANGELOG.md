@@ -1,5 +1,13 @@
 # Alumna Backend changelog
 
+## 0.3.4 - 2026-04-27
+
+* perf: faster rules execution and optimizations on router `resolve_service` and `parse_forwarded`
+
+## 0.3.3 - 2026-04-27
+
+* perf: improved rules dispatching processing and execution
+
 ## 0.3.2 - 2026-04-27
 
 * fix: improved CORS rule

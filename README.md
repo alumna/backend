@@ -283,7 +283,9 @@ end
 
 # An error-rule that logs failures
 LogError = Alumna::Rule.new do |ctx|
-  Log.error { "Request failed: #{ctx.error.not_nil!.message}" }
+  if error = ctx.error
+    Log.error { "Request failed: #{error.message}" }
+  end
   ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
   Alumna::RuleResult.continue
 end
@@ -313,6 +315,8 @@ end
 | `ctx.http.location` | `String?` | Set to trigger an HTTP redirect |
 
 > `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design - rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
+
+> When you call `app.use`, Alumna pre-compiles the before/after pipelines for each method, so dispatch is a simple array walk with zero allocations.
 
 ### Headers, params, and client IP
 

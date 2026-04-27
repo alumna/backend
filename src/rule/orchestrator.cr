@@ -1,24 +1,33 @@
 module Alumna
   module Orchestrator
-    def self.run(rules : Array(Rule), ctx : RuleContext) : RuleContext
-      rules.each do |rule|
-        result = rule.call(ctx)
-
+    def self.run(rules : Array(Rule), ctx : RuleContext, short_circuit = false) : Bool
+      i = 0
+      size = rules.size
+      while i < size
+        result = rules.unsafe_fetch(i).call(ctx)
         if result.stop?
           ctx.error = result.error
-          ctx.phase = RulePhase::Error
-          break
+          return false
         end
-
-        # A before-rule may short-circuit the service method call entirely by
-        # setting ctx.result directly before returning RuleResult.continue.
-        # The orchestrator stops processing further before-rules in that case,
-        # and dispatch will skip the service method call. This is the intended
-        # mechanism for caching, mocking, or access-controlled early returns.
-        break if ctx.phase.before? && ctx.result_set?
+        return true if short_circuit && ctx.result_set?
+        i += 1
       end
+      true
+    end
 
-      ctx
+    def self.run_bounded(rules : Array(Rule), ctx : RuleContext, boundary : Int32, short_circuit = false) : {Bool, Bool}
+      i = 0
+      size = rules.size
+      while i < size
+        result = rules.unsafe_fetch(i).call(ctx)
+        if result.stop?
+          ctx.error = result.error
+          return {false, i < boundary}
+        end
+        return {true, false} if short_circuit && ctx.result_set?
+        i += 1
+      end
+      {true, false}
     end
   end
 end

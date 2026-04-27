@@ -1,83 +1,56 @@
 require "../spec_helper"
 
-private class TrackedService < Alumna::MemoryAdapter
-  getter called : Array(String)
-
-  def initialize
-    super("/tracked")
-    @called = [] of String
-  end
-
-  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData))
-    @called << "find"
-    super
-  end
-
-  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
-    @called << "create"
-    super
-  end
-end
-
 private class ExplodingService < Alumna::Service
   def initialize
     super("/boom")
   end
 
-  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData))
+  def find(ctx) : Array(Hash(String, Alumna::AnyData))
     raise "kaboom"
   end
 
-  def get(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)?
+  def get(ctx) : Hash(String, Alumna::AnyData)?
     raise Exception.new
   end
 
-  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def create(ctx) : Hash(String, Alumna::AnyData)
     {} of String => Alumna::AnyData
   end
 
-  def update(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def update(ctx) : Hash(String, Alumna::AnyData)
     {} of String => Alumna::AnyData
   end
 
-  def patch(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def patch(ctx) : Hash(String, Alumna::AnyData)
     {} of String => Alumna::AnyData
   end
 
-  def remove(ctx : Alumna::RuleContext) : Bool
+  def remove(ctx) : Bool
     true
   end
 end
 
-private def make_ctx(service : Alumna::Service, method : Alumna::ServiceMethod) : Alumna::RuleContext
-  Alumna::RuleContext.new(
-    app: Alumna::App.new,
-    service: service,
-    path: service.path,
-    method: method,
+private def dispatch(svc, method)
+  app = Alumna::App.new
+  app.use(svc.path, svc)
+  ctx = Alumna::RuleContext.new(
+    app: app, service: svc, path: svc.path, method: method,
     phase: Alumna::RulePhase::Before,
     params: Alumna::Http::ParamsView.new(HTTP::Params.new),
     headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
   )
-end
-
-private def rule(log : Array(String), label : String) : Alumna::Rule
-  Alumna::Rule.new do |ctx|
-    log << label
-    Alumna::RuleResult.continue
-  end
+  app.dispatch(svc, ctx)
+  ctx
 end
 
 describe "Service::Base" do
   describe "error boundary in call_method" do
-    it "wraps a raised Exception with message into 500 (line 96)" do
+    it "wraps a raised Exception with message into 500" do
       svc = ExplodingService.new
-      ctx = make_ctx(svc, Alumna::ServiceMethod::Find)
-
-      svc.dispatch(ctx)
+      ctx = dispatch(svc, Alumna::ServiceMethod::Find)
 
       ctx.error.should_not be_nil
-      err = ctx.error.not_nil!
+      err = ctx.error.as(Alumna::ServiceError)
       err.status.should eq(500)
       err.message.should eq("kaboom")
       ctx.phase.should eq(Alumna::RulePhase::Error)
@@ -86,11 +59,10 @@ describe "Service::Base" do
 
     it "uses 'Unexpected error' when Exception.message is nil" do
       svc = ExplodingService.new
-      ctx = make_ctx(svc, Alumna::ServiceMethod::Get)
+      ctx = dispatch(svc, Alumna::ServiceMethod::Get)
 
-      svc.dispatch(ctx)
-
-      ctx.error.not_nil!.message.should eq("Unexpected error")
+      ctx.error.should_not be_nil
+      ctx.error.as(Alumna::ServiceError).message.should eq("Unexpected error")
     end
   end
 end
