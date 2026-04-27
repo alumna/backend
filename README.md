@@ -7,7 +7,7 @@ A minimalist, service-oriented backend framework for [Crystal](https://crystal-l
 ## Backend can be simple
 
 ```crystal
-require "../src/alumna"
+require "alumna"
 
 # Schema definition
 MessageSchema = Alumna::Schema.new
