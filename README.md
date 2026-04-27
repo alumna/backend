@@ -226,11 +226,16 @@ Returns 422 with per-field details when validation fails. Respects `required_on`
 
 **2. CORS**
 ```crystal
-before Alumna.cors(origins: ["https://app.example.com"], methods: ["GET","POST"])
+before Alumna.cors(
+  origins: ["https://app.example.com"],
+  credentials: true
+)
 ```
-- Sets `Access-Control-Allow-Origin`, `Vary`, and related headers
-- Handles preflight `OPTIONS` automatically with a 204 response
-- Use `origins: ["*"]` for public APIs
+- Sets `Access-Control-Allow-Origin` (echoes the request Origin), `Access-Control-Allow-Credentials` when enabled, and `Vary: Origin` for non-wildcard responses
+- Normalizes origins once at boot — matching is case-insensitive and ignores a trailing slash, so `"HTTPS://Example.com/"` matches `"https://example.com"`
+- Handles real preflights only (`OPTIONS` + `Access-Control-Request-Method`) with 204, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age`
+- Skips requests without an `Origin` header entirely (no wasted headers)
+- `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot — per the Fetch spec, wildcard cannot be used with credentials
 
 **3. Logger**
 ```crystal
