@@ -4,8 +4,11 @@ module Alumna
 
     @rules : RuleMap = RuleMap.new
 
-    # --- public API ---
+    # Built lazily to avoid compile-time enum lookup issues
+    EMPTY_RULES = [] of Rule
+    @compiled : Array(Array(Array(Rule)))? = nil
 
+    # --- public API ---
     def before(rule : Rule, only : ServiceMethod | Symbol) : self
       before(rule, only: [only])
     end
@@ -33,12 +36,9 @@ module Alumna
       self
     end
 
-    # --- used by dispatch ---
-
+    # --- hot path ---
     def collect_rules(method : ServiceMethod, phase : RulePhase) : Array(Rule)
-      global = @rules[nil]?.try(&.[phase]?) || [] of Rule
-      specific = @rules[method]?.try(&.[phase]?) || [] of Rule
-      global + specific
+      ensure_compiled![method.value][phase.value]
     end
 
     private def register_rule(phase : RulePhase, methods : Array(ServiceMethod), rule : Rule)
@@ -47,6 +47,26 @@ module Alumna
         @rules[target] ||= {} of RulePhase => Array(Rule)
         @rules[target][phase] ||= [] of Rule
         @rules[target][phase] << rule
+
+        if target.nil?
+          ServiceMethod.values.each { |m| rebuild_index(m, phase) }
+        else
+          rebuild_index(target, phase)
+        end
+      end
+    end
+
+    private def rebuild_index(method : ServiceMethod, phase : RulePhase)
+      compiled = ensure_compiled!
+      global = @rules[nil]?.try(&.[phase]?) || EMPTY_RULES
+      specific = @rules[method]?.try(&.[phase]?) || EMPTY_RULES
+      compiled[method.value][phase.value] = global + specific
+    end
+
+    # Returns the matrix, creating it once on first use
+    private def ensure_compiled! : Array(Array(Array(Rule)))
+      @compiled ||= Array.new(ServiceMethod.values.size) do
+        Array.new(RulePhase.values.size) { EMPTY_RULES }
       end
     end
 

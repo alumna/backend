@@ -38,7 +38,8 @@ describe Alumna::RuleResult do
 
       result.outcome.should eq(Alumna::RuleResult::Outcome::Stop)
       result.error.should be(err)
-      result.error.not_nil!.status.should eq(401)
+      result.error.should_not be_nil
+      result.error.as(Alumna::ServiceError).status.should eq(401)
       result.continue?.should be_false
       result.stop?.should be_true
     end
@@ -73,7 +74,8 @@ describe "Alumna::Rule alias" do
 
     result = rule.call(dummy_ctx)
     result.stop?.should be_true
-    result.error.not_nil!.status.should eq(403)
+    result.error.should_not be_nil
+    result.error.as(Alumna::ServiceError).status.should eq(403)
   end
 
   it "works with a captured method" do

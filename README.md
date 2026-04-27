@@ -283,7 +283,9 @@ end
 
 # An error-rule that logs failures
 LogError = Alumna::Rule.new do |ctx|
-  Log.error { "Request failed: #{ctx.error.not_nil!.message}" }
+  if error = ctx.error
+    Log.error { "Request failed: #{error.message}" }
+  end
   ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
   Alumna::RuleResult.continue
 end

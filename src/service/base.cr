@@ -5,7 +5,16 @@ module Alumna
     getter path : String
     getter schema : Schema?
 
+    # Merged pipelines built by App.use
+    @before_pipeline : Array(Array(Rule))
+    @after_pipeline : Array(Array(Rule))
+    @before_app_len : Array(Int32)
+
     def initialize(@path : String, @schema : Schema? = nil)
+      size = ServiceMethod.values.size
+      @before_pipeline = Array.new(size) { [] of Rule }
+      @after_pipeline = Array.new(size) { [] of Rule }
+      @before_app_len = Array.new(size, 0)
     end
 
     abstract def find(ctx : RuleContext) : Array(Hash(String, AnyData))
@@ -15,35 +24,29 @@ module Alumna
     abstract def patch(ctx : RuleContext) : Hash(String, AnyData)
     abstract def remove(ctx : RuleContext) : Bool
 
-    def dispatch(ctx : RuleContext) : RuleContext
-      # 1. before
-      Orchestrator.run(collect_rules(ctx.method, RulePhase::Before), ctx)
-      if ctx.error
-        ctx.phase = RulePhase::Error
-        Orchestrator.run(collect_rules(ctx.method, RulePhase::Error), ctx)
-        return ctx
-      end
-
-      # 2. service method — only if no result yet
-      unless ctx.result_set?
-        ctx.phase = RulePhase::After
-        result, error = call_method(ctx)
-        if error
-          ctx.error = error
-          ctx.phase = RulePhase::Error
-          Orchestrator.run(collect_rules(ctx.method, RulePhase::Error), ctx)
-          return ctx
-        end
-        ctx.result = result
-      end
-
-      # 3. after — always runs on success, even on short-circuit
-      ctx.phase = RulePhase::After
-      Orchestrator.run(collect_rules(ctx.method, RulePhase::After), ctx)
-      ctx
+    def set_before_pipeline(method : ServiceMethod, app_rules : Array(Rule), svc_rules : Array(Rule))
+      idx = method.value
+      @before_pipeline[idx] = app_rules + svc_rules
+      @before_app_len[idx] = app_rules.size
     end
 
-    private def call_method(ctx : RuleContext) : {ServiceResult, ServiceError?}
+    def set_after_pipeline(method : ServiceMethod, svc_rules : Array(Rule), app_rules : Array(Rule))
+      @after_pipeline[method.value] = svc_rules + app_rules
+    end
+
+    def before_pipeline(method) : Array(Rule)
+      @before_pipeline[method.value]
+    end
+
+    def after_pipeline(method) : Array(Rule)
+      @after_pipeline[method.value]
+    end
+
+    def before_app_len(method) : Int32
+      @before_app_len[method.value]
+    end
+
+    protected def call_method(ctx : RuleContext) : {ServiceResult, ServiceError?}
       case ctx.method
       when .find? then {find(ctx), nil}
       when .get?
@@ -54,7 +57,8 @@ module Alumna
       when .update? then {update(ctx), nil}
       when .patch?  then {patch(ctx), nil}
       when .remove?
-        { {"removed" => remove(ctx)} of String => AnyData, nil }
+        removed = {"removed" => remove(ctx)} of String => AnyData
+        {removed, nil}
       else
         {nil, ServiceError.internal("Unknown service method")}
       end
