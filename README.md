@@ -316,6 +316,8 @@ end
 
 > `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design - rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
 
+> When you call `app.use`, Alumna pre-compiles the before/after pipelines for each method, so dispatch is a simple array walk with zero allocations.
+
 ### Headers, params, and client IP
 
 `ctx.headers` and `ctx.params` are not plain hashes. They are zero-allocation views:

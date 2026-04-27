@@ -32,6 +32,19 @@ class TestService < Alumna::MemoryAdapter
   end
 end
 
+class AfterFailService < Alumna::MemoryAdapter
+  def initialize
+    super("/after-stop", TestSchema)
+    before Authenticate
+    before Alumna.validate(TestSchema), only: [:create, :update, :patch]
+    after AfterLogger
+    # this after-rule forces the failure path in App#dispatch
+    after Alumna::Rule.new { |ctx|
+      Alumna::RuleResult.stop(Alumna::ServiceError.internal("after failed"))
+    }
+  end
+end
+
 def authenticated_client
   HTTP::Client.new("localhost", TEST_PORT).tap do |c|
     c.before_request do |r|
@@ -50,6 +63,7 @@ describe "Alumna System Integration" do
     app = Alumna::App.new
     app.error ErrorLogger
     app.use("/test", TestService.new)
+    app.use("/after-stop", AfterFailService.new)
     spawn { app.listen(TEST_PORT) }
     sleep 0.3.seconds
   end
@@ -198,5 +212,14 @@ describe "Alumna System Integration" do
   it "after-rule does not run on error" do
     res = HTTP::Client.new("localhost", TEST_PORT).get("/test")
     res.headers["X-Request-ID"]?.should be_nil
+  end
+
+  it "runs app error rules when an after-rule stops" do
+    res = authenticated_client.get("/after-stop")
+    res.status_code.should eq(500)
+    res.headers["X-Error-ID"]?.should eq("err-123")
+    # AfterLogger ran before the stop, so the header is present
+    res.headers["X-Request-ID"]?.should_not be_nil
+    json(res.body)["error"].as_s.should eq("after failed")
   end
 end
