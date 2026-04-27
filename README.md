@@ -64,7 +64,7 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ In-memory adapter implementing the full service interface
 - ✅ JSON and MessagePack serialization
 - ✅ Production-ready built-in rules: CORS, request logging, rate limiting, and validation
-- ✅ Rich `RuleContext` with `store`, `remote_ip`, `http_method`, `headers`, and `provider`
+- ✅ Rich `RuleContext` with `store`, `remote_ip` (with trusted proxy support), `http_method`, `headers`, and `provider`
 - ✅ Cross-platform CI with full test coverage
 
 See the [Roadmap](#roadmap) for what is coming next.
@@ -286,10 +286,10 @@ end
 | `ctx.method` | `ServiceMethod` | `Find`, `Get`, `Create`, `Update`, `Patch`, `Remove` |
 | `ctx.phase` | `RulePhase` | `Before`, `After`, or `Error` |
 | `ctx.http_method` | `String` | Original HTTP verb (`GET`, `POST`, etc.) |
-| `ctx.remote_ip` | `String` | Client IP address, or Unix socket path when applicable |
+| `ctx.remote_ip` | `String` | Client IP address; when trusted proxies are configured, correctly extracted from `Forwarded`, `X-Forwarded-For`, or `X-Real-IP`, otherwise the direct socket address |
 | `ctx.provider` | `String` | Transport that invoked the service (`"rest"` today, `"websocket"` in future) |
-| `ctx.params` | `Hash(String, String)` | Query string parameters |
-| `ctx.headers` | `Hash(String, String)` | Request headers, lowercased |
+| `ctx.params` | `ParamsView` | Query string parameters; supports `[]`, `[]?`, `[]=` with an overlay that shadows the original request |
+| `ctx.headers` | `HeadersView` | Request headers; case-insensitive reads, writes go to an overlay (does not mutate the incoming request) |
 | `ctx.id` | `String?` | Record ID from the URL, if present |
 | `ctx.data` | `Hash(String, AnyData)` | Parsed request body |
 | `ctx.result` | `ServiceResult` | Response payload; set this in a before-rule to skip the service method (after-rules still run) |
@@ -300,6 +300,43 @@ end
 | `ctx.http.location` | `String?` | Set to trigger an HTTP redirect |
 
 > `ctx.method`, `ctx.path`, `ctx.app`, and `ctx.service` are read-only by design — rules transform data, not routing. Use `ctx.params`, `ctx.data`, `ctx.result`, and `ctx.error` for all mutations.
+
+### Headers, params, and client IP
+
+`ctx.headers` and `ctx.params` are not plain hashes. They are zero-allocation views:
+
+- **HeadersView** – case-insensitive (`ctx.headers["authorization"]?` works for any casing), implements `Enumerable({String, String})`, and supports `[]`, `[]?`, `[]=`, and `each`. Writes go to an in-memory overlay; the original `HTTP::Request` is never mutated.
+- **ParamsView** – same API for query parameters, without case folding.
+
+This lets rules enrich the request safely:
+
+```crystal
+ctx.headers["x-request-id"] = Random::Secure.hex(8)
+ctx.params["locale"] = "en" unless ctx.params["locale"]?
+```
+
+The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response — copy values to `ctx.http.headers` if you need to send them back.
+
+**Trusted proxies**
+
+When Alumna runs behind Nginx, HAProxy, Cloudflare, or a load balancer, `ctx.remote_ip` must be derived from proxy headers. Configure trusted proxies when you start the server:
+
+```crystal
+app = Alumna::App.new
+app.use("/messages", MessageService.new)
+
+# Only trust private ranges
+app.listen(3000, trusted_proxies: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+
+# Or trust all hops (useful for local development only)
+# app.listen(3000, trusted_proxies: true)
+```
+
+- `trusted_proxies: nil` (default) – never trust proxy headers
+- `true` – trust `Forwarded`, `X-Forwarded-For`, and `X-Real-IP` from any client
+- `Array(String)` – trust only when the immediate peer IP matches a CIDR; IPv4 and IPv6 are fully supported
+
+Parsing follows the standard order: `Forwarded` → `X-Forwarded-For` → `X-Real-IP`. The implementation uses `IPCidr` with bit-level matching, no regexes on the hot path, and is covered by dedicated specs.
 
 **Signalling outcomes:**
 

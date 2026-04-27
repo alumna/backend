@@ -1,31 +1,28 @@
 require "http/server"
+require "./router/*"
+require "./serializers"
 
 module Alumna
   module Http
-    JSON_SERIALIZER    = JsonSerializer.new
-    MSGPACK_SERIALIZER = MsgpackSerializer.new
-
-    class LimitedIO < IO
-      def initialize(@io : IO, @limit : Int64)
-        @read = 0_i64
-      end
-
-      def read(slice : Bytes) : Int32
-        raise IO::Error.new("exceeded") if @read >= @limit
-        to_read = Math.min(slice.size, @limit - @read).to_i
-        n = @io.read(slice[0, to_read])
-        @read += n
-        n
-      end
-
-      def write(slice : Bytes) : Nil
-        raise IO::Error.new("write not supported")
-      end
-    end
-
     class Router
-      def initialize(@app : App)
+      enum TrustMode
+        None
+        All
+        List
+      end
+
+      @services : Hash(String, Service)
+      @trust_mode : TrustMode
+      @trusted_set : TrustedProxySet?
+
+      def initialize(@app : App, trusted_proxies : App::TrustedProxies = nil)
         @services = @app.services
+        @trust_mode, @trusted_set = case trusted_proxies
+                                    when nil, false then {TrustMode::None, nil}
+                                    when true       then {TrustMode::All, nil}
+                                    when Array      then {TrustMode::List, TrustedProxySet.new(trusted_proxies)}
+                                    else                 {TrustMode::None, nil}
+                                    end
       end
 
       def handle(http_ctx : HTTP::Server::Context) : Nil
@@ -56,9 +53,6 @@ module Alumna
           return
         end
 
-        params = parse_query(request)
-        headers = parse_headers(request)
-
         ctx = RuleContext.new(
           app: @app,
           service: service,
@@ -67,8 +61,8 @@ module Alumna
           phase: RulePhase::Before,
           http_method: request.method,
           remote_ip: remote_ip(http_ctx),
-          params: params,
-          headers: headers,
+          params: ParamsView.new(request.query_params),
+          headers: HeadersView.new(request.headers),
           id: id,
           data: data
         )
@@ -107,23 +101,11 @@ module Alumna
       end
 
       private def resolve_input_serializer(request : HTTP::Request) : Serializer?
-        case request.headers["content-type"]?.try(&.downcase)
-        when /msgpack/ then MSGPACK_SERIALIZER
-        when /json/    then JSON_SERIALIZER
-        end
+        Serializers.from_content_type?(request.headers["content-type"]?)
       end
 
       private def resolve_output_serializer(request : HTTP::Request) : Serializer?
-        case request.headers["accept"]?.try(&.downcase)
-        when /msgpack/ then MSGPACK_SERIALIZER
-        when /json/    then JSON_SERIALIZER
-        end
-      end
-
-      private def parse_query(request : HTTP::Request) : Hash(String, String)
-        params = {} of String => String
-        request.query_params.each { |k, v| params[k] = v }
-        params
+        Serializers.from_accept?(request.headers["accept"]?)
       end
 
       private def parse_body(request : HTTP::Request, serializer : Serializer) : Hash(String, AnyData)
@@ -147,22 +129,54 @@ module Alumna
         raise ServiceError.new("Payload Too Large", 413)
       end
 
-      private def parse_headers(request : HTTP::Request) : Hash(String, String)
-        headers = {} of String => String
-        request.headers.each do |name, values|
-          headers[name.downcase] = values.first
+      private def remote_ip(ctx : HTTP::Server::Context) : String
+        case @trust_mode
+        in TrustMode::None
+          direct_ip(ctx)
+        in TrustMode::All
+          extract_ip(ctx, nil, true)
+        in TrustMode::List
+          extract_ip(ctx, @trusted_set, false)
         end
-        headers
       end
 
-      private def remote_ip(http_ctx : HTTP::Server::Context) : String
-        case addr = http_ctx.request.remote_address
-        when Socket::IPAddress
-          # prefer X-Forwarded-For when behind a proxy, fallback to socket
-          http_ctx.request.headers["x-forwarded-for"]?.try(&.split(',').first.strip) || addr.address
-        else
-          "-"
+      private def direct_ip(ctx : HTTP::Server::Context) : String
+        addr = ctx.request.remote_address
+        addr.is_a?(Socket::IPAddress) ? addr.address : "-"
+      end
+
+      private def extract_ip(ctx : HTTP::Server::Context, trusted_set : TrustedProxySet?, trust_all : Bool) : String
+        remote = direct_ip(ctx)
+        return remote unless trust_all || trusted_set.try(&.trusted?(remote))
+
+        parse_forwarded(ctx) || parse_xff(ctx, remote, trusted_set, trust_all) ||
+          parse_x_real_ip(ctx) || remote
+      end
+
+      private def parse_forwarded(ctx) : String?
+        fwd = ctx.request.headers["Forwarded"]?; return nil unless fwd
+        fwd.split(',').each do |part|
+          if m = part.match(/for=("[^"]+"|[^;,\s]+)/i)
+            ip = m[1].strip('"').lstrip('[').rstrip(']')
+            return ip if Socket::IPAddress.valid?(ip)
+          end
         end
+        nil
+      end
+
+      private def parse_xff(ctx, remote_ip, trusted_set, trust_all) : String?
+        xff = ctx.request.headers["X-Forwarded-For"]?; return nil unless xff
+        ips = xff.split(',').map(&.strip).reject(&.empty?) << remote_ip
+        ips.reverse_each do |ip|
+          next unless Socket::IPAddress.valid?(ip)
+          return trust_all ? ips.first : ip unless trusted_set.try &.trusted?(ip)
+        end
+        nil
+      end
+
+      private def parse_x_real_ip(ctx) : String?
+        ip = ctx.request.headers["X-Real-IP"]?.try(&.strip)
+        ip if ip && Socket::IPAddress.valid?(ip)
       end
     end
   end

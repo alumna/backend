@@ -8,7 +8,9 @@ private def dummy_ctx : Alumna::RuleContext
     service: service,
     path: "/dummy",
     method: Alumna::ServiceMethod::Find,
-    phase: Alumna::RulePhase::Before
+    phase: Alumna::RulePhase::Before,
+    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
+    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
   )
 end
 

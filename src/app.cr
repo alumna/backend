@@ -5,13 +5,16 @@ module Alumna
     # before and after rules can be applied at the app (global) level
     include Ruleable
 
+    alias TrustedProxies = Bool | Array(String) | Nil
+
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
+    getter trusted_proxies : TrustedProxies
 
     # Defaults
     property max_body_size : Int64 = 1_048_576 # 1 MB default
 
-    def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
+    def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new, @trusted_proxies : TrustedProxies = nil)
       @services = {} of String => Service
     end
 
@@ -40,7 +43,7 @@ module Alumna
     end
 
     def listen(port : Int32 = 3000)
-      router = Http::Router.new(self)
+      router = Http::Router.new(self, @trusted_proxies)
       server = HTTP::Server.new { |ctx| router.handle(ctx) }
       puts "Listening on http://0.0.0.0:#{port}"
       server.listen("0.0.0.0", port)
