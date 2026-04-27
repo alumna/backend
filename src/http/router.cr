@@ -72,18 +72,28 @@ module Alumna
       end
 
       private def resolve_service(path : String) : {Service, String?}?
+        # 1) exact match – find/create – single hash lookup, no allocations
         if service = @services[path]?
           return {service, nil}
         end
-        slash = path.rindex('/')
-        return nil if slash.nil? || slash == 0
-        base = path[0...slash]
-        id = path[slash + 1..]
-        return nil if id.empty? || id.includes?('/')
-        if service = @services[base]?
-          return {service, id}
-        end
-        nil
+
+        # 2) must be /base/id – find the first '/' after the leading one
+        # index('/', 1) is cheaper than rindex and tells us the base length
+        sep = path.index('/', 1)
+        return nil unless sep
+
+        # 3) reject /base/id/extra in the same scan – no id.includes?('/')
+        return nil if path.index('/', sep + 1)
+
+        # 4) only now allocate the base string and do the second hash lookup
+        base = path[0...sep]
+        service = @services[base]?
+        return nil unless service
+
+        # 5) id is the tail – we already know it's non-empty and has no '/'
+        id = path[sep + 1..]
+        return nil if id.empty?
+        {service, id}
       end
 
       private def resolve_method(http_verb : String, id : String?) : ServiceMethod?
@@ -153,12 +163,34 @@ module Alumna
           parse_x_real_ip(ctx) || remote
       end
 
-      private def parse_forwarded(ctx) : String?
-        fwd = ctx.request.headers["Forwarded"]?; return nil unless fwd
-        fwd.split(',').each do |part|
-          if m = part.match(/for=("[^"]+"|[^;,\s]+)/i)
-            ip = m[1].strip('"').lstrip('[').rstrip(']')
-            return ip if Socket::IPAddress.valid?(ip)
+      private def parse_forwarded(ctx : HTTP::Server::Context) : String?
+        fwd = ctx.request.headers["Forwarded"]?
+        return nil unless fwd
+
+        # Guard against absurdly long headers – cheap DoS protection
+        return nil if fwd.bytesize > 2_048
+
+        # RFC 7239: Forwarded: for=1.2.3.4;proto=http, for="[2001:db8::1]"
+        fwd.split(',') do |segment|
+          segment.split(';') do |pair|
+            pair = pair.lstrip
+            next unless pair.size > 4
+
+            # case-insensitive "for=" without allocating a downcased copy
+            next unless pair[0].downcase == 'f' &&
+                        pair[1].downcase == 'o' &&
+                        pair[2].downcase == 'r' &&
+                        pair[3] == '='
+
+            val = pair[4..].strip
+            # strip optional quotes: for="1.2.3.4"
+            if val.size >= 2 && val.starts_with?('"') && val.ends_with?('"')
+              val = val[1...-1]
+            end
+            # strip IPv6 brackets: for="[::1]"
+            val = val.lstrip('[').rstrip(']')
+
+            return val if Socket::IPAddress.valid?(val)
           end
         end
         nil
