@@ -6,6 +6,7 @@ module Alumna
     Update
     Patch
     Remove
+    Options
 
     def to_s : String
       super.downcase

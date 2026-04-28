@@ -35,11 +35,12 @@ module Alumna
     headers = HTTP::Headers.new
     headers["Origin"] = origin if origin
     headers["Access-Control-Request-Method"] = acrm if acrm
+    method = http_method == "OPTIONS" ? ServiceMethod::Options : ServiceMethod::Find
     RuleContext.new(
       app: app,
       service: service,
       path: "/test",
-      method: ServiceMethod::Find,
+      method: method,
       phase: RulePhase::Before,
       params: Http::ParamsView.new(HTTP::Params.new),
       headers: Http::HeadersView.new(headers),

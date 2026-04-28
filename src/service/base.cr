@@ -59,6 +59,7 @@ module Alumna
       when .remove?
         removed = {"removed" => remove(ctx)} of String => AnyData
         {removed, nil}
+      when .options? then { {} of String => AnyData, nil }
       else
         {nil, ServiceError.internal("Unknown service method")}
       end

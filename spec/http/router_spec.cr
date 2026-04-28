@@ -116,6 +116,12 @@ private def delete(path, headers : Hash(String, String) = {} of String => String
   })
 end
 
+private def options(path, headers : Hash(String, String) = {} of String => String)
+  HTTP::Client.options("http://127.0.0.1:#{PORT}#{path}", headers: HTTP::Headers.new.tap { |h|
+    headers.each { |k, v| h[k] = v }
+  })
+end
+
 # ─────────────────────────────────────────────────────────────────────────────
 
 describe "Router integration" do
@@ -389,6 +395,18 @@ describe "Router integration" do
       expect_raises(IO::Error, "write not supported") do
         limited.write("x".to_slice)
       end
+    end
+  end
+
+  # ── OPTIONS convention ───────────────────────────────────────────────────────
+
+  describe "OPTIONS handling" do
+    it "bypasses global auth rules by default" do
+      # ItemService has a global before auth, but OPTIONS is opt-in
+      response = options("/items")
+      response.status_code.should eq(200)
+      # default Options implementation returns empty object
+      JSON.parse(response.body).as_h?.should_not be_nil
     end
   end
 end

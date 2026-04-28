@@ -12,6 +12,12 @@ describe Alumna::Ruleable do
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
   end
 
+  it "excludes global rules from OPTIONS by convention" do
+    r = DummyRuleable.new.before(rule)
+    r.collect_rules(Alumna::ServiceMethod::Options, Alumna::RulePhase::Before).size.should eq(0)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
+  end
+
   it "registers specific after rules with symbols" do
     r = DummyRuleable.new.after(rule, only: [:create, :update])
     creates = r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)

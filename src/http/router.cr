@@ -105,7 +105,7 @@ module Alumna
         when {"PUT", true}    then ServiceMethod::Update
         when {"PATCH", true}  then ServiceMethod::Patch
         when {"DELETE", true} then ServiceMethod::Remove
-        when {"OPTIONS", _}   then ServiceMethod::Find
+        when {"OPTIONS", _}   then ServiceMethod::Options
         else                       nil
         end
       end

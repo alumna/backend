@@ -44,7 +44,7 @@ Most backend frameworks ask you to learn their full architecture before you can 
 
 The entire model fits in your head at once:
 
-- A **Service** exposes a standard set of methods (`find`, `get`, `create`, `update`, `patch`, `remove`) and is automatically mounted as a RESTful HTTP API at a given path.
+- A **Service** exposes a standard set of methods (`find`, `get`, `create`, `update`, `patch`, `remove`, `options`) and is automatically mounted as a RESTful HTTP API at a given path. `options` is reserved for CORS preflights and has no business logic by default.
 - A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them. Rules can be registered globally on the app or per-service.
 - A **Schema** describes the shape of a service's data. It is used for input validation inside rules and as a structural hint for storage adapters.
 
@@ -226,16 +226,15 @@ Returns 422 with per-field details when validation fails. Respects `required_on`
 
 **2. CORS**
 ```crystal
-before Alumna.cors(
-  origins: ["https://app.example.com"],
-  credentials: true
-)
+# for normal requests
+before Alumna.cors(origins: ["https://app.example.com"])
+# for preflights — OPTIONS is opt-in by design
+before Alumna.cors(origins: ["https://app.example.com"]), only: :options
 ```
-- Sets `Access-Control-Allow-Origin` (echoes the request Origin), `Access-Control-Allow-Credentials` when enabled, and `Vary: Origin` for non-wildcard responses
-- Normalizes origins once at boot — matching is case-insensitive and ignores a trailing slash, so `"HTTPS://Example.com/"` matches `"https://example.com"`
-- Handles real preflights only (`OPTIONS` + `Access-Control-Request-Method`) with 204, `Access-Control-Allow-Methods`, `Access-Control-Allow-Headers`, and `Access-Control-Max-Age`
-- Skips requests without an `Origin` header entirely (no wasted headers)
+- Sets `Access-Control-Allow-Origin`, `Vary: Origin`, and credentials when enabled
+- Handles real preflights (`OPTIONS` + `Access-Control-Request-Method`) with 204
 - `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot — per the Fetch spec, wildcard cannot be used with credentials
+- **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `only: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
 
 **3. Logger**
 ```crystal
@@ -420,6 +419,7 @@ end
 | `update` | `PUT` | `/users/:id` |
 | `patch` | `PATCH` | `/users/:id` |
 | `remove` | `DELETE` | `/users/:id` |
+| `options` | `OPTIONS` | `/users` or `/users/:id` |
 
 
 **Execution order:**
