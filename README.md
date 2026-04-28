@@ -33,7 +33,7 @@ end
 # Done
 app = Alumna::App.new
 app.use("/messages", MessageService.new)
-app.listen(3000)
+app.listen(3000) # binds to 127.0.0.1:3000 by default
 ```
 
 ---
@@ -283,9 +283,7 @@ end
 
 # An error-rule that logs failures
 LogError = Alumna::Rule.new do |ctx|
-  if error = ctx.error
-    Log.error { "Request failed: #{error.message}" }
-  end
+  Log.error { "Request failed: #{ctx.error.message}" } if ctx.error
   ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
   Alumna::RuleResult.continue
 end
@@ -334,6 +332,20 @@ ctx.params["locale"] = "en" unless ctx.params["locale"]?
 
 The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response - copy values to `ctx.http.headers` if you need to send them back.
 
+**Listening and network binding**
+
+By default `app.listen` binds only to the loopback interface for safety:
+
+```crystal
+app.listen(3000) # http://127.0.0.1:3000
+```
+
+To expose the server publicly, pass an explicit host:
+
+```crystal
+app.listen(3000, host: "0.0.0.0")
+```
+
 **Trusted proxies**
 
 When Alumna runs behind Nginx, HAProxy, Cloudflare, or a load balancer, `ctx.remote_ip` must be derived from proxy headers. Configure trusted proxies when you start the server:
@@ -342,13 +354,17 @@ When Alumna runs behind Nginx, HAProxy, Cloudflare, or a load balancer, `ctx.rem
 app = Alumna::App.new
 app.use("/messages", MessageService.new)
 
-# Only trust private ranges
-app.listen(3000, trusted_proxies: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"])
+# Production behind a private load balancer
+app.listen(3000,
+  host: "0.0.0.0",
+  trusted_proxies: ["10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+)
 
-# Or trust all hops (useful for local development only)
-# app.listen(3000, trusted_proxies: true)
+# Local development only – trust all hops
+# app.listen(3000, host: "127.0.0.1", trusted_proxies: true)
 ```
 
+- `host: "127.0.0.1"` (default) – binds to localhost only; use "0.0.0.0" or "::" for all interfaces
 - `trusted_proxies: nil` (default) – never trust proxy headers
 - `true` – trust `Forwarded`, `X-Forwarded-For`, and `X-Real-IP` from any client
 - `Array(String)` – trust only when the immediate peer IP matches a CIDR; IPv4 and IPv6 are fully supported
@@ -437,7 +453,7 @@ app.after Logger
 app.error LogError
 
 app.use("/users", UserService.new)
-app.listen(3000)
+app.listen(3000) # localhost only
 ```
 
 ---
@@ -481,7 +497,7 @@ end
 app = Alumna::App.new
 app.use("/users", UserService.new)
 app.use("/posts", PostService.new)
-app.listen(3000)
+app.listen(3000) # http://127.0.0.1:3000
 ```
 
 PATCH works without sending required fields, because `required_on` limits the requirement to create/update.

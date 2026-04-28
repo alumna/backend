@@ -8,11 +8,10 @@ module Alumna
 
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
-    getter trusted_proxies : TrustedProxies
 
     property max_body_size : Int64 = 1_048_576
 
-    def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new, @trusted_proxies : TrustedProxies = nil)
+    def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
     end
 
@@ -72,11 +71,19 @@ module Alumna
       ctx
     end
 
-    def listen(port : Int32 = 3000)
-      router = Http::Router.new(self, @trusted_proxies)
+    def listen(port : Int32 = 3000, *, host : String = "127.0.0.1", trusted_proxies : TrustedProxies = nil)
+      router = Http::Router.new(self, trusted_proxies)
       server = HTTP::Server.new { |ctx| router.handle(ctx) }
-      puts "Listening on http://0.0.0.0:#{port}"
-      server.listen("0.0.0.0", port)
+      server.bind_tcp(host, port, reuse_port: false)
+
+      display_host = host.includes?(':') ? "[#{host}]" : host
+      puts "Listening on http://#{display_host}:#{port}"
+
+      if host == "0.0.0.0" || host == "::"
+        STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
+      end
+
+      server.listen
     end
   end
 end
