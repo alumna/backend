@@ -1,23 +1,19 @@
 # Alumna Backend changelog
 
-## 0.3.4 - 2026-04-27
+## 0.3.5 - 2026-04-28
+
+* refactor: HTTP `OPTIONS` verb is now native are correctly handled
+* refactor: CORS implementation now makes correct use of HTTP `OPTIONS`
+* fix: pre-compilation of rule pipelines are done at the `app.listen` phase or
+       at the first dispatch, which comes first. This ensures that global rules
+       registered after services registration are still added to them
+
+## 0.3.0-0.3.4 - 2026-04-27
 
 * perf: faster rules execution and optimizations on router `resolve_service` and `parse_forwarded`
-
-## 0.3.3 - 2026-04-27
-
 * perf: improved rules dispatching processing and execution
-
-## 0.3.2 - 2026-04-27
-
 * fix: improved CORS rule
-
-## 0.3.1 - 2026-04-27
-
 * fix: improved rate limiting rule
-
-## 0.3.0 - 2026-04-27
-
 * fix: solidified the proxy handling logic for real_ip reading
 * fix: make http headers and params available with zero-allocation views
 

@@ -1,9 +1,11 @@
 require "../../spec_helper"
 
 private def build_ctx_rate_limiter(app : Alumna::App, service : Alumna::Service, ip : String, method = "GET") : Alumna::RuleContext
+  svc_method = method == "OPTIONS" ? Alumna::ServiceMethod::Options : Alumna::ServiceMethod::Find
+
   Alumna::RuleContext.new(
     app: app, service: service, path: "/test",
-    method: Alumna::ServiceMethod::Find, phase: Alumna::RulePhase::Before,
+    method: svc_method, phase: Alumna::RulePhase::Before,
     params: Alumna::Http::ParamsView.new(HTTP::Params.new),
     headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
     http_method: method, remote_ip: ip

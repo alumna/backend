@@ -13,25 +13,34 @@ module Alumna
 
     def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
+      @pipelines_compiled = false
     end
 
     def use(path : String, service : Service) : self
       @services[path] = service
-      # Compile merged pipelines once
-      ServiceMethod.values.each do |m|
-        app_b = collect_rules(m, RulePhase::Before)
-        svc_b = service.collect_rules(m, RulePhase::Before)
-        service.set_before_pipeline(m, app_b, svc_b)
-
-        svc_a = service.collect_rules(m, RulePhase::After)
-        app_a = collect_rules(m, RulePhase::After)
-        service.set_after_pipeline(m, svc_a, app_a)
-      end
       self
+    end
+
+    private def compile_pipelines!
+      return if @pipelines_compiled
+      @services.each_value do |service|
+        # Compile merged pipelines once
+        ServiceMethod.values.each do |m|
+          app_b = collect_rules(m, RulePhase::Before)
+          svc_b = service.collect_rules(m, RulePhase::Before)
+          service.set_before_pipeline(m, app_b, svc_b)
+
+          svc_a = service.collect_rules(m, RulePhase::After)
+          app_a = collect_rules(m, RulePhase::After)
+          service.set_after_pipeline(m, svc_a, app_a)
+        end
+      end
+      @pipelines_compiled = true
     end
 
     # Central dispatch using merged pipelines (2 Orchestrator calls)
     def dispatch(service : Service, ctx : RuleContext) : RuleContext
+      compile_pipelines! unless @pipelines_compiled
       m = ctx.method
 
       # 1. BEFORE (app + service)
@@ -72,6 +81,8 @@ module Alumna
     end
 
     def listen(port : Int32 = 3000, *, host : String = "127.0.0.1", trusted_proxies : TrustedProxies = nil)
+      compile_pipelines! # freeze once, after all rules are registered
+
       router = Http::Router.new(self, trusted_proxies)
       server = HTTP::Server.new { |ctx| router.handle(ctx) }
       server.bind_tcp(host, port, reuse_port: false)

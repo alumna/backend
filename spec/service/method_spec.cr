@@ -8,6 +8,7 @@ describe Alumna::ServiceMethod do
     Alumna::ServiceMethod::Update.to_s.should eq("update")
     Alumna::ServiceMethod::Patch.to_s.should eq("patch")
     Alumna::ServiceMethod::Remove.to_s.should eq("remove")
+    Alumna::ServiceMethod::Options.to_s.should eq("options")
   end
 
   it "round-trips through parse when lowercased then capitalized" do

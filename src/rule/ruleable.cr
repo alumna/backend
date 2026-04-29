@@ -60,7 +60,9 @@ module Alumna
       compiled = ensure_compiled!
       global = @rules[nil]?.try(&.[phase]?) || EMPTY_RULES
       specific = @rules[method]?.try(&.[phase]?) || EMPTY_RULES
-      compiled[method.value][phase.value] = global + specific
+      # CONVENTION: OPTIONS is opt-in. Global rules (registered without `only:`)
+      # apply to data methods only, not to preflights.
+      compiled[method.value][phase.value] = method.options? ? specific : global + specific
     end
 
     # Returns the matrix, creating it once on first use
