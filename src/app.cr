@@ -17,8 +17,15 @@ module Alumna
     end
 
     def use(path : String, service : Service) : self
-      @services[path] = service
+      normalized = normalize_path(path)
+      raise ArgumentError.new("service already mounted at #{normalized}") if @services.has_key?(normalized)
+      @services[normalized] = service
       self
+    end
+
+    private def normalize_path(path) : String
+      raise ArgumentError.new("path must start with '/'") unless path.starts_with?('/')
+      path == "/" ? path : path.chomp('/')
     end
 
     private def compile_pipelines!

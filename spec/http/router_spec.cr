@@ -297,15 +297,28 @@ describe "Router integration" do
   # ── Path matching edge cases ───────────────────────────────────────────────────
 
   describe "path matching" do
-    it "returns 404 for trailing slash on id segment" do
-      # /items/1/ → id would be "1/", which contains '/', so no match
-      response = get("/items/1/", AUTH)
-      response.status_code.should eq(404)
+    it "normalizes trailing slash on id segment" do
+      # /items/1/ → normalized to /items/1, so it should succeed
+      created = post("/items", %|{"name":"Trailing"}|, AUTH)
+      id = JSON.parse(created.body)["id"].as_s
+
+      response = get("/items/#{id}/", AUTH)
+      response.status_code.should eq(200)
+      JSON.parse(response.body)["id"].as_s.should eq(id)
     end
 
     it "returns 404 for nested path segments" do
+      # /items/1/extra has a second '/' after the id → still invalid
       response = get("/items/1/extra", AUTH)
       response.status_code.should eq(404)
+    end
+
+    it "normalizes trailing slash on collection path" do
+      # /items/ and /items should hit the same service
+      r1 = get("/items", AUTH)
+      r2 = get("/items/", AUTH)
+      r1.status_code.should eq(200)
+      r2.status_code.should eq(200)
     end
   end
 

@@ -72,6 +72,9 @@ module Alumna
       end
 
       private def resolve_service(path : String) : {Service, String?}?
+        # treat /items and /items/ as identical
+        path = path == "/" ? path : path.chomp('/')
+
         # 1) exact match – find/create – single hash lookup, no allocations
         if service = @services[path]?
           return {service, nil}
