@@ -75,6 +75,7 @@ module Alumna
       after_rules = service.after_pipeline(m)
       unless Orchestrator.run(after_rules, ctx)
         ctx.phase = RulePhase::Error
+        Orchestrator.run(service.collect_rules(m, RulePhase::Error), ctx)
         Orchestrator.run(collect_rules(m, RulePhase::Error), ctx)
       end
       ctx

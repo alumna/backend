@@ -42,6 +42,11 @@ class AfterFailService < Alumna::MemoryAdapter
     after Alumna::Rule.new { |ctx|
       Alumna::RuleResult.stop(Alumna::ServiceError.internal("after failed"))
     }
+    # service-level error hook
+    error Alumna::Rule.new { |ctx|
+      ctx.http.headers["X-Service-Error"] = "svc-456"
+      Alumna::RuleResult.continue
+    }
   end
 end
 
@@ -217,7 +222,8 @@ describe "Alumna System Integration" do
   it "runs app error rules when an after-rule stops" do
     res = authenticated_client.get("/after-stop")
     res.status_code.should eq(500)
-    res.headers["X-Error-ID"]?.should eq("err-123")
+    res.headers["X-Error-ID"]?.should eq("err-123")      # app-level
+    res.headers["X-Service-Error"]?.should eq("svc-456") # service-level
     # AfterLogger ran before the stop, so the header is present
     res.headers["X-Request-ID"]?.should_not be_nil
     json(res.body)["error"].as_s.should eq("after failed")
