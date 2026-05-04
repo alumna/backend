@@ -18,6 +18,9 @@ module Alumna
 
         response.status_code = ctx.http.status || default_status(ctx.method)
 
+        # RFC 7230 sec 3.3.2 / RFC 7231 sec 6.3.5: 204 and 304 MUST NOT include a body
+        return if response.status_code == 204 || response.status_code == 304
+
         case result = ctx.result
         when Array
           serializer.encode(result, response)
