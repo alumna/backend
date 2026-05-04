@@ -122,6 +122,33 @@ describe Alumna::MemoryAdapter do
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
       adapter.find(ctx).should be_empty
     end
+
+    it "applies $limit and $skip" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      5.times { |i| insert(adapter, {"n" => any(i.to_s)} of String => Alumna::AnyData) }
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$skip" => "1", "$limit" => "2"})
+      results = adapter.find(ctx)
+      results.size.should eq(2)
+      results.map(&.["n"]).should eq(["1", "2"])
+    end
+
+    it "applies $sort" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      insert(adapter, {"age" => any("30")} of String => Alumna::AnyData)
+      insert(adapter, {"age" => any("20")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$sort" => "age:1"})
+      adapter.find(ctx).first["age"].should eq("20")
+    end
+
+    it "applies $select" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      insert(adapter, {"a" => any("1"), "b" => any("2")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a"})
+      rec = adapter.find(ctx).first
+      rec.has_key?("a").should be_true
+      rec.has_key?("b").should be_false
+      rec.has_key?("id").should be_true # id always preserved
+    end
   end
 
   describe "#get" do
