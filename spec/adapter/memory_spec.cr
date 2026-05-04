@@ -149,6 +149,20 @@ describe Alumna::MemoryAdapter do
       rec.has_key?("b").should be_false
       rec.has_key?("id").should be_true # id always preserved
     end
+
+    it "applies $select when id is explicitly requested" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      insert(adapter, {"a" => any("1"), "b" => any("2")} of String => Alumna::AnyData)
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a,id"})
+      rec = adapter.find(ctx).first
+      rec.keys.sort!.should eq(["a", "id"]) # id not duplicated
+    end
+
+    it "applies $select on empty store" do
+      adapter = Alumna::MemoryAdapter.new("/items")
+      ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a"})
+      adapter.find(ctx).should be_empty
+    end
   end
 
   describe "#get" do
@@ -278,7 +292,7 @@ describe Alumna::MemoryAdapter do
       records = adapter.find(ctx)
 
       records.size.should eq(count)
-      ids = records.map { |r| r["id"].as(String).to_i64 }.sort
+      ids = records.map { |rec| rec["id"].as(String).to_i64 }.sort!
       ids.should eq((1_i64..count.to_i64).to_a)
     end
 
@@ -290,7 +304,7 @@ describe Alumna::MemoryAdapter do
       writers = 50
       done = Channel(Nil).new(writers)
 
-      writers.times do |i|
+      writers.times do |_i|
         spawn do
           get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: id)
           current = adapter.get(get_ctx)

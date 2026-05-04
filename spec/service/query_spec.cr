@@ -18,4 +18,12 @@ describe Alumna::Query do
     q.filters["x"].should eq("1")
     q.filters.has_key?("$foo").should be_false
   end
+
+  it "empty? is true for empty params and false otherwise" do
+    q1 = Alumna::Query.new(Alumna::Http::ParamsView.new(HTTP::Params.new))
+    q1.empty?.should be_true
+
+    q2 = Alumna::Query.new(Alumna::Http::ParamsView.new(HTTP::Params.parse("x=1")))
+    q2.empty?.should be_false
+  end
 end
