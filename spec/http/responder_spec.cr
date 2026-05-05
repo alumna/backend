@@ -147,4 +147,34 @@ describe Alumna::Http::Responder do
       resp.status_code.should eq(422)
     end
   end
+
+  describe "RFCs 7230/7231: 204 and 304 MUST NOT include a body" do
+    it "skips encoding for 204 No Content" do
+      ctx = build_ctx(result: {"should_not" => "appear"} of String => Alumna::AnyData)
+      ctx.http.status = 204
+      io = IO::Memory.new
+      resp = HTTP::Server::Response.new(io)
+
+      Alumna::Http::Responder.write(resp, ctx, json_serializer)
+      resp.close
+
+      resp.status_code.should eq(204)
+      io.to_s.should_not contain("should_not")
+      io.to_s.should_not contain("{}") # body must be empty
+    end
+
+    it "skips encoding for 304 Not Modified" do
+      ctx = build_ctx(result: {"x" => 1_i64} of String => Alumna::AnyData)
+      ctx.http.status = 304
+      io = IO::Memory.new
+      resp = HTTP::Server::Response.new(io)
+
+      Alumna::Http::Responder.write(resp, ctx, json_serializer)
+      resp.close
+
+      resp.status_code.should eq(304)
+      io.to_s.should end_with("\r\n\r\n") # headers terminator, nothing after
+      io.to_s.should_not contain("\"x\"") # body must be absent
+    end
+  end
 end

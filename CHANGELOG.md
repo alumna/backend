@@ -1,5 +1,20 @@
 # Alumna Backend changelog
 
+## 0.3.6 - 2026-05-05
+
+### Fixed
+* **app dispatch:** after-phase errors now run service error hooks before app error hooks, making error handling symmetrical across before/service/after phases
+* **http responder:** 204 No Content and 304 Not Modified responses no longer include a body, per RFC 7230/7231; fixes CORS preflight returning `{}`
+* **router:** paths are now normalized (`/items` == `/items/`), duplicate `app.use` mounts raise `ArgumentError`
+* **limited_io:** limit enforcement now covers `read_byte`, `peek`, and `skip`; `peek` returns `Bytes.empty` at EOF instead of `nil`
+
+### Added
+* **query:** new `ctx.query` API with lazy parsing of `$limit`, `$skip`, `$sort`, `$select`; `MemoryAdapter#find` implements all four
+* **tests:** full coverage for query parsing, path normalization, and LimitedIO lifecycle (`close`, `closed?`)
+
+### Changed
+* **cors:** global rules no longer run on OPTIONS by design; register with `only: :options` (or all methods) for preflights — documented and tested
+
 ## 0.3.5 - 2026-04-28
 
 * refactor: HTTP `OPTIONS` verb is now native are correctly handled

@@ -42,6 +42,20 @@ class AfterFailService < Alumna::MemoryAdapter
     after Alumna::Rule.new { |ctx|
       Alumna::RuleResult.stop(Alumna::ServiceError.internal("after failed"))
     }
+    # service-level error hook
+    error Alumna::Rule.new { |ctx|
+      ctx.http.headers["X-Service-Error"] = "svc-456"
+      Alumna::RuleResult.continue
+    }
+  end
+end
+
+class CorsService < Alumna::MemoryAdapter
+  def initialize
+    super("/cors-test")
+    # OPTIONS is opt-in, so list all methods explicitly
+    before Alumna.cors(origins: ["https://example.com"]),
+      only: [:find, :get, :create, :update, :patch, :remove, :options]
   end
 end
 
@@ -64,6 +78,7 @@ describe "Alumna System Integration" do
     app.error ErrorLogger
     app.use("/test", TestService.new)
     app.use("/after-stop", AfterFailService.new)
+    app.use("/cors-test", CorsService.new)
     spawn { app.listen(TEST_PORT) }
     sleep 0.3.seconds
   end
@@ -217,9 +232,24 @@ describe "Alumna System Integration" do
   it "runs app error rules when an after-rule stops" do
     res = authenticated_client.get("/after-stop")
     res.status_code.should eq(500)
-    res.headers["X-Error-ID"]?.should eq("err-123")
+    res.headers["X-Error-ID"]?.should eq("err-123")      # app-level
+    res.headers["X-Service-Error"]?.should eq("svc-456") # service-level
     # AfterLogger ran before the stop, so the header is present
     res.headers["X-Request-ID"]?.should_not be_nil
     json(res.body)["error"].as_s.should eq("after failed")
+  end
+
+  it "CORS preflight returns 204 with empty body" do
+    client = HTTP::Client.new("localhost", TEST_PORT)
+    client.before_request do |r|
+      r.headers["Origin"] = "https://example.com"
+      r.headers["Access-Control-Request-Method"] = "POST"
+    end
+    res = client.options("/cors-test")
+
+    res.status_code.should eq(204)
+    res.body.should be_empty
+    res.headers["Access-Control-Allow-Origin"].should eq("https://example.com")
+    res.headers["Access-Control-Allow-Methods"].should contain("POST")
   end
 end

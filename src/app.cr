@@ -17,8 +17,15 @@ module Alumna
     end
 
     def use(path : String, service : Service) : self
-      @services[path] = service
+      normalized = normalize_path(path)
+      raise ArgumentError.new("service already mounted at #{normalized}") if @services.has_key?(normalized)
+      @services[normalized] = service
       self
+    end
+
+    private def normalize_path(path) : String
+      raise ArgumentError.new("path must start with '/'") unless path.starts_with?('/')
+      path == "/" ? path : path.chomp('/')
     end
 
     private def compile_pipelines!
@@ -75,6 +82,7 @@ module Alumna
       after_rules = service.after_pipeline(m)
       unless Orchestrator.run(after_rules, ctx)
         ctx.phase = RulePhase::Error
+        Orchestrator.run(service.collect_rules(m, RulePhase::Error), ctx)
         Orchestrator.run(collect_rules(m, RulePhase::Error), ctx)
       end
       ctx

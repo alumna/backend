@@ -151,4 +151,22 @@ describe Alumna::Orchestrator do
       log.should eq(["a", "b", "c"])
     end
   end
+
+  describe "service errors are skipped when the app stops early" do
+    it "skips service error hooks when app before-rule stops" do
+      log = [] of String
+      app = Alumna::App.new
+      app.before(Alumna::Rule.new { |ctx| log << "app-before"; Alumna::RuleResult.stop(Alumna::ServiceError.forbidden) })
+      app.error(Alumna::Rule.new { |ctx| log << "app-error"; Alumna::RuleResult.continue })
+
+      svc = Alumna::MemoryAdapter.new("/x")
+      svc.error(Alumna::Rule.new { |ctx| log << "svc-error"; Alumna::RuleResult.continue })
+      app.use("/x", svc)
+
+      ctx = test_ctx(app: app, service: svc, method: Alumna::ServiceMethod::Find)
+      app.dispatch(svc, ctx)
+
+      log.should eq(["app-before", "app-error"]) # svc-error must NOT appear
+    end
+  end
 end

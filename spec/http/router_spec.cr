@@ -297,15 +297,28 @@ describe "Router integration" do
   # ── Path matching edge cases ───────────────────────────────────────────────────
 
   describe "path matching" do
-    it "returns 404 for trailing slash on id segment" do
-      # /items/1/ → id would be "1/", which contains '/', so no match
-      response = get("/items/1/", AUTH)
-      response.status_code.should eq(404)
+    it "normalizes trailing slash on id segment" do
+      # /items/1/ → normalized to /items/1, so it should succeed
+      created = post("/items", %|{"name":"Trailing"}|, AUTH)
+      id = JSON.parse(created.body)["id"].as_s
+
+      response = get("/items/#{id}/", AUTH)
+      response.status_code.should eq(200)
+      JSON.parse(response.body)["id"].as_s.should eq(id)
     end
 
     it "returns 404 for nested path segments" do
+      # /items/1/extra has a second '/' after the id → still invalid
       response = get("/items/1/extra", AUTH)
       response.status_code.should eq(404)
+    end
+
+    it "normalizes trailing slash on collection path" do
+      # /items/ and /items should hit the same service
+      r1 = get("/items", AUTH)
+      r2 = get("/items/", AUTH)
+      r1.status_code.should eq(200)
+      r2.status_code.should eq(200)
     end
   end
 
@@ -389,12 +402,64 @@ describe "Router integration" do
       end
     end
 
+    it "enforces limit on read_byte" do
+      source = IO::Memory.new("ab")
+      limited = Alumna::Http::LimitedIO.new(source, 1)
+
+      limited.read_byte.should eq('a'.ord)
+      expect_raises(IO::Error, "exceeded") do
+        limited.read_byte
+      end
+    end
+
+    it "limits peek to remaining bytes" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.peek.should eq("123".to_slice)
+    end
+
+    it "enforces limit on skip" do
+      source = IO::Memory.new("abcdef")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+
+      limited.skip(5) # only 2 bytes can be skipped
+      expect_raises(IO::Error, "exceeded") do
+        limited.read(Bytes.new(1))
+      end
+    end
+
     it "raises on write because it is read-only" do
       limited = Alumna::Http::LimitedIO.new(IO::Memory.new, 10)
-
       expect_raises(IO::Error, "write not supported") do
         limited.write("x".to_slice)
       end
+    end
+
+    it "peek returns Bytes.empty when limit is exhausted" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+      limited.read(Bytes.new(2)) # consume limit
+
+      peeked = limited.peek
+      peeked.should eq(Bytes.empty)
+    end
+
+    it "closed? reflects the underlying IO state" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.closed?.should be_false
+      source.closed?.should be_false
+    end
+
+    it "close delegates to the underlying IO" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.close
+      limited.closed?.should be_true # delegates to source.closed?
+      source.closed?.should be_true  # confirms the delegation actually closed source
     end
   end
 

@@ -13,13 +13,47 @@ module Alumna
 
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
       @mutex.synchronize do
+        q = ctx.query
         records = @store.values
-        return records.to_a if ctx.params.empty?
-        records.select do |record|
-          ctx.params.all? do |key, value|
-            record[key]?.as?(String) == value
+
+        # 1) filters (old behaviour, now via q.filters)
+        unless q.filters.empty?
+          records = records.select do |rec|
+            q.filters.all? { |k, v| rec[k]?.try(&.to_s) == v }
           end
-        end.to_a
+        end
+
+        # 2) sort
+        records = records.to_a
+        if sort = q.sort
+          records.sort! do |a, b|
+            sort.reduce(0) do |cmp, (field, dir)|
+              next cmp if cmp != 0
+              av = a[field]?.try(&.to_s) || ""
+              bv = b[field]?.try(&.to_s) || ""
+              (av <=> bv) * dir
+            end
+          end
+        end
+
+        # 3) skip + limit
+        records = records.skip(q.skip || 0)
+        if limit = q.limit
+          records = records.first(limit)
+        end
+
+        # 4) select (always keep id for sanity)
+        if fields = q.select
+          # LCOV_EXCL_START - kcov wrongly misses .map
+          records.map do |rec|
+            # LCOV_EXCL_STOP
+            selected = rec.select(fields)
+            selected["id"] = rec["id"] if rec["id"]? && !selected.has_key?("id")
+            selected
+          end
+        else
+          records
+        end
       end
     end
 
