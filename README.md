@@ -11,14 +11,14 @@ require "alumna"
 
 # Schema definition
 MessageSchema = Alumna::Schema.new
-  .str("body", required: true, min_length: 1, max_length: 500)
-  .str("author", required: true, min_length: 1)
+  .str("body", min_length: 1, max_length: 500)
+  .str("author", min_length: 1)
   .bool("read", required: false)
 
 # Authentication rule
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 # Built-in adapters
@@ -208,9 +208,9 @@ It’s equivalent to:
 ```crystal
 Alumna::Rule.new do |ctx|
   errors = UserSchema.validate(ctx.data, ctx.method)
-  next Alumna::RuleResult.continue if errors.empty?
+  next nil if errors.empty?
   details = errors.to_h { |e| {e.field, e.message} }
-  Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
+  Alumna::ServiceError.unprocessable("Validation failed", details)
 end
 ```
 
@@ -293,26 +293,26 @@ All four are regular `Rule` objects - you can compose them with your own rules, 
 
 ### Rules
 
-A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes - they are defined once and registered globally on the application or on individual services.
+A rule is a `Proc` that receives a `RuleContext` and returns a `nil` to continue and a `ServiceError` to stop. Rules are values, not classes - they are defined once and registered globally on the application or on individual services.
 
 ```crystal
 # A rule that checks for a valid bearer token
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 # An after-rule that adds a response header
 AddRequestId = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
-  Alumna::RuleResult.continue
+  nil
 end
 
 # An error-rule that logs failures
 LogError = Alumna::Rule.new do |ctx|
   Log.error { "Request failed: #{ctx.error.message}" } if ctx.error
   ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
-  Alumna::RuleResult.continue
+  nil
 end
 ```
 
@@ -401,9 +401,9 @@ Parsing follows the standard order: `Forwarded` → `X-Forwarded-For` → `X-Rea
 **Signalling outcomes:**
 
 ```crystal
-RuleResult.continue                              # proceed to the next rule or service method
-RuleResult.stop(ServiceError.unauthorized)       # halt the pipeline and return an error response
-RuleResult.stop(ServiceError.bad_request("...")) # halt with a custom error
+nil                             # proceed to the next rule or service method
+ServiceError.unauthorized       # halt the pipeline and return an error response
+ServiceError.bad_request("...") # halt with a custom error
 ```
 
 **Available `ServiceError` constructors:**
@@ -460,7 +460,7 @@ When a request arrives, rules run in this exact sequence:
 4. `service.after` rules
 5. `app.after` rules
 
-If any rule returns `RuleResult.stop`, the pipeline jumps immediately to error rules:
+If any rule returns a `ServiceError`, the pipeline jumps immediately to error rules:
 
 6. `service.error` rules
 7. `app.error` rules
@@ -502,7 +502,7 @@ PostSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 class UserService < Alumna::MemoryAdapter

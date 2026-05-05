@@ -53,23 +53,18 @@ private def dispatch(service, method, id = nil, data = {} of String => Alumna::A
   ctx
 end
 
-private def continuing_rule(log : Array(String), label : String) : Alumna::Rule
-  Alumna::Rule.new do |ctx|
-    log << label
-    Alumna::RuleResult.continue
-  end
+private def continuing_rule(log, label)
+  Alumna::Rule.new { |_ctx| log << label; nil }
 end
 
-private def stopping_rule(label : String) : Alumna::Rule
-  Alumna::Rule.new do |ctx|
-    Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized(label))
-  end
+private def stopping_rule(message : String) : Alumna::Rule
+  Alumna::Rule.new { |_ctx| Alumna::ServiceError.unauthorized(message) }
 end
 
 private def result_setting_rule(label : String) : Alumna::Rule
   Alumna::Rule.new do |ctx|
     ctx.result = {"shortcut" => label} of String => Alumna::AnyData
-    Alumna::RuleResult.continue
+    nil.as(Alumna::ServiceError?)
   end
 end
 
@@ -93,7 +88,7 @@ describe "Dispatch" do
       service = TrackedService.new
       service.after(Alumna::Rule.new do |ctx|
         observed_phase = ctx.phase
-        Alumna::RuleResult.continue
+        nil
       end)
 
       dispatch(service, Alumna::ServiceMethod::Find)
@@ -105,7 +100,7 @@ describe "Dispatch" do
       service = TrackedService.new
       service.after(Alumna::Rule.new do |ctx|
         observed_result = ctx.result
-        Alumna::RuleResult.continue
+        nil
       end)
 
       dispatch(service, Alumna::ServiceMethod::Find)
@@ -116,7 +111,7 @@ describe "Dispatch" do
       log = [] of String
       svc = TrackedService.new
       svc.before(stopping_rule("boom"))
-      svc.error(Alumna::Rule.new { log << "error"; Alumna::RuleResult.continue })
+      svc.error(Alumna::Rule.new { log << "error"; nil })
 
       ctx = dispatch(svc, Alumna::ServiceMethod::Find)
       log.should eq(["error"])
@@ -127,7 +122,7 @@ describe "Dispatch" do
       log = [] of String
       app = Alumna::App.new
       svc = TrackedService.new
-      app.error(Alumna::Rule.new { log << "app-error"; Alumna::RuleResult.continue })
+      app.error(Alumna::Rule.new { log << "app-error"; nil })
       app.use("/x", svc)
 
       ctx = make_ctx(app, svc, Alumna::ServiceMethod::Update, "999")
@@ -165,10 +160,10 @@ describe "Dispatch" do
       log = [] of String
       app = Alumna::App.new
       svc = TrackedService.new
-      app.before(Alumna::Rule.new { log << "app-before"; Alumna::RuleResult.continue })
-      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
-      svc.before(Alumna::Rule.new { log << "svc-before"; Alumna::RuleResult.continue })
-      svc.after(Alumna::Rule.new { log << "svc-after"; Alumna::RuleResult.continue })
+      app.before(Alumna::Rule.new { log << "app-before"; nil })
+      app.after(Alumna::Rule.new { log << "app-after"; nil })
+      svc.before(Alumna::Rule.new { log << "svc-before"; nil })
+      svc.after(Alumna::Rule.new { log << "svc-after"; nil })
       app.use("/ordered", svc)
 
       ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
@@ -181,9 +176,9 @@ describe "Dispatch" do
       log = [] of String
       app = Alumna::App.new
       svc = TrackedService.new
-      app.before(Alumna::Rule.new { log << "app-before"; Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized) })
-      svc.before(Alumna::Rule.new { log << "svc-before"; Alumna::RuleResult.continue })
-      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+      app.before(Alumna::Rule.new { log << "app-before"; Alumna::ServiceError.unauthorized })
+      svc.before(Alumna::Rule.new { log << "svc-before"; nil })
+      app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
       ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
@@ -200,9 +195,9 @@ describe "Dispatch" do
       app.before(Alumna::Rule.new { |c|
         c.result = {"cached" => true} of String => Alumna::AnyData
         log << "app-before"
-        Alumna::RuleResult.continue
+        nil
       })
-      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+      app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
       ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
@@ -217,7 +212,7 @@ describe "Dispatch" do
       app = Alumna::App.new
       svc = TrackedService.new
       svc.before(stopping_rule("boom"))
-      app.after(Alumna::Rule.new { log << "app-after"; Alumna::RuleResult.continue })
+      app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
       ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)

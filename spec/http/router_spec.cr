@@ -21,9 +21,9 @@ class ItemService < Alumna::MemoryAdapter
     self.before(Alumna::Rule.new do |ctx|
       token = ctx.headers["authorization"]?
       if token == "valid-token"
-        Alumna::RuleResult.continue
+        nil
       else
-        Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized("Invalid or missing token"))
+        Alumna::ServiceError.unauthorized("Invalid or missing token")
       end
     end)
 
@@ -31,12 +31,12 @@ class ItemService < Alumna::MemoryAdapter
       Alumna::Rule.new do |ctx|
         errors = ItemSchema.validate(ctx.data)
         if errors.empty?
-          Alumna::RuleResult.continue
+          nil
         else
           details = errors.each_with_object({} of String => Alumna::AnyData) do |e, h|
             h[e.field] = e.message
           end
-          Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
+          Alumna::ServiceError.unprocessable("Validation failed", details)
         end
       end,
       only: [

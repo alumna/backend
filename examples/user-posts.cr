@@ -11,7 +11,7 @@ PostSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 class UserService < Alumna::MemoryAdapter

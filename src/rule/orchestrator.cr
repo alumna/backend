@@ -4,9 +4,8 @@ module Alumna
       i = 0
       size = rules.size
       while i < size
-        result = rules.unsafe_fetch(i).call(ctx)
-        if result.stop?
-          ctx.error = result.error
+        if err = rules.unsafe_fetch(i).call(ctx)
+          ctx.error = err
           return false
         end
         return true if short_circuit && ctx.result_set?
@@ -19,9 +18,8 @@ module Alumna
       i = 0
       size = rules.size
       while i < size
-        result = rules.unsafe_fetch(i).call(ctx)
-        if result.stop?
-          ctx.error = result.error
+        if err = rules.unsafe_fetch(i).call(ctx)
+          ctx.error = err
           return {false, i < boundary}
         end
         return {true, false} if short_circuit && ctx.result_set?

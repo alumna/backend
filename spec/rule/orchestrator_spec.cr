@@ -2,25 +2,19 @@ require "../spec_helper"
 
 # ── Helpers ───────────────────────────────────
 
-private def continuing_rule(log : Array(String), label : String) : Alumna::Rule
-  Alumna::Rule.new do |ctx|
-    log << label
-    Alumna::RuleResult.continue
-  end
+private def continuing_rule(log, label)
+  Alumna::Rule.new { |_ctx| log << label; nil }
 end
 
-private def stopping_rule(log : Array(String), label : String, message : String = "stopped") : Alumna::Rule
-  Alumna::Rule.new do |ctx|
-    log << label
-    Alumna::RuleResult.stop(Alumna::ServiceError.bad_request(message))
-  end
+private def stopping_rule(log, label, message = "stopped")
+  Alumna::Rule.new { |_ctx| log << label; Alumna::ServiceError.bad_request(message) }
 end
 
 private def result_setting_rule(log : Array(String), label : String) : Alumna::Rule
   Alumna::Rule.new do |ctx|
     log << label
     ctx.result = {"cached" => true} of String => Alumna::AnyData
-    Alumna::RuleResult.continue
+    nil.as(Alumna::ServiceError?)
   end
 end
 
@@ -66,7 +60,7 @@ describe Alumna::Orchestrator do
 
   describe "when a rule returns stop" do
     it "sets ctx.error to the ServiceError" do
-      rule = Alumna::Rule.new { |ctx| Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized("no token")) }
+      rule = Alumna::Rule.new { |ctx| Alumna::ServiceError.unauthorized("no token") }
       ctx = test_ctx
       Alumna::Orchestrator.run([rule], ctx)
       error = ctx.error
@@ -78,7 +72,7 @@ describe Alumna::Orchestrator do
     end
 
     it "returns false and does not change ctx.phase" do
-      rule = Alumna::Rule.new { |ctx| Alumna::RuleResult.stop(Alumna::ServiceError.forbidden) }
+      rule = Alumna::Rule.new { |ctx| Alumna::ServiceError.forbidden }
       ctx = test_ctx(phase: Alumna::RulePhase::Before)
       result = Alumna::Orchestrator.run([rule], ctx)
       result.should be_false
@@ -156,11 +150,11 @@ describe Alumna::Orchestrator do
     it "skips service error hooks when app before-rule stops" do
       log = [] of String
       app = Alumna::App.new
-      app.before(Alumna::Rule.new { |ctx| log << "app-before"; Alumna::RuleResult.stop(Alumna::ServiceError.forbidden) })
-      app.error(Alumna::Rule.new { |ctx| log << "app-error"; Alumna::RuleResult.continue })
+      app.before(Alumna::Rule.new { |ctx| log << "app-before"; Alumna::ServiceError.forbidden })
+      app.error(Alumna::Rule.new { |ctx| log << "app-error"; nil })
 
       svc = Alumna::MemoryAdapter.new
-      svc.error(Alumna::Rule.new { |ctx| log << "svc-error"; Alumna::RuleResult.continue })
+      svc.error(Alumna::Rule.new { |ctx| log << "svc-error"; nil })
       app.use("/x", svc)
 
       ctx = test_ctx(app: app, service: svc, method: Alumna::ServiceMethod::Find)

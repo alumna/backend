@@ -25,7 +25,7 @@ module Alumna
 
     Rule.new do |ctx|
       origin = ctx.headers["origin"]?
-      next RuleResult.continue unless origin
+      next nil unless origin
 
       # same normalization for the incoming value – O(1) string ops
       origin_norm = origin.strip.downcase.chomp('/')
@@ -36,7 +36,7 @@ module Alumna
                          origin # echo the client's exact value, spec-compliant
                        end
 
-      next RuleResult.continue unless allowed_origin
+      next nil unless allowed_origin
 
       h = ctx.http.headers
       h["Access-Control-Allow-Origin"] = allowed_origin
@@ -52,7 +52,7 @@ module Alumna
         ctx.result = {} of String => AnyData
       end
 
-      RuleResult.continue
+      nil
     end
   end
 end

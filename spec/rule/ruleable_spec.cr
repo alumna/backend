@@ -5,7 +5,7 @@ class DummyRuleable
 end
 
 describe Alumna::Ruleable do
-  rule = ->(ctx : Alumna::RuleContext) { Alumna::RuleResult.continue }
+  rule = ->(ctx : Alumna::RuleContext) : Alumna::ServiceError? { nil }
 
   it "registers global before rules" do
     r = DummyRuleable.new.before(rule)
@@ -60,8 +60,8 @@ describe Alumna::Ruleable do
   it "runs global before specific" do
     r = DummyRuleable.new
     order = [] of String
-    global = Alumna::Rule.new { order << "global"; Alumna::RuleResult.continue }
-    specific = Alumna::Rule.new { order << "specific"; Alumna::RuleResult.continue }
+    global = Alumna::Rule.new { |ctx| order << "global"; nil.as(Alumna::ServiceError?) }
+    specific = Alumna::Rule.new { |ctx| order << "specific"; nil.as(Alumna::ServiceError?) }
 
     r.before(global)
     r.before(specific, only: :get)

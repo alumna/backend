@@ -7,16 +7,12 @@ MessageSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  if token == "secret-token"
-    Alumna::RuleResult.continue
-  else
-    Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized("Invalid or missing token"))
-  end
+  token == "secret-token" ? nil : Alumna::ServiceError.unauthorized("Invalid or missing token")
 end
 
 LogResult = Alumna::Rule.new do |ctx|
   puts "[#{ctx.method}] #{ctx.path} → #{ctx.http.status || 200}"
-  Alumna::RuleResult.continue
+  nil
 end
 
 class MessageService < Alumna::MemoryAdapter
