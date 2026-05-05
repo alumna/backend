@@ -38,6 +38,31 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 
 ---
 
+## Table of Contents
+- [Backend can be simple](#backend-can-be-simple)
+- [Philosophy](#philosophy)
+- [Status](#status)
+- [Installation](#installation)
+- [Core concepts](#core-concepts)
+    - [Schema](#schema)
+        - [Pluggable formats](#pluggable-formats)
+    - [Validation: Built-in validation rule](#validation-built-in-validation-rule)
+    - [Validation: custom validator](#validation-custom-validator)
+    - [Built-in rules](#built-in-rules)
+- [Rules](#rules)
+- [Headers, params, and client IP](#headers-params-and-client-ip)
+- [Services](#services)
+- [Example of global rules in an application](#example-of-global-rules-in-an-application)
+- [Full example](#full-example)
+- [Writing a custom adapter](#writing-a-custom-adapter)
+- [Serialization](#serialization)
+- [Roadmap](#roadmap)
+- [Design decisions and trade-offs](#design-decisions-and-trade-offs)
+- [Contributing](#contributing)
+- [License](#license)
+
+---
+
 ## Philosophy
 
 Most backend frameworks ask you to learn their full architecture before you can write a single working endpoint. Alumna takes the opposite approach.
@@ -64,6 +89,9 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ In-memory adapter implementing the full service interface
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with `store`, `remote_ip` (with trusted proxy support), `http_method`, `headers`, and `provider`
+- ✅ Query parsing (`$limit`, `$skip`, `$sort`, `$select`) via `ctx.query`
+- ✅ Path normalization and duplicate-route protection
+- ✅ Strict request-body limits enforced on all IO entry points
 - ✅ Cross-platform CI with full test coverage
 
 Production-ready built-in rules:
