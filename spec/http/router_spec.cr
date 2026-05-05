@@ -402,12 +402,47 @@ describe "Router integration" do
       end
     end
 
+    it "enforces limit on read_byte" do
+      source = IO::Memory.new("ab")
+      limited = Alumna::Http::LimitedIO.new(source, 1)
+
+      limited.read_byte.should eq('a'.ord)
+      expect_raises(IO::Error, "exceeded") do
+        limited.read_byte
+      end
+    end
+
+    it "limits peek to remaining bytes" do
+      source = IO::Memory.new("12345")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.peek.should eq("123".to_slice)
+    end
+
+    it "enforces limit on skip" do
+      source = IO::Memory.new("abcdef")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+
+      limited.skip(5) # only 2 bytes can be skipped
+      expect_raises(IO::Error, "exceeded") do
+        limited.read(Bytes.new(1))
+      end
+    end
+
     it "raises on write because it is read-only" do
       limited = Alumna::Http::LimitedIO.new(IO::Memory.new, 10)
-
       expect_raises(IO::Error, "write not supported") do
         limited.write("x".to_slice)
       end
+    end
+
+    it "peek returns Bytes.empty when limit is exhausted" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 2)
+      limited.read(Bytes.new(2)) # consume limit
+
+      peeked = limited.peek
+      peeked.should eq(Bytes.empty)
     end
   end
 
