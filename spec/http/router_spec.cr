@@ -444,6 +444,23 @@ describe "Router integration" do
       peeked = limited.peek
       peeked.should eq(Bytes.empty)
     end
+
+    it "closed? reflects the underlying IO state" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.closed?.should be_false
+      source.closed?.should be_false
+    end
+
+    it "close delegates to the underlying IO" do
+      source = IO::Memory.new("abc")
+      limited = Alumna::Http::LimitedIO.new(source, 3)
+
+      limited.close
+      limited.closed?.should be_true # delegates to source.closed?
+      source.closed?.should be_true  # confirms the delegation actually closed source
+    end
   end
 
   # ── OPTIONS convention ───────────────────────────────────────────────────────
