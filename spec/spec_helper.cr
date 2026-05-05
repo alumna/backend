@@ -3,7 +3,7 @@ require "../src/alumna"
 
 def test_ctx(
   app = Alumna::App.new,
-  service = Alumna::MemoryAdapter.new("/test"),
+  service = Alumna::MemoryAdapter.new,
   path = "/test",
   method = Alumna::ServiceMethod::Find,
   phase = Alumna::RulePhase::Before,

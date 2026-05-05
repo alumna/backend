@@ -85,7 +85,7 @@ describe Alumna::Ruleable do
 
   it "works identically in App and Service" do
     app = Alumna::App.new
-    svc = Alumna::MemoryAdapter.new("/test")
+    svc = Alumna::MemoryAdapter.new
     app.before(rule)
     svc.before(rule, only: :find)
 

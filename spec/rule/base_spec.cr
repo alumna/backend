@@ -2,7 +2,7 @@ require "../spec_helper"
 
 private def dummy_ctx : Alumna::RuleContext
   app = Alumna::App.new
-  service = Alumna::MemoryAdapter.new("/dummy")
+  service = Alumna::MemoryAdapter.new
   Alumna::RuleContext.new(
     app: app,
     service: service,

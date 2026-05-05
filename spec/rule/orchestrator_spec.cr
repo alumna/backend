@@ -159,7 +159,7 @@ describe Alumna::Orchestrator do
       app.before(Alumna::Rule.new { |ctx| log << "app-before"; Alumna::RuleResult.stop(Alumna::ServiceError.forbidden) })
       app.error(Alumna::Rule.new { |ctx| log << "app-error"; Alumna::RuleResult.continue })
 
-      svc = Alumna::MemoryAdapter.new("/x")
+      svc = Alumna::MemoryAdapter.new
       svc.error(Alumna::Rule.new { |ctx| log << "svc-error"; Alumna::RuleResult.continue })
       app.use("/x", svc)
 

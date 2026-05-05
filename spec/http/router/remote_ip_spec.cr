@@ -5,7 +5,7 @@ require "http/server"
 # A tiny service that just echoes back the ip the router computed
 class IpEchoService < Alumna::MemoryAdapter
   def initialize
-    super("/ip", Alumna::Schema.new)
+    super(Alumna::Schema.new)
   end
 
   def find(ctx) : Array(Hash(String, Alumna::AnyData))

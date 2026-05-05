@@ -4,8 +4,8 @@ module Alumna
     @next_id : Int64
     @mutex : Mutex
 
-    def initialize(path : String, schema : Schema? = nil)
-      super(path, schema)
+    def initialize(schema : Schema? = nil)
+      super(schema)
       @store = {} of String => Hash(String, AnyData)
       @next_id = 1_i64
       @mutex = Mutex.new

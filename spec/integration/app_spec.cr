@@ -25,7 +25,7 @@ end
 
 class TestService < Alumna::MemoryAdapter
   def initialize
-    super("/test", TestSchema)
+    super(TestSchema)
     before Authenticate
     before Alumna.validate(TestSchema), only: [:create, :update, :patch]
     after AfterLogger
@@ -34,7 +34,7 @@ end
 
 class AfterFailService < Alumna::MemoryAdapter
   def initialize
-    super("/after-stop", TestSchema)
+    super(TestSchema)
     before Authenticate
     before Alumna.validate(TestSchema), only: [:create, :update, :patch]
     after AfterLogger
@@ -52,7 +52,7 @@ end
 
 class CorsService < Alumna::MemoryAdapter
   def initialize
-    super("/cors-test")
+    super()
     # OPTIONS is opt-in, so list all methods explicitly
     before Alumna.cors(origins: ["https://example.com"]),
       only: [:find, :get, :create, :update, :patch, :remove, :options]

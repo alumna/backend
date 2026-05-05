@@ -24,7 +24,7 @@ end
 # Built-in adapters
 class MessageService < Alumna::MemoryAdapter
   def initialize
-    super("/messages", MessageSchema)
+    super(MessageSchema)
     before Authenticate
     before Alumna.validate(MessageSchema), only: [:create, :update]
   end
@@ -219,7 +219,7 @@ Because it receives `ctx.method`, it automatically respects `required_on: [:crea
 ```crystal
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Alumna.validate(UserSchema), only: [:create, :update, :patch]
   end
 end
@@ -428,7 +428,7 @@ A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` direc
 ```crystal
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
     before Alumna.validate(UserSchema), only: [:create, :update, :patch]
     after AddRequestId
@@ -507,7 +507,7 @@ end
 
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
     before Alumna.validate(UserSchema), only: [:create, :update, :patch]
   end
@@ -515,7 +515,7 @@ end
 
 class PostService < Alumna::MemoryAdapter
   def initialize
-    super("/posts", PostSchema)
+    super(PostSchema)
     before Authenticate
     before Alumna.validate(PostSchema), only: [:create, :update, :patch]
 
@@ -539,7 +539,7 @@ To connect a real database, inherit from `Alumna::Service` and implement the six
 ```crystal
 class PostgresUserService < Alumna::Service
   def initialize(@db : DB::Database)
-    super("/users", UserSchema)
+    super(UserSchema)
     self.before(Authenticate)
   end
 

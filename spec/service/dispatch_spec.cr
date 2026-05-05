@@ -4,7 +4,7 @@ private class TrackedService < Alumna::MemoryAdapter
   getter called : Array(String)
 
   def initialize
-    super("/tracked")
+    super()
     @called = [] of String
   end
 
@@ -46,7 +46,8 @@ end
 
 private def dispatch(service, method, id = nil, data = {} of String => Alumna::AnyData, app = nil)
   app ||= Alumna::App.new
-  app.use(service.path, service) unless app.services.has_key?(service.path)
+  mount_path = "/tracked" # TrackedService is always mounted here in this spec
+  app.use(mount_path, service) unless app.services.has_key?(mount_path)
   ctx = make_ctx(app, service, method, id, data)
   app.dispatch(service, ctx)
   ctx

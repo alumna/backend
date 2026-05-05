@@ -15,7 +15,7 @@ end
 module Alumna
   class TestService < Service
     def initialize
-      super("/test")
+      super()
     end
 
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))

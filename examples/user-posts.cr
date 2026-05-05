@@ -16,7 +16,7 @@ end
 
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
     before Alumna.validate(UserSchema), only: [:create, :update, :patch]
   end
@@ -24,7 +24,7 @@ end
 
 class PostService < Alumna::MemoryAdapter
   def initialize
-    super("/posts", PostSchema)
+    super(PostSchema)
     before Authenticate
     before Alumna.validate(PostSchema), only: [:create, :update, :patch]
   end

@@ -21,7 +21,7 @@ end
 
 class MessageService < Alumna::MemoryAdapter
   def initialize
-    super("/messages", MessageSchema)
+    super(MessageSchema)
     before Authenticate
     before Alumna.validate(MessageSchema), only: [:create, :update, :patch]
     after LogResult

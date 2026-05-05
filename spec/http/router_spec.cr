@@ -16,7 +16,7 @@ ItemSchema = Alumna::Schema.new
 # so we can also test that rule-generated errors propagate through the HTTP layer.
 class ItemService < Alumna::MemoryAdapter
   def initialize
-    super("/items", ItemSchema)
+    super(ItemSchema)
 
     self.before(Alumna::Rule.new do |ctx|
       token = ctx.headers["authorization"]?
