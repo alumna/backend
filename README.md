@@ -26,7 +26,7 @@ class MessageService < Alumna::MemoryAdapter
   def initialize
     super(MessageSchema)
     before Authenticate
-    before Alumna.validate(MessageSchema), only: [:create, :update]
+    before Alumna.validate(MessageSchema), on: :write
   end
 end
 
@@ -220,7 +220,7 @@ Because it receives `ctx.method`, it automatically respects `required_on: [:crea
 class UserService < Alumna::MemoryAdapter
   def initialize
     super(UserSchema)
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 ```
@@ -248,7 +248,7 @@ Alumna.rate_limit(limit: 100, window_seconds: 60) # in-memory rate limiting
 
 **1. Validation**
 ```crystal
-before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+before Alumna.validate(UserSchema), on: :write
 ```
 Returns 422 with per-field details when validation fails. Respects `required_on`.
 
@@ -257,12 +257,12 @@ Returns 422 with per-field details when validation fails. Respects `required_on`
 # for normal requests
 before Alumna.cors(origins: ["https://app.example.com"])
 # for preflights — OPTIONS is opt-in by design
-before Alumna.cors(origins: ["https://app.example.com"]), only: :options
+before Alumna.cors(origins: ["https://app.example.com"]), on: :options
 ```
 - Sets `Access-Control-Allow-Origin`, `Vary: Origin`, and credentials when enabled
 - Handles real preflights (`OPTIONS` + `Access-Control-Request-Method`) with 204
 - `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot — per the Fetch spec, wildcard cannot be used with credentials
-- **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `only: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
+- **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `on: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
 
 **3. Logger**
 ```crystal
@@ -287,7 +287,7 @@ before Alumna.rate_limit(limit: 60, window_seconds: 60)
 - Returns 429 when exceeded
 - Skips `OPTIONS` requests automatically
 
-All four are regular `Rule` objects - you can compose them with your own rules, limit them with `only:`, and test them with `RuleRunner` like any custom rule.
+All four are regular `Rule` objects - you can compose them with your own rules, limit them with `on:`, and test them with `RuleRunner` like any custom rule.
 
 ---
 
@@ -430,7 +430,7 @@ class UserService < Alumna::MemoryAdapter
   def initialize
     super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
     after AddRequestId
     error LogError
   end
@@ -509,7 +509,7 @@ class UserService < Alumna::MemoryAdapter
   def initialize
     super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 
@@ -517,7 +517,7 @@ class PostService < Alumna::MemoryAdapter
   def initialize
     super(PostSchema)
     before Authenticate
-    before Alumna.validate(PostSchema), only: [:create, :update, :patch]
+    before Alumna.validate(PostSchema), on: :write
 
   end
 end

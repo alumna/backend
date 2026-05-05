@@ -132,11 +132,11 @@ describe "Dispatch" do
     end
   end
 
-  describe "only: scoping" do
+  describe "on: scoping" do
     it "runs a method-scoped rule only for its registered method" do
       log = [] of String
       service = TrackedService.new
-      service.before(continuing_rule(log, "create-only"), only: [Alumna::ServiceMethod::Create])
+      service.before(continuing_rule(log, "create-only"), on: [Alumna::ServiceMethod::Create])
 
       dispatch(service, Alumna::ServiceMethod::Find)
       log.should be_empty
@@ -148,7 +148,7 @@ describe "Dispatch" do
     it "does not run a method-scoped rule for any other method" do
       log = [] of String
       service = TrackedService.new
-      service.after(continuing_rule(log, "find-after"), only: [Alumna::ServiceMethod::Find])
+      service.after(continuing_rule(log, "find-after"), on: [Alumna::ServiceMethod::Find])
 
       dispatch(service, Alumna::ServiceMethod::Create, nil, {"x" => "y"} of String => Alumna::AnyData)
       log.should be_empty

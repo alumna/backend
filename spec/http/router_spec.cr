@@ -39,7 +39,7 @@ class ItemService < Alumna::MemoryAdapter
           Alumna::ServiceError.unprocessable("Validation failed", details)
         end
       end,
-      only: [
+      on: [
         Alumna::ServiceMethod::Create,
         Alumna::ServiceMethod::Update,
       ]

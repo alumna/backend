@@ -18,7 +18,7 @@ class UserService < Alumna::MemoryAdapter
   def initialize
     super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 
@@ -26,7 +26,7 @@ class PostService < Alumna::MemoryAdapter
   def initialize
     super(PostSchema)
     before Authenticate
-    before Alumna.validate(PostSchema), only: [:create, :update, :patch]
+    before Alumna.validate(PostSchema), on: :write
   end
 end
 

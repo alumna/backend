@@ -19,7 +19,7 @@ describe Alumna::Ruleable do
   end
 
   it "registers specific after rules with symbols" do
-    r = DummyRuleable.new.after(rule, only: [:create, :update])
+    r = DummyRuleable.new.after(rule, on: [:create, :update])
     creates = r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)
     finds = r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After)
     creates.size.should eq(1)
@@ -27,31 +27,31 @@ describe Alumna::Ruleable do
   end
 
   it "normalizes symbols to enums" do
-    r = DummyRuleable.new.before(rule, only: :patch)
+    r = DummyRuleable.new.before(rule, on: :patch)
     r.collect_rules(Alumna::ServiceMethod::Patch, Alumna::RulePhase::Before).size.should eq(1)
   end
 
   it "accepts single enum overload for before" do
     r = DummyRuleable.new
-    r.before(rule, only: Alumna::ServiceMethod::Find)
+    r.before(rule, on: Alumna::ServiceMethod::Find)
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
   end
 
   it "accepts single symbol and normalizes via capitalize" do
     r = DummyRuleable.new
-    r.before(rule, only: :create)
+    r.before(rule, on: :create)
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before).size.should eq(1)
   end
 
   it "accepts uppercase symbol for after" do
     r = DummyRuleable.new
-    r.after(rule, only: :FIND)
+    r.after(rule, on: :FIND)
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(1)
   end
 
   it "accepts array of symbols" do
     r = DummyRuleable.new
-    r.before(rule, only: [:find, :create])
+    r.before(rule, on: [:find, :create])
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before).size.should eq(1)
     r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before).size.should eq(0)
@@ -64,7 +64,7 @@ describe Alumna::Ruleable do
     specific = Alumna::Rule.new { |ctx| order << "specific"; nil.as(Alumna::ServiceError?) }
 
     r.before(global)
-    r.before(specific, only: :get)
+    r.before(specific, on: :get)
 
     rules = r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before)
     Alumna::Orchestrator.run(rules, test_ctx(method: Alumna::ServiceMethod::Get))
@@ -87,7 +87,7 @@ describe Alumna::Ruleable do
     app = Alumna::App.new
     svc = Alumna::MemoryAdapter.new
     app.before(rule)
-    svc.before(rule, only: :find)
+    svc.before(rule, on: :find)
 
     app.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
     svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
@@ -100,13 +100,13 @@ describe Alumna::Ruleable do
 
   it "accepts single enum overload for error" do
     r = DummyRuleable.new
-    r.error(rule, only: Alumna::ServiceMethod::Find)
+    r.error(rule, on: Alumna::ServiceMethod::Find)
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
   end
 
   it "accepts single symbol for error and normalizes" do
     r = DummyRuleable.new
-    r.error(rule, only: :create)
+    r.error(rule, on: :create)
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).size.should eq(1)
   end
 end
