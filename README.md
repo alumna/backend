@@ -21,18 +21,15 @@ Authenticate = Alumna::Rule.new do |ctx|
   token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
-# Built-in adapters
-class MessageService < Alumna::MemoryAdapter
-  def initialize
-    super(MessageSchema)
-    before Authenticate
-    before Alumna.validate(MessageSchema), on: :write
-  end
-end
 
-# Done
 app = Alumna::App.new
-app.use("/messages", MessageService.new)
+
+# Messages service based on Memory adapter
+app.use "/messages", Alumna.memory(MessageSchema) do
+  before Authenticate
+  before Alumna.validate(MessageSchema), on: :write
+end
+# Done
 app.listen(3000) # binds to 127.0.0.1:3000 by default
 ```
 
@@ -256,12 +253,12 @@ Returns 422 with per-field details when validation fails. Respects `required_on`
 ```crystal
 # for normal requests
 before Alumna.cors(origins: ["https://app.example.com"])
-# for preflights — OPTIONS is opt-in by design
+# for preflights - OPTIONS is opt-in by design
 before Alumna.cors(origins: ["https://app.example.com"]), on: :options
 ```
 - Sets `Access-Control-Allow-Origin`, `Vary: Origin`, and credentials when enabled
 - Handles real preflights (`OPTIONS` + `Access-Control-Request-Method`) with 204
-- `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot — per the Fetch spec, wildcard cannot be used with credentials
+- `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot - per the Fetch spec, wildcard cannot be used with credentials
 - **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `on: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
 
 **3. Logger**
@@ -458,6 +455,31 @@ class UserService < Alumna::MemoryAdapter
 end
 ```
 
+#### Alternative way to create a service
+
+For simple services that only need to configure rules, you can skip the class definition entirely and use the `Alumna.memory` factory with a block:
+
+```crystal
+app.use "/messages", Alumna.memory(MessageSchema) do
+  before Authenticate
+  before Alumna.validate(MessageSchema), on: :write
+  after AddRequestId
+end
+```
+
+The block runs once at boot with the service as its context, so `before`, `after`, and `error` work exactly as in a constructor. This is the recommended approach for memory tables, and the same pattern will be available for future adapters (`Alumna.postgres`, `Alumna.sqlite`, etc.).
+
+Use a full class only when you need to override service methods (`find`, `get`, `create`, etc.) with custom logic:
+
+```crystal
+class CustomService < Alumna::MemoryAdapter
+  def find(ctx)
+    # custom implementation
+    super
+  end
+end
+```
+
 #### Registering rules
 
 Rules are attached in a service (or app) constructor with three methods:
@@ -517,7 +539,7 @@ After-rules always run when there is no error, even if a before-rule short-circu
 
 ---
 
-### Example of global rules in an application
+#### Example of global rules in an application
 
 ```crystal
 app = Alumna::App.new
