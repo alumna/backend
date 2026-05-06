@@ -5,7 +5,7 @@ class DummyRuleable
 end
 
 describe Alumna::Ruleable do
-  rule = ->(ctx : Alumna::RuleContext) : Alumna::ServiceError? { nil }
+  rule = ->(_ctx : Alumna::RuleContext) : Alumna::ServiceError? { nil }
 
   it "registers global before rules" do
     r = DummyRuleable.new.before(rule)
@@ -60,8 +60,8 @@ describe Alumna::Ruleable do
   it "runs global before specific" do
     r = DummyRuleable.new
     order = [] of String
-    global = Alumna::Rule.new { |ctx| order << "global"; nil.as(Alumna::ServiceError?) }
-    specific = Alumna::Rule.new { |ctx| order << "specific"; nil.as(Alumna::ServiceError?) }
+    global = Alumna::Rule.new { |_ctx| order << "global"; nil.as(Alumna::ServiceError?) }
+    specific = Alumna::Rule.new { |_ctx| order << "specific"; nil.as(Alumna::ServiceError?) }
 
     r.before(global)
     r.before(specific, on: :get)
@@ -108,5 +108,25 @@ describe Alumna::Ruleable do
     r = DummyRuleable.new
     r.error(rule, on: :create)
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).size.should eq(1)
+  end
+
+  it "registers before rules via block form" do
+    r = DummyRuleable.new.before { |_ctx| nil }
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Options, Alumna::RulePhase::Before).size.should eq(0)
+  end
+
+  it "registers after rules via block form with on: :write" do
+    r = DummyRuleable.new.after(on: :write) { |_ctx| nil }
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Update, Alumna::RulePhase::After).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(0)
+  end
+
+  it "registers error rules via block form with on: :read" do
+    r = DummyRuleable.new.error(on: :read) { |_ctx| nil }
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Error).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).size.should eq(0)
   end
 end

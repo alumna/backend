@@ -39,7 +39,7 @@ class AfterFailService < Alumna::MemoryAdapter
     before Alumna.validate(TestSchema), on: :write
     after AfterLogger
     # this after-rule forces the failure path in App#dispatch
-    after Alumna::Rule.new { |ctx|
+    after Alumna::Rule.new { |_ctx|
       Alumna::ServiceError.internal("after failed")
     }
     # service-level error hook

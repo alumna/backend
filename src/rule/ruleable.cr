@@ -12,8 +12,8 @@ module Alumna
       self
     end
 
-    def before(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, & : RuleContext -> _)
-      before(Rule.new { |ctx| yield(ctx).as(ServiceError?) }, on: on)
+    def before(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      before(block, on: on)
     end
 
     def after(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
@@ -21,8 +21,8 @@ module Alumna
       self
     end
 
-    def after(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, & : RuleContext -> _)
-      after(Rule.new { |ctx| yield(ctx).as(ServiceError?) }, on: on)
+    def after(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      after(block, on: on)
     end
 
     def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
@@ -30,8 +30,8 @@ module Alumna
       self
     end
 
-    def error(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, & : RuleContext -> _)
-      error(Rule.new { |ctx| yield(ctx).as(ServiceError?) }, on: on)
+    def error(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      error(block, on: on)
     end
 
     # ---- internals ----
