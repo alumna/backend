@@ -70,7 +70,7 @@ Most backend frameworks ask you to learn their full architecture before you can 
 The entire model fits in your head at once:
 
 - A **Service** exposes a standard set of methods (`find`, `get`, `create`, `update`, `patch`, `remove`, `options`) and is automatically mounted as a RESTful HTTP API at a given path. `options` is reserved for CORS preflights and has no business logic by default.
-- A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns either `continue` or `stop`. Rules do not call each other; a flat orchestrator sequences them. Rules can be registered globally on the app or per-service.
+- A **Rule** is a single-responsibility function that receives a request context, applies one concern - authentication, validation, rate limiting, logging - and returns `nil` to continue or a `ServiceError` to stop the pipeline. Rules do not call each other; a flat orchestrator sequences them. Rules can be registered globally on the app or per-service.
 - A **Schema** describes the shape of a service's data. It is used for input validation inside rules and as a structural hint for storage adapters.
 
 There is no magic, no dependency injection container, no decorator metadata, no resolver chain. Every moving piece is visible and explicit. A developer new to the codebase can read a service definition and understand the full execution path in minutes.
@@ -316,6 +316,27 @@ LogError = Alumna::Rule.new do |ctx|
 end
 ```
 
+#### Two ways to register a rule
+
+**For production code** - define a reusable constant, ideally in its own file:
+
+```crystal
+# src/rules/authenticate.cr
+Authenticate = Alumna::Rule.new do |ctx|
+  ctx.headers["authorization"]? ? nil : Alumna::ServiceError.unauthorized
+end
+```
+
+**For prototypes or one-liners** - use the block form directly:
+
+```crystal
+before on: :write do |ctx|
+  ctx.headers["authorization"]? ? nil : Alumna::ServiceError.unauthorized
+end
+```
+
+Both compile to the same `Proc`. The block form provides convenience, while the constant form is more recommended because it keeps rules testable and encourages one-file-per-concern architecture.
+
 **What is available on the context:**
 
 | Field | Type | Description |
@@ -435,6 +456,33 @@ class UserService < Alumna::MemoryAdapter
     error LogError
   end
 end
+```
+
+#### Registering rules
+
+Rules are attached in a service (or app) constructor with three methods:
+
+```crystal
+before rule, on: ...
+after  rule, on: ...
+error  rule, on: ...
+```
+
+**`on:` controls which service methods run the rule.** It accepts:
+
+- a `ServiceMethod` enum: `on: Alumna::ServiceMethod::Find`
+- a symbol: `on: :create`, `on: :patch`
+- an array: `on: [:find, :get]`
+- a shorthand:
+  - `:read`  → `find`, `get`
+  - `:write` → `create`, `update`, `patch`, `remove`
+  - `:all`   → all methods *except* `options`
+- omit `on:` → same as `:all`
+
+`options` is excluded by design since it's reserved for CORS preflights. If you need a rule to run on preflights, be explicit:
+
+```crystal
+before Alumna.cors(origins: ["*"]), on: :options
 ```
 
 **HTTP mapping:**
