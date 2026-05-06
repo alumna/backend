@@ -70,13 +70,12 @@ describe "Service::Base" do
     it "yields self for rule registration" do
       schema = Alumna::Schema.new.str("x")
 
-      svc = Alumna::MemoryAdapter.new(schema) do |s|
-        s.before { |_c| nil }
-        s.after { |_c| nil }
-        s.error { |_c| nil }
+      svc = Alumna.memory(schema) do # use the factory, not .new directly
+        before { |_c| nil }
+        after { |_c| nil }
+        error { |_c| nil }
       end
 
-      # Check raw rules, not compiled pipelines
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(1)
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
@@ -85,8 +84,8 @@ describe "Service::Base" do
     it "works with Alumna.memory factory" do
       schema = Alumna::Schema.new.str("y")
 
-      svc = Alumna.memory(schema) do |s|
-        s.before on: :create do |c|
+      svc = Alumna.memory(schema) do
+        before on: :create do |c|
           c.data["x"]? ? nil : Alumna::ServiceError.bad_request("missing x")
         end
       end

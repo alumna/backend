@@ -17,14 +17,6 @@ module Alumna
       @before_app_len = Array.new(size, 0)
     end
 
-    def initialize(@schema : Schema? = nil, &block : Service ->)
-      size = ServiceMethod.values.size
-      @before_pipeline = Array.new(size) { [] of Rule }
-      @after_pipeline = Array.new(size) { [] of Rule }
-      @before_app_len = Array.new(size, 0)
-      yield self
-    end
-
     abstract def find(ctx : RuleContext) : Array(Hash(String, AnyData))
     abstract def get(ctx : RuleContext) : Hash(String, AnyData)?
     abstract def create(ctx : RuleContext) : Hash(String, AnyData)

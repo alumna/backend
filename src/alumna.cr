@@ -52,11 +52,9 @@ require "./http/router"
 require "./http/responder"
 
 module Alumna
-  def self.memory(schema : Schema? = nil)
-    MemoryAdapter.new(schema)
-  end
-
-  def self.memory(schema : Schema? = nil, &block : Service ->)
-    MemoryAdapter.new(schema, &block)
+  def self.memory(schema : Schema? = nil, &)
+    svc = MemoryAdapter.new(schema) # no block
+    with svc yield                  # scope = svc
+    svc
   end
 end

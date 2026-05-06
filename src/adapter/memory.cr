@@ -11,11 +11,12 @@ module Alumna
       @mutex = Mutex.new
     end
 
-    def initialize(schema : Schema? = nil, &block : Service ->)
-      super(schema, &block)
+    def initialize(schema : Schema? = nil, &)
+      super(schema) # no block - pipelines init'd here
       @store = {} of String => Hash(String, AnyData)
       @next_id = 1_i64
       @mutex = Mutex.new
+      with self yield # scope = self
     end
 
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
