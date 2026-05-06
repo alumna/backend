@@ -95,7 +95,7 @@ module Alumna
     store = RateLimitStore.new(window_seconds.seconds)
 
     Rule.new do |ctx|
-      next RuleResult.continue if ctx.http_method == "OPTIONS"
+      next nil if ctx.http_method == "OPTIONS"
 
       count, reset_at = store.hit(key.call(ctx))
 
@@ -106,9 +106,9 @@ module Alumna
       ctx.http.headers["X-RateLimit-Reset"] = reset_at.to_unix.to_s
 
       if count > limit
-        RuleResult.stop(ServiceError.new("Too Many Requests", 429))
+        ServiceError.new("Too Many Requests", 429)
       else
-        RuleResult.continue
+        nil
       end
     end
   end

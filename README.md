@@ -11,22 +11,22 @@ require "alumna"
 
 # Schema definition
 MessageSchema = Alumna::Schema.new
-  .str("body", required: true, min_length: 1, max_length: 500)
-  .str("author", required: true, min_length: 1)
+  .str("body", min_length: 1, max_length: 500)
+  .str("author", min_length: 1)
   .bool("read", required: false)
 
 # Authentication rule
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 # Built-in adapters
 class MessageService < Alumna::MemoryAdapter
   def initialize
-    super("/messages", MessageSchema)
+    super(MessageSchema)
     before Authenticate
-    before Alumna.validate(MessageSchema), only: [:create, :update]
+    before Alumna.validate(MessageSchema), on: :write
   end
 end
 
@@ -208,9 +208,9 @@ It’s equivalent to:
 ```crystal
 Alumna::Rule.new do |ctx|
   errors = UserSchema.validate(ctx.data, ctx.method)
-  next Alumna::RuleResult.continue if errors.empty?
+  next nil if errors.empty?
   details = errors.to_h { |e| {e.field, e.message} }
-  Alumna::RuleResult.stop(Alumna::ServiceError.unprocessable("Validation failed", details))
+  Alumna::ServiceError.unprocessable("Validation failed", details)
 end
 ```
 
@@ -219,8 +219,8 @@ Because it receives `ctx.method`, it automatically respects `required_on: [:crea
 ```crystal
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    super(UserSchema)
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 ```
@@ -248,7 +248,7 @@ Alumna.rate_limit(limit: 100, window_seconds: 60) # in-memory rate limiting
 
 **1. Validation**
 ```crystal
-before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+before Alumna.validate(UserSchema), on: :write
 ```
 Returns 422 with per-field details when validation fails. Respects `required_on`.
 
@@ -257,12 +257,12 @@ Returns 422 with per-field details when validation fails. Respects `required_on`
 # for normal requests
 before Alumna.cors(origins: ["https://app.example.com"])
 # for preflights — OPTIONS is opt-in by design
-before Alumna.cors(origins: ["https://app.example.com"]), only: :options
+before Alumna.cors(origins: ["https://app.example.com"]), on: :options
 ```
 - Sets `Access-Control-Allow-Origin`, `Vary: Origin`, and credentials when enabled
 - Handles real preflights (`OPTIONS` + `Access-Control-Request-Method`) with 204
 - `origins: ["*"]` is allowed for public APIs, but using it with `credentials: true` raises `ArgumentError` at boot — per the Fetch spec, wildcard cannot be used with credentials
-- **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `only: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
+- **Convention:** global `before` rules do *not* run on `OPTIONS` unless you explicitly include `on: :options`. This prevents authentication or validation from blocking CORS preflights, matching the HTTP spec.
 
 **3. Logger**
 ```crystal
@@ -287,32 +287,32 @@ before Alumna.rate_limit(limit: 60, window_seconds: 60)
 - Returns 429 when exceeded
 - Skips `OPTIONS` requests automatically
 
-All four are regular `Rule` objects - you can compose them with your own rules, limit them with `only:`, and test them with `RuleRunner` like any custom rule.
+All four are regular `Rule` objects - you can compose them with your own rules, limit them with `on:`, and test them with `RuleRunner` like any custom rule.
 
 ---
 
 ### Rules
 
-A rule is a `Proc` that receives a `RuleContext` and returns a `RuleResult`. Rules are values, not classes - they are defined once and registered globally on the application or on individual services.
+A rule is a `Proc` that receives a `RuleContext` and returns a `nil` to continue and a `ServiceError` to stop. Rules are values, not classes - they are defined once and registered globally on the application or on individual services.
 
 ```crystal
 # A rule that checks for a valid bearer token
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 # An after-rule that adds a response header
 AddRequestId = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
-  Alumna::RuleResult.continue
+  nil
 end
 
 # An error-rule that logs failures
 LogError = Alumna::Rule.new do |ctx|
   Log.error { "Request failed: #{ctx.error.message}" } if ctx.error
   ctx.http.headers["X-Error-ID"] = Random::Secure.hex(4)
-  Alumna::RuleResult.continue
+  nil
 end
 ```
 
@@ -401,9 +401,9 @@ Parsing follows the standard order: `Forwarded` → `X-Forwarded-For` → `X-Rea
 **Signalling outcomes:**
 
 ```crystal
-RuleResult.continue                              # proceed to the next rule or service method
-RuleResult.stop(ServiceError.unauthorized)       # halt the pipeline and return an error response
-RuleResult.stop(ServiceError.bad_request("...")) # halt with a custom error
+nil                             # proceed to the next rule or service method
+ServiceError.unauthorized       # halt the pipeline and return an error response
+ServiceError.bad_request("...") # halt with a custom error
 ```
 
 **Available `ServiceError` constructors:**
@@ -428,9 +428,9 @@ A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` direc
 ```crystal
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
     after AddRequestId
     error LogError
   end
@@ -460,7 +460,7 @@ When a request arrives, rules run in this exact sequence:
 4. `service.after` rules
 5. `app.after` rules
 
-If any rule returns `RuleResult.stop`, the pipeline jumps immediately to error rules:
+If any rule returns a `ServiceError`, the pipeline jumps immediately to error rules:
 
 6. `service.error` rules
 7. `app.error` rules
@@ -502,22 +502,22 @@ PostSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 
 class PostService < Alumna::MemoryAdapter
   def initialize
-    super("/posts", PostSchema)
+    super(PostSchema)
     before Authenticate
-    before Alumna.validate(PostSchema), only: [:create, :update, :patch]
+    before Alumna.validate(PostSchema), on: :write
 
   end
 end
@@ -539,7 +539,7 @@ To connect a real database, inherit from `Alumna::Service` and implement the six
 ```crystal
 class PostgresUserService < Alumna::Service
   def initialize(@db : DB::Database)
-    super("/users", UserSchema)
+    super(UserSchema)
     self.before(Authenticate)
   end
 

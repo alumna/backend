@@ -2,7 +2,7 @@ module Alumna
   abstract class Service
     include Ruleable
 
-    getter path : String
+    property path : String = ""
     getter schema : Schema?
 
     # Merged pipelines built by App.use
@@ -10,7 +10,7 @@ module Alumna
     @after_pipeline : Array(Array(Rule))
     @before_app_len : Array(Int32)
 
-    def initialize(@path : String, @schema : Schema? = nil)
+    def initialize(@schema : Schema? = nil)
       size = ServiceMethod.values.size
       @before_pipeline = Array.new(size) { [] of Rule }
       @after_pipeline = Array.new(size) { [] of Rule }

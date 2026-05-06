@@ -45,7 +45,7 @@ end
 describe Alumna::MemoryAdapter do
   describe "#create" do
     it "returns the record with an auto-assigned id" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"name" => any("Alice")} of String => Alumna::AnyData)
       record = adapter.create(ctx)
       record["id"].should eq("1")
@@ -53,7 +53,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "auto-increments ids across successive calls" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       r1 = insert(adapter, {"x" => any("a")} of String => Alumna::AnyData)
       r2 = insert(adapter, {"x" => any("b")} of String => Alumna::AnyData)
       r1["id"].should eq("1")
@@ -61,14 +61,14 @@ describe Alumna::MemoryAdapter do
     end
 
     it "overrides any id supplied in the input data with its own counter" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Create, data: {"id" => any("999"), "name" => any("Bob")} of String => Alumna::AnyData)
       record = adapter.create(ctx)
       record["id"].should eq("1")
     end
 
     it "persists the record so it can be retrieved afterwards" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       get_ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(get_ctx)
@@ -81,13 +81,13 @@ describe Alumna::MemoryAdapter do
 
   describe "#find" do
     it "returns an empty array when the store is empty" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find)
       adapter.find(ctx).should be_empty
     end
 
     it "returns all records when no params are given" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       insert(adapter, {"name" => any("Bob")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find)
@@ -95,7 +95,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "filters records by a single query param" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"role" => any("admin")} of String => Alumna::AnyData)
       insert(adapter, {"role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
@@ -105,7 +105,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "applies AND semantics when multiple params are given" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"role" => any("admin"), "active" => any("true")} of String => Alumna::AnyData)
       insert(adapter, {"role" => any("admin"), "active" => any("false")} of String => Alumna::AnyData)
       insert(adapter, {"role" => any("user"), "active" => any("true")} of String => Alumna::AnyData)
@@ -117,14 +117,14 @@ describe Alumna::MemoryAdapter do
     end
 
     it "returns an empty array when no records match the filter" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"role" => "admin"})
       adapter.find(ctx).should be_empty
     end
 
     it "applies $limit and $skip" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       5.times { |i| insert(adapter, {"n" => any(i.to_s)} of String => Alumna::AnyData) }
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$skip" => "1", "$limit" => "2"})
       results = adapter.find(ctx)
@@ -133,7 +133,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "applies $sort" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"age" => any("30")} of String => Alumna::AnyData)
       insert(adapter, {"age" => any("20")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$sort" => "age:1"})
@@ -141,7 +141,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "applies $select" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"a" => any("1"), "b" => any("2")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a"})
       rec = adapter.find(ctx).first
@@ -151,7 +151,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "applies $select when id is explicitly requested" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"a" => any("1"), "b" => any("2")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a,id"})
       rec = adapter.find(ctx).first
@@ -159,7 +159,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "applies $select on empty store" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Find, params: {"$select" => "a"})
       adapter.find(ctx).should be_empty
     end
@@ -167,7 +167,7 @@ describe Alumna::MemoryAdapter do
 
   describe "#get" do
     it "returns the record for a known id" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "1")
       record = adapter.get(ctx)
@@ -178,13 +178,13 @@ describe Alumna::MemoryAdapter do
     end
 
     it "returns nil for an unknown id" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: "99")
       adapter.get(ctx).should be_nil
     end
 
     it "returns nil when ctx.id is nil" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Get, id: nil)
       adapter.get(ctx).should be_nil
     end
@@ -192,7 +192,7 @@ describe Alumna::MemoryAdapter do
 
   describe "#update" do
     it "replaces the record entirely and returns it with the same id" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Update, id: "1", data: {"name" => any("Alice"), "role" => any("admin")} of String => Alumna::AnyData)
       record = adapter.update(ctx)
@@ -203,7 +203,7 @@ describe Alumna::MemoryAdapter do
 
   describe "#patch" do
     it "merges fields and preserves id" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")} of String => Alumna::AnyData)
       record = adapter.patch(ctx)
@@ -213,7 +213,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "persists the merge so a subsequent get reflects it" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice"), "role" => any("user")} of String => Alumna::AnyData)
       patch_ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "1", data: {"role" => any("admin")} of String => Alumna::AnyData)
       adapter.patch(patch_ctx)
@@ -227,14 +227,14 @@ describe Alumna::MemoryAdapter do
     end
 
     it "raises a 404 error when the id does not exist" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: "99", data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.patch(ctx) }
       error.status.should eq(404)
     end
 
     it "raises a 400 error when ctx.id is nil" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Patch, id: nil, data: {"name" => any("Ghost")} of String => Alumna::AnyData)
       error = expect_raises(Alumna::ServiceError) { adapter.patch(ctx) }
       error.status.should eq(400)
@@ -243,14 +243,14 @@ describe Alumna::MemoryAdapter do
 
   describe "#remove" do
     it "deletes the record and returns true" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: "1")
       adapter.remove(ctx).should be_true
     end
 
     it "makes the record unretrievable after deletion" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       insert(adapter, {"name" => any("Alice")} of String => Alumna::AnyData)
       remove_ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: "1")
       adapter.remove(remove_ctx)
@@ -259,13 +259,13 @@ describe Alumna::MemoryAdapter do
     end
 
     it "returns false when the id does not exist" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: "99")
       adapter.remove(ctx).should be_false
     end
 
     it "raises a 400 error when ctx.id is nil" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       ctx = make_ctx(adapter, Alumna::ServiceMethod::Remove, id: nil)
       error = expect_raises(Alumna::ServiceError) { adapter.remove(ctx) }
       error.status.should eq(400)
@@ -274,7 +274,7 @@ describe Alumna::MemoryAdapter do
 
   describe "concurrency" do
     it "assigns unique sequential ids under concurrent creates" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       count = 100
       done = Channel(Nil).new(count)
 
@@ -297,7 +297,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "does not lose updates under concurrent patches to the same record" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       base = insert(adapter, {"counter" => any(0_i64)} of String => Alumna::AnyData)
       id = base["id"].as(String)
 
@@ -336,7 +336,7 @@ describe Alumna::MemoryAdapter do
     end
 
     it "allows concurrent finds while writing" do
-      adapter = Alumna::MemoryAdapter.new("/items")
+      adapter = Alumna::MemoryAdapter.new
       done = Channel(Nil).new(2)
 
       spawn do

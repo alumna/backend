@@ -2,7 +2,8 @@ require "../spec_helper"
 
 private def dummy_ctx : Alumna::RuleContext
   app = Alumna::App.new
-  service = Alumna::MemoryAdapter.new("/dummy")
+  service = Alumna::MemoryAdapter.new
+  app.use("/dummy", service)
   Alumna::RuleContext.new(
     app: app,
     service: service,
@@ -14,72 +15,31 @@ private def dummy_ctx : Alumna::RuleContext
   )
 end
 
-# proves the alias is structural, not tied to a specific literal
-def my_rule(ctx : Alumna::RuleContext) : Alumna::RuleResult
-  Alumna::RuleResult.continue
-end
-
-describe Alumna::RuleResult do
-  describe ".continue" do
-    it "creates a Continue result with no error" do
-      result = Alumna::RuleResult.continue
-
-      result.outcome.should eq(Alumna::RuleResult::Outcome::Continue)
-      result.error.should be_nil
-      result.continue?.should be_true
-      result.stop?.should be_false
-    end
-  end
-
-  describe ".stop" do
-    it "creates a Stop result with the given error" do
-      err = Alumna::ServiceError.unauthorized("nope")
-      result = Alumna::RuleResult.stop(err)
-
-      result.outcome.should eq(Alumna::RuleResult::Outcome::Stop)
-      result.error.should be(err)
-      result.error.should_not be_nil
-      result.error.as(Alumna::ServiceError).status.should eq(401)
-      result.continue?.should be_false
-      result.stop?.should be_true
-    end
-  end
-
-  describe "Outcome enum" do
-    it "exposes Continue and Stop" do
-      Alumna::RuleResult::Outcome::Continue.should eq(Alumna::RuleResult::Outcome::Continue)
-      Alumna::RuleResult::Outcome::Stop.continue?.should be_false
-      Alumna::RuleResult::Outcome::Continue.stop?.should be_false
-    end
-  end
+def my_rule(ctx : Alumna::RuleContext) : Alumna::ServiceError?
+  nil
 end
 
 describe "Alumna::Rule alias" do
-  it "accepts a Proc that takes RuleContext and returns RuleResult" do
-    rule : Alumna::Rule = ->(ctx : Alumna::RuleContext) {
+  it "accepts a Proc that returns nil to continue" do
+    rule = ->(ctx : Alumna::RuleContext) : Alumna::ServiceError? do
       ctx.headers["x"] = "1"
-      Alumna::RuleResult.continue
-    }
-
+      nil
+    end
     ctx = dummy_ctx
-    result = rule.call(ctx)
-
-    result.should be_a(Alumna::RuleResult)
-    result.continue?.should be_true
+    err = rule.call(ctx)
+    err.should be_nil
     ctx.headers["x"].should eq("1")
   end
 
-  it "works with Rule.new shorthand" do
-    rule = Alumna::Rule.new { |ctx| Alumna::RuleResult.stop(Alumna::ServiceError.forbidden) }
-
-    result = rule.call(dummy_ctx)
-    result.stop?.should be_true
-    result.error.should_not be_nil
-    result.error.as(Alumna::ServiceError).status.should eq(403)
+  it "accepts a Proc that returns ServiceError to stop" do
+    rule = Alumna::Rule.new { |ctx| Alumna::ServiceError.forbidden }
+    err = rule.call(dummy_ctx)
+    err.should_not be_nil
+    err.as(Alumna::ServiceError).status.should eq(403)
   end
 
   it "works with a captured method" do
-    rule : Alumna::Rule = ->my_rule(Alumna::RuleContext)
-    rule.call(dummy_ctx).continue?.should be_true
+    rule = ->my_rule(Alumna::RuleContext) # my_rule already returns ServiceError?
+    rule.call(dummy_ctx).should be_nil
   end
 end

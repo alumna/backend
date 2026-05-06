@@ -1,29 +1,25 @@
 require "../src/alumna"
 
 MessageSchema = Alumna::Schema.new
-  .str("body", required: true, min_length: 1, max_length: 500)
-  .str("author", required: true, min_length: 1)
+  .str("body", min_length: 1, max_length: 500)
+  .str("author", min_length: 1)
   .bool("read", required: false)
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  if token == "secret-token"
-    Alumna::RuleResult.continue
-  else
-    Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized("Invalid or missing token"))
-  end
+  token == "secret-token" ? nil : Alumna::ServiceError.unauthorized("Invalid or missing token")
 end
 
 LogResult = Alumna::Rule.new do |ctx|
   puts "[#{ctx.method}] #{ctx.path} → #{ctx.http.status || 200}"
-  Alumna::RuleResult.continue
+  nil
 end
 
 class MessageService < Alumna::MemoryAdapter
   def initialize
-    super("/messages", MessageSchema)
+    super(MessageSchema)
     before Authenticate
-    before Alumna.validate(MessageSchema), only: [:create, :update, :patch]
+    before Alumna.validate(MessageSchema), on: :write
     after LogResult
   end
 end

@@ -1,79 +1,74 @@
 module Alumna
   module Ruleable
-    alias RuleMap = Hash(ServiceMethod?, Hash(RulePhase, Array(Rule)))
+    # Eager, non-nilable storage - each App/Service gets its own hashes
+    @before_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
+    @after_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
+    @error_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
 
-    @rules : RuleMap = RuleMap.new
+    # ---- public API ----
 
-    # Built lazily to avoid compile-time enum lookup issues
-    EMPTY_RULES = [] of Rule
-    @compiled : Array(Array(Array(Rule)))? = nil
-
-    # --- public API ---
-    def before(rule : Rule, only : ServiceMethod | Symbol) : self
-      before(rule, only: [only])
-    end
-
-    def after(rule : Rule, only : ServiceMethod | Symbol) : self
-      after(rule, only: [only])
-    end
-
-    def before(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
-      register_rule(RulePhase::Before, normalize_methods(only), rule)
+    def before(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rule(:before, rule, on)
       self
     end
 
-    def after(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
-      register_rule(RulePhase::After, normalize_methods(only), rule)
+    def before(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      before(block, on: on)
+    end
+
+    def after(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rule(:after, rule, on)
       self
     end
 
-    def error(rule : Rule, only : ServiceMethod | Symbol) : self
-      error(rule, only: [only])
+    def after(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      after(block, on: on)
     end
 
-    def error(rule : Rule, only : Array(ServiceMethod | Symbol) = [] of ServiceMethod) : self
-      register_rule(RulePhase::Error, normalize_methods(only), rule)
+    def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rule(:error, rule, on)
       self
     end
 
-    # --- hot path ---
+    def error(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      error(block, on: on)
+    end
+
+    # ---- internals ----
     def collect_rules(method : ServiceMethod, phase : RulePhase) : Array(Rule)
-      ensure_compiled![method.value][phase.value]
+      case phase
+      in RulePhase::Before then @before_rules[method]
+      in RulePhase::After  then @after_rules[method]
+      in RulePhase::Error  then @error_rules[method]
+      end
     end
 
-    private def register_rule(phase : RulePhase, methods : Array(ServiceMethod), rule : Rule)
-      targets = methods.empty? ? [nil] : methods.map(&.as(ServiceMethod?))
-      targets.each do |target|
-        @rules[target] ||= {} of RulePhase => Array(Rule)
-        @rules[target][phase] ||= [] of Rule
-        @rules[target][phase] << rule
+    private def register_rule(phase : Symbol, rule : Rule, on)
+      target = case phase
+               when :before then @before_rules
+               when :after  then @after_rules
+               when :error  then @error_rules
+               else
+                 raise "BUG: Ruleable.register_rule invalid phase #{phase.inspect}"
+               end
 
-        if target.nil?
-          ServiceMethod.values.each { |m| rebuild_index(m, phase) }
-        else
-          rebuild_index(target, phase)
+      expand_on(on).each { |m| target[m] << rule }
+    end
+
+    private def expand_on(on) : Array(ServiceMethod)
+      return ServiceMethod.values.reject(&.options?) if on.nil?
+
+      items = on.is_a?(Array) ? on : [on]
+      items.flat_map do |item|
+        case item
+        when ServiceMethod then [item]
+        when :read         then [ServiceMethod::Find, ServiceMethod::Get]
+        when :write        then [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch, ServiceMethod::Remove]
+        when :all          then ServiceMethod.values.reject(&.options?)
+        when Symbol        then [ServiceMethod.parse(item.to_s)]
+        else                    [] of ServiceMethod
         end
-      end
-    end
-
-    private def rebuild_index(method : ServiceMethod, phase : RulePhase)
-      compiled = ensure_compiled!
-      global = @rules[nil]?.try(&.[phase]?) || EMPTY_RULES
-      specific = @rules[method]?.try(&.[phase]?) || EMPTY_RULES
-      # CONVENTION: OPTIONS is opt-in. Global rules (registered without `only:`)
-      # apply to data methods only, not to preflights.
-      compiled[method.value][phase.value] = method.options? ? specific : global + specific
-    end
-
-    # Returns the matrix, creating it once on first use
-    private def ensure_compiled! : Array(Array(Array(Rule)))
-      @compiled ||= Array.new(ServiceMethod.values.size) do
-        Array.new(RulePhase.values.size) { EMPTY_RULES }
-      end
-    end
-
-    private def normalize_methods(only) : Array(ServiceMethod)
-      only.map { |m| m.is_a?(Symbol) ? ServiceMethod.parse(m.to_s.capitalize) : m }
+      end.uniq!
     end
   end
 end

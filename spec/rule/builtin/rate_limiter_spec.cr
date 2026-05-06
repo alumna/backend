@@ -15,7 +15,7 @@ end
 module Alumna
   class TestService < Service
     def initialize
-      super("/test")
+      super()
     end
 
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
@@ -67,29 +67,28 @@ module Alumna
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
       ctx = build_ctx_rate_limiter(app, service, "3.3.3")
       rule.call(ctx)
-      result = rule.call(ctx)
-      result.stop?.should be_true
-      result.error.try(&.status).should eq(429)
+      result = rule.call(ctx).should_not be_nil
+      result.status.should eq(429)
       ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
     end
 
     it "resets count after window expires" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 0)
-      ctx = build_ctx_rate_limiter(app, service, "5.5.5.5")
+      ctx = build_ctx_rate_limiter(app, service, "5.5.5")
       first = rule.call(ctx)
-      first.continue?.should be_true
+      first.should be_nil
       ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
       sleep 1.milliseconds
       second = rule.call(ctx)
-      second.continue?.should be_true
+      second.should be_nil
       ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
     end
 
     it "skips OPTIONS" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
-      ctx = build_ctx_rate_limiter(app, service, "4.4.4.4", "OPTIONS")
+      ctx = build_ctx_rate_limiter(app, service, "4.4.4", "OPTIONS")
       result = rule.call(ctx)
-      result.continue?.should be_true
+      result.should be_nil
       ctx.http.headers.has_key?("X-RateLimit-Limit").should be_false
     end
 
@@ -100,11 +99,11 @@ module Alumna
       ctx_a = build_ctx_rate_limiter(app, service, "10.0.0.1")
       ctx_b = build_ctx_rate_limiter(app, service, "10.0.0.2")
 
-      rule.call(ctx_a).continue?.should be_true
-      rule.call(ctx_b).continue?.should be_true
+      rule.call(ctx_a).should be_nil
+      rule.call(ctx_b).should be_nil
       # second hit for A should block, B still has its own bucket
-      rule.call(ctx_a).stop?.should be_true
-      rule.call(ctx_b).stop?.should be_true
+      rule.call(ctx_a).should_not be_nil
+      rule.call(ctx_b).should_not be_nil
     end
 
     it "prunes expired entries to prevent unbounded growth" do

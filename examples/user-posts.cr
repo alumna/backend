@@ -11,22 +11,22 @@ PostSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer my-secret" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
 class UserService < Alumna::MemoryAdapter
   def initialize
-    super("/users", UserSchema)
+    super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), only: [:create, :update, :patch]
+    before Alumna.validate(UserSchema), on: :write
   end
 end
 
 class PostService < Alumna::MemoryAdapter
   def initialize
-    super("/posts", PostSchema)
+    super(PostSchema)
     before Authenticate
-    before Alumna.validate(PostSchema), only: [:create, :update, :patch]
+    before Alumna.validate(PostSchema), on: :write
   end
 end
 

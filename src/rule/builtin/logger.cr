@@ -17,7 +17,7 @@ module Alumna
 
         io.puts %(#{ctx.remote_ip} "#{ctx.http_method} #{path}" #{status} #{ms}ms)
       end
-      RuleResult.continue
+      nil
     end
   end
 end

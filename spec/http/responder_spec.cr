@@ -12,7 +12,7 @@ private def build_ctx(
   error : Alumna::ServiceError? = nil,
 ) : Alumna::RuleContext
   app = Alumna::App.new
-  service = Alumna::MemoryAdapter.new("/test")
+  service = Alumna::MemoryAdapter.new
   ctx = Alumna::RuleContext.new(
     app: app,
     service: service,

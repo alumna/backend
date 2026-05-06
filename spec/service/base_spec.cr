@@ -2,7 +2,7 @@ require "../spec_helper"
 
 private class ExplodingService < Alumna::Service
   def initialize
-    super("/boom")
+    super()
   end
 
   def find(ctx) : Array(Hash(String, Alumna::AnyData))
@@ -32,9 +32,9 @@ end
 
 private def dispatch(svc, method)
   app = Alumna::App.new
-  app.use(svc.path, svc)
+  app.use("/boom", svc)
   ctx = Alumna::RuleContext.new(
-    app: app, service: svc, path: svc.path, method: method,
+    app: app, service: svc, path: "/boom", method: method,
     phase: Alumna::RulePhase::Before,
     params: Alumna::Http::ParamsView.new(HTTP::Params.new),
     headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)

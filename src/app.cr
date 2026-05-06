@@ -19,6 +19,7 @@ module Alumna
     def use(path : String, service : Service) : self
       normalized = normalize_path(path)
       raise ArgumentError.new("service already mounted at #{normalized}") if @services.has_key?(normalized)
+      service.path = normalized
       @services[normalized] = service
       self
     end

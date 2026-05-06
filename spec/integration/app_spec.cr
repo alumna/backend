@@ -10,52 +10,52 @@ TestSchema = Alumna::Schema.new
 
 Authenticate = Alumna::Rule.new do |ctx|
   token = ctx.headers["authorization"]?
-  token == "Bearer test-token" ? Alumna::RuleResult.continue : Alumna::RuleResult.stop(Alumna::ServiceError.unauthorized)
+  token == "Bearer test-token" ? nil : Alumna::ServiceError.unauthorized
 end
 
 AfterLogger = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Request-ID"] = Random::Secure.hex(8)
-  Alumna::RuleResult.continue
+  nil
 end
 
 ErrorLogger = Alumna::Rule.new do |ctx|
   ctx.http.headers["X-Error-ID"] = "err-123"
-  Alumna::RuleResult.continue
+  nil
 end
 
 class TestService < Alumna::MemoryAdapter
   def initialize
-    super("/test", TestSchema)
+    super(TestSchema)
     before Authenticate
-    before Alumna.validate(TestSchema), only: [:create, :update, :patch]
+    before Alumna.validate(TestSchema), on: :write
     after AfterLogger
   end
 end
 
 class AfterFailService < Alumna::MemoryAdapter
   def initialize
-    super("/after-stop", TestSchema)
+    super(TestSchema)
     before Authenticate
-    before Alumna.validate(TestSchema), only: [:create, :update, :patch]
+    before Alumna.validate(TestSchema), on: :write
     after AfterLogger
     # this after-rule forces the failure path in App#dispatch
-    after Alumna::Rule.new { |ctx|
-      Alumna::RuleResult.stop(Alumna::ServiceError.internal("after failed"))
+    after Alumna::Rule.new { |_ctx|
+      Alumna::ServiceError.internal("after failed")
     }
     # service-level error hook
     error Alumna::Rule.new { |ctx|
       ctx.http.headers["X-Service-Error"] = "svc-456"
-      Alumna::RuleResult.continue
+      nil
     }
   end
 end
 
 class CorsService < Alumna::MemoryAdapter
   def initialize
-    super("/cors-test")
+    super()
     # OPTIONS is opt-in, so list all methods explicitly
     before Alumna.cors(origins: ["https://example.com"]),
-      only: [:find, :get, :create, :update, :patch, :remove, :options]
+      on: [:find, :get, :create, :update, :patch, :remove, :options]
   end
 end
 
