@@ -11,6 +11,13 @@ module Alumna
       @mutex = Mutex.new
     end
 
+    def initialize(schema : Schema? = nil, &block : Service ->)
+      super(schema, &block)
+      @store = {} of String => Hash(String, AnyData)
+      @next_id = 1_i64
+      @mutex = Mutex.new
+    end
+
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
       @mutex.synchronize do
         q = ctx.query
