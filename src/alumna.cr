@@ -50,3 +50,11 @@ require "./http/serializers/json_serializer"
 require "./http/serializers/msgpack_serializer"
 require "./http/router"
 require "./http/responder"
+
+module Alumna
+  def self.memory(schema : Schema? = nil, &)
+    svc = MemoryAdapter.new(schema) # no block
+    with svc yield                  # scope = svc
+    svc
+  end
+end

@@ -65,4 +65,42 @@ describe "Service::Base" do
       ctx.error.as(Alumna::ServiceError).message.should eq("Unexpected error")
     end
   end
+
+  describe "block initialization" do
+    it "yields self for rule registration" do
+      schema = Alumna::Schema.new.str("x")
+
+      svc = Alumna.memory(schema) do # use the factory, not .new directly
+        before { |_c| nil }
+        after { |_c| nil }
+        error { |_c| nil }
+      end
+
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(1)
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
+    end
+
+    it "works with Alumna.memory factory" do
+      schema = Alumna::Schema.new.str("y")
+
+      svc = Alumna.memory(schema) do
+        before on: :create do |c|
+          c.data["x"]? ? nil : Alumna::ServiceError.bad_request("missing x")
+        end
+      end
+
+      svc.should be_a(Alumna::MemoryAdapter)
+      svc.schema.should eq(schema)
+      # Check raw rules
+      svc.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before).size.should eq(1)
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(0)
+    end
+
+    it "preserves existing no-block initialization" do
+      svc = Alumna::MemoryAdapter.new
+      svc.schema.should be_nil
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).should be_empty
+    end
+  end
 end

@@ -79,6 +79,12 @@ describe "Alumna System Integration" do
     app.use("/test", TestService.new)
     app.use("/after-stop", AfterFailService.new)
     app.use("/cors-test", CorsService.new)
+    # New: direct block style, no class needed
+    app.use("/block", Alumna.memory(TestSchema) do
+      before Authenticate
+      before Alumna.validate(TestSchema), on: :write
+      after AfterLogger
+    end)
     spawn { app.listen(TEST_PORT) }
     sleep 0.3.seconds
   end
@@ -251,5 +257,11 @@ describe "Alumna System Integration" do
     res.body.should be_empty
     res.headers["Access-Control-Allow-Origin"].should eq("https://example.com")
     res.headers["Access-Control-Allow-Methods"].should contain("POST")
+  end
+
+  it "works with block-initialized service" do
+    res = authenticated_client.get("/block")
+    res.status_code.should eq(200)
+    res.headers["X-Request-ID"]?.should_not be_nil
   end
 end
