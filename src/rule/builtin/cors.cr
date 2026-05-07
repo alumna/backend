@@ -22,6 +22,7 @@ module Alumna
     allow_headers = headers.join(", ")
     wildcard = normalized.includes?("*")
     origins_set = wildcard ? nil : normalized.to_set
+    max_age_s = max_age.to_s # cached – no allocation per request
 
     Rule.new do |ctx|
       origin = ctx.headers["origin"]?
@@ -46,7 +47,7 @@ module Alumna
       if ctx.http_method == "OPTIONS" && ctx.headers["access-control-request-method"]?
         h["Access-Control-Allow-Methods"] = allow_methods
         h["Access-Control-Allow-Headers"] = allow_headers
-        h["Access-Control-Max-Age"] = max_age.to_s
+        h["Access-Control-Max-Age"] = max_age_s
 
         ctx.http.status = 204
         ctx.result = {} of String => AnyData
