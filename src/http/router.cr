@@ -225,7 +225,9 @@ module Alumna
         # The !possible.includes?(':') guard prevents accidentally truncating
         # a bare IPv6 address (no brackets) at its last colon.
         if colon = val.rindex(':')
+          # LCOV_EXCL_START - kcov wrongly misses string slicing operation
           possible = val[0...colon]
+          # LCOV_EXCL_STOP
           if !possible.includes?(':') && Socket::IPAddress.valid?(possible)
             return possible
           end
