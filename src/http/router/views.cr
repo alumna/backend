@@ -11,11 +11,11 @@ module Alumna
       end
 
       def [](key : String) : String?
-        k = key.downcase
         if ov = @overlay
+          k = key.downcase
           return ov[k] if ov.has_key?(k)
         end
-        @src[k]?
+        @src[key]?
       end
 
       def []?(key : String) : String?
@@ -27,10 +27,14 @@ module Alumna
       end
 
       def each(& : {String, String} ->)
-        seen = Set(String).new
-        if ov = @overlay
-          ov.each { |k, v| seen << k; yield({k, v}) }
+        ov = @overlay # local snapshot: type is Hash(String, String)?
+        if ov.nil?    # after this branch + return, ov is Hash(String, String)
+          @src.each { |k, vs| yield({k.downcase, vs.first}) }
+          return
         end
+
+        seen = Set(String).new
+        ov.each { |k, v| seen << k; yield({k, v}) }
         @src.each do |k, vs|
           lk = k.downcase
           next if seen.includes?(lk)
@@ -60,10 +64,14 @@ module Alumna
       end
 
       def each(& : {String, String} ->)
-        seen = Set(String).new
-        if ov = @overlay
-          ov.each { |k, v| seen << k; yield({k, v}) }
+        ov = @overlay
+        if ov.nil?
+          @src.each { |k, v| yield({k, v}) }
+          return
         end
+
+        seen = Set(String).new
+        ov.each { |k, v| seen << k; yield({k, v}) }
         @src.each { |k, v| next if seen.includes?(k); yield({k, v}) }
       end
     end
