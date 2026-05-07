@@ -2,8 +2,10 @@ module Alumna
   module Http
     module Responder
       def self.write(response : HTTP::Server::Response, ctx : RuleContext, serializer : Serializer) : Nil
-        # Always apply headers and location first — works for success and error
-        ctx.http.headers.each { |k, v| response.headers[k] = v }
+        # Apply headers only if any were set - keeps HttpOverrides lazy
+        if h = ctx.http.headers?
+          h.each { |k, v| response.headers[k] = v }
+        end
 
         if location = ctx.http.location
           response.headers["Location"] = location

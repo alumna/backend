@@ -24,7 +24,6 @@ module Alumna
         end
 
         # 2) sort
-        records = records.to_a
         if sort = q.sort
           records.sort! do |a, b|
             sort.reduce(0) do |cmp, (field, dir)|
@@ -44,7 +43,7 @@ module Alumna
 
         # 4) select (always keep id for sanity)
         if fields = q.select
-          # LCOV_EXCL_START - kcov wrongly misses .map
+          # LCOV_EXCL_START - kcov wrongly misses.map
           records.map do |rec|
             # LCOV_EXCL_STOP
             selected = rec.select(fields)

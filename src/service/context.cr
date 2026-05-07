@@ -28,12 +28,16 @@ module Alumna
     property error : ServiceError?
     property http : HttpOverrides
     property headers : Http::HeadersView
-    property store : Hash(String, AnyData)
 
+    @store : Hash(String, AnyData)?
     @query : Query?
 
     def query : Query
       @query ||= Query.new(@params)
+    end
+
+    def store : Hash(String, AnyData)
+      @store ||= {} of String => AnyData
     end
 
     protected setter phase
@@ -55,7 +59,6 @@ module Alumna
       @result = nil
       @error = nil
       @http = HttpOverrides.new
-      @store = {} of String => AnyData
     end
 
     def result_set? : Bool
@@ -82,13 +85,20 @@ module Alumna
 
   struct HttpOverrides
     property status : Int32?
-    property headers : Hash(String, String)
     property location : String?
+    @headers : Hash(String, String)?
 
     def initialize
       @status = nil
-      @headers = {} of String => String
       @location = nil
+    end
+
+    def headers : Hash(String, String)
+      @headers ||= {} of String => String
+    end
+
+    def headers? : Hash(String, String)?
+      @headers
     end
   end
 
@@ -109,9 +119,9 @@ module Alumna
       params.each do |k, v|
         case k
         when "$limit"
-          @limit = v.to_i? if v.matches?(/^\d+$/)
+          @limit = parse_positive_int v
         when "$skip"
-          @skip = v.to_i? if v.matches?(/^\d+$/)
+          @skip = parse_positive_int v
         when "$sort"
           # "age:-1,name:1" → [{"age",-1},{"name",1}]
           @sort = v.split(',').compact_map do |part|
@@ -130,6 +140,13 @@ module Alumna
 
     def empty? : Bool
       @filters.empty? && @limit.nil? && @skip.nil? && @sort.nil? && @select.nil?
+    end
+
+    @[AlwaysInline]
+    private def parse_positive_int(str : String) : Int32?
+      return nil if str.empty?
+      str.each_byte { |b| return nil unless 48 <= b <= 57 } # '0'..'9'
+      str.to_i?
     end
   end
 end

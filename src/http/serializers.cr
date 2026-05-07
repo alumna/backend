@@ -6,12 +6,17 @@ module Alumna
       JSON    = JsonSerializer.new
       MSGPACK = MsgpackSerializer.new
 
-      # Fast lookup used by Router
       def self.from_content_type?(ct : String?) : Serializer?
         return nil unless ct
-        ct = ct.downcase
+        # Fast path: HTTP clients almost always send lowercase content types.
+        # These checks are allocation-free.
         return MSGPACK if ct.includes?("msgpack")
         return JSON if ct.includes?("json")
+        # Slow path: non-lowercase content type (rare in practice).
+        # Pay the allocation cost only here.
+        lc = ct.downcase
+        return MSGPACK if lc.includes?("msgpack")
+        return JSON if lc.includes?("json")
         nil
       end
 
