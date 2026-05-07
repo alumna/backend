@@ -119,9 +119,9 @@ module Alumna
       params.each do |k, v|
         case k
         when "$limit"
-          @limit = v.to_i? if v.matches?(/^\d+$/)
+          @limit = parse_positive_int v
         when "$skip"
-          @skip = v.to_i? if v.matches?(/^\d+$/)
+          @skip = parse_positive_int v
         when "$sort"
           # "age:-1,name:1" → [{"age",-1},{"name",1}]
           @sort = v.split(',').compact_map do |part|
@@ -140,6 +140,13 @@ module Alumna
 
     def empty? : Bool
       @filters.empty? && @limit.nil? && @skip.nil? && @sort.nil? && @select.nil?
+    end
+
+    @[AlwaysInline]
+    private def parse_positive_int(str : String) : Int32?
+      return nil if str.empty?
+      str.each_byte { |b| return nil unless 48 <= b <= 57 } # '0'..'9'
+      str.to_i?
     end
   end
 end
