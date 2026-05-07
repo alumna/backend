@@ -79,12 +79,14 @@ describe "Alumna System Integration" do
     app.use("/test", TestService.new)
     app.use("/after-stop", AfterFailService.new)
     app.use("/cors-test", CorsService.new)
+
     # New: direct block style, no class needed
-    app.use("/block", Alumna.memory(TestSchema) do
+    app.use "/block", Alumna.memory(TestSchema) {
       before Authenticate
       before Alumna.validate(TestSchema), on: :write
       after AfterLogger
-    end)
+    }
+
     spawn { app.listen(TEST_PORT) }
     sleep 0.3.seconds
   end

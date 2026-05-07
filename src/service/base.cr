@@ -17,6 +17,19 @@ module Alumna
       @before_app_len = Array.new(size, 0)
     end
 
+    # ---- convenience helpers ----
+
+    # Returns a validation Rule for this service's schema.
+    # Use inside a service block: `before validate, on: :write`
+    # You can override with `validate(other_schema)` if needed.
+    def validate(schema : Schema? = nil) : Rule
+      s = schema || self.schema
+      raise ArgumentError.new("validate requires a schema - service has none and none was passed") unless s
+      Alumna.validate(s)
+    end
+
+    # -----------------------------
+
     abstract def find(ctx : RuleContext) : Array(Hash(String, AnyData))
     abstract def get(ctx : RuleContext) : Hash(String, AnyData)?
     abstract def create(ctx : RuleContext) : Hash(String, AnyData)

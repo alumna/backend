@@ -15,15 +15,10 @@ LogResult = Alumna::Rule.new do |ctx|
   nil
 end
 
-class MessageService < Alumna::MemoryAdapter
-  def initialize
-    super(MessageSchema)
-    before Authenticate
-    before Alumna.validate(MessageSchema), on: :write
-    after LogResult
-  end
-end
-
 app = Alumna::App.new
-app.use("/messages", MessageService.new)
+app.use "/messages", Alumna.memory(MessageSchema) {
+  before Authenticate
+  before validate, on: :write
+  after LogResult
+}
 app.listen(3000)
