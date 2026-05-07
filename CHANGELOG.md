@@ -1,5 +1,27 @@
 # Alumna Backend changelog
 
+## 0.4.0 - 2026-05-07
+
+### Added
+* **service:** `validate` helper - `before validate, on: :write` uses the service's own schema, no duplication
+* **context:** typed data accessors - `ctx.data_str?`, `ctx.data_int?`, `ctx.data_float?`, `ctx.data_bool?` for zero-cost, allocation-free reads in adapters
+* **ruleable:** explicit `READ_METHODS` and `WRITE_METHODS` constants for clarity
+
+### Changed
+* **BREAKING - service:** `Service` no longer accepts `path` in `initialize`. Path is set once by `app.use`. Removes duplication across all adapters
+* **BREAKING - rules:** `Rule` is now `Proc(RuleContext, ServiceError?)`. Return `nil` to continue, return `ServiceError` to stop. `RuleResult` removed from public API
+* **rules:** `before`, `after`, `error` now accept blocks directly - `before { |ctx| ... }` compiles to the same proc with no extra allocation
+* **services:** `Alumna.memory(schema) { ... }` yields the service for inline rule registration. Enables `app.use "/x", Alumna.memory(S) { ... }`
+* **schema:** `required_on` accepts single symbol - `required_on: :create` works alongside `[:create, :update]`
+* **ruleable:** `:write` now expands to `[Create, Update, Patch]` only - `Remove` is excluded by design, preventing accidental validation on DELETE
+* **docs:** all examples updated to omit `required: true` (default) and use the new helpers
+
+### Removed
+* **public API:** `Alumna::RuleResult` - replaced by nullable `ServiceError` return
+
+### Performance
+* No changes to hot path - `Orchestrator.run_bounded` still uses `unsafe_fetch`, pipelines remain pre-compiled at `listen`. All eight simplifications are compile-time only
+
 ## 0.3.6 - 2026-05-05
 
 ### Fixed
@@ -13,7 +35,7 @@
 * **tests:** full coverage for query parsing, path normalization, and LimitedIO lifecycle (`close`, `closed?`)
 
 ### Changed
-* **cors:** global rules no longer run on OPTIONS by design; register with `only: :options` (or all methods) for preflights — documented and tested
+* **cors:** global rules no longer run on OPTIONS by design; register with `only: :options` (or all methods) for preflights - documented and tested
 
 ## 0.3.5 - 2026-04-28
 
@@ -65,10 +87,10 @@
 ## 0.2.0 - 2026-04-17
 
 * Optimizations:
-  * `src/http/router.cr` - avoiding repeated instantiation of serializers
-  * `src/schema/validator.cr` - avoiding repeated instantiation of regexes
-  * `src/rule/orchestrator.cr` - changing it to a module
-  * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocations and method instantiations
+    * `src/http/router.cr` - avoiding repeated instantiation of serializers
+    * `src/schema/validator.cr` - avoiding repeated instantiation of regexes
+    * `src/rule/orchestrator.cr` - changing it to a module
+    * `src/service/base.cr` - make it to call `Orchestrator.run` directly, avoiding repeated object allocations and method instantiations
 
 * Simplification of syntax allowing symbols for HTTP verbs like `:create`, `:update`, `:patch`, etc
 * `Alumna.validate(<Schema>)` for cleaner validations
