@@ -28,12 +28,16 @@ module Alumna
     property error : ServiceError?
     property http : HttpOverrides
     property headers : Http::HeadersView
-    property store : Hash(String, AnyData)
 
+    @store : Hash(String, AnyData)?
     @query : Query?
 
     def query : Query
       @query ||= Query.new(@params)
+    end
+
+    def store : Hash(String, AnyData)
+      @store ||= {} of String => AnyData
     end
 
     protected setter phase
@@ -55,7 +59,6 @@ module Alumna
       @result = nil
       @error = nil
       @http = HttpOverrides.new
-      @store = {} of String => AnyData
     end
 
     def result_set? : Bool
@@ -82,13 +85,20 @@ module Alumna
 
   struct HttpOverrides
     property status : Int32?
-    property headers : Hash(String, String)
     property location : String?
+    @headers : Hash(String, String)?
 
     def initialize
       @status = nil
-      @headers = {} of String => String
       @location = nil
+    end
+
+    def headers : Hash(String, String)
+      @headers ||= {} of String => String
+    end
+
+    def headers? : Hash(String, String)?
+      @headers
     end
   end
 
