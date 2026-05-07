@@ -1,5 +1,26 @@
 # Alumna Backend changelog
 
+## 0.4.1 - 2026-05-07
+
+### Performance
+* **router:** remove `http_verb.upcase` in `resolve_method` — HTTP methods are already uppercase per RFC 9110, saves one String allocation on every request
+* **router:** `parse_xff` now builds the IP list in a single pass — eliminates `split.map.reject` intermediate arrays
+* **router:** `parse_forwarded` now walks right-to-left respecting `trusted_proxies`, matching the XFF security model
+* **serializers:** `from_content_type?` fast-path for lowercase `application/json` and `application/msgpack` — zero allocations for the common case, fallback to `downcase` only for rare casings
+* **validator:** lazy error allocation — `validate` returns shared `EMPTY_ERRORS` on success, allocates only on first error; extracted `required?` and `push_error` to remove duplication
+* **query:** `$limit`/`$skip` validation replaced `/\A\d+\z/` Regex with byte-level check (`each_byte { |b| 48 <= b <= 57 }`) — no Regex engine, no allocations, early exit on first non-digit
+* **memory:** removed redundant `records.to_a` in `MemoryAdapter#find` — `@store.values` already returns a fresh Array
+
+### Fixed
+* **router:** `Forwarded: for="[::1]:1234"` was silently dropped — now correctly extracts IPv6 address and strips optional port
+* **router:** `Forwarded` header previously returned leftmost IP without checking trust list — now correctly skips trusted proxies, preventing spoofing behind trusted load balancers
+
+### Changed
+* **serializers:** `Accept` matching remains simple substring search (no q-value parsing) — behavior unchanged, now documented and allocation-free
+
+### Added
+* **test:** create `spec/http/serializers_spec.cr` to cover serializer selection logic based on http headers
+
 ## 0.4.0 - 2026-05-07
 
 ### Added
