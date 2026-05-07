@@ -87,4 +87,25 @@ describe "Router remote_ip with trusted proxies" do
       ip.should eq "127.0.0.1"
     end
   end
+
+  it "parses Forwarded with IPv6 and port (covers extract_ip_from_forwarded)" do
+    with_router(true) do |port|
+      headers = HTTP::Headers{
+        "Forwarded" => "for=\"[2001:db8::1]:1234\";proto=https",
+      }
+      ip = get_ip(port, headers)
+      ip.should eq "2001:db8::1"
+    end
+  end
+
+  it "walks Forwarded right-to-left respecting trust list" do
+    # remote (127.0.0.1) is trusted, so we should skip it and the trusted 10.0.0.1
+    with_router(["127.0.0.1", "10.0.0.0/8"]) do |port|
+      headers = HTTP::Headers{
+        "Forwarded" => "for=1.2.3.4, for=10.0.0.1",
+      }
+      ip = get_ip(port, headers)
+      ip.should eq "1.2.3.4"
+    end
+  end
 end
