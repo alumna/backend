@@ -192,6 +192,7 @@ All fields are required unless you pass `required: false` or limit them with `re
 | `.str("title")` | required on every method |
 | `.str("title", required: false)` | optional on every method |
 | `.str("title", required_on: [:create, :update])` | required only for create and update, optional for patch |
+| `.str("title", required_on: :create)` | required only for create, optional for the rest |
 
 ### Validation: Built-in validation rule
 

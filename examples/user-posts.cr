@@ -1,8 +1,8 @@
 require "../src/alumna"
 
 UserSchema = Alumna::Schema.new
-  .str("name", required: true, min_length: 2, max_length: 100)
-  .str("email", required: true, format: :email)
+  .str("name", min_length: 2, max_length: 100)
+  .str("email", format: :email)
   .int("age", required: false)
 
 PostSchema = Alumna::Schema.new
