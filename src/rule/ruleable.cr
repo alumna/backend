@@ -5,6 +5,11 @@ module Alumna
     @after_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
     @error_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
 
+    # Explicit method sets - used at boot time only, no runtime cost
+    READ_METHODS  = [ServiceMethod::Find, ServiceMethod::Get]
+    WRITE_METHODS = [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch]
+    ALL_METHODS   = ServiceMethod.values.reject(&.options?)
+
     # ---- public API ----
 
     def before(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
@@ -56,16 +61,16 @@ module Alumna
     end
 
     private def expand_on(on) : Array(ServiceMethod)
-      return ServiceMethod.values.reject(&.options?) if on.nil?
+      return ALL_METHODS if on.nil?
 
       items = on.is_a?(Array) ? on : [on]
       items.flat_map do |item|
         case item
         when ServiceMethod then [item]
-        when :read         then [ServiceMethod::Find, ServiceMethod::Get]
-        when :write        then [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch, ServiceMethod::Remove]
-        when :all          then ServiceMethod.values.reject(&.options?)
-        when Symbol        then [ServiceMethod.parse(item.to_s)]
+        when :read         then READ_METHODS
+        when :write        then WRITE_METHODS
+        when :all          then ALL_METHODS
+        when Symbol        then [ServiceMethod.parse(item.to_s.capitalize)]
         else                    [] of ServiceMethod
         end
       end.uniq!
