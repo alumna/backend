@@ -47,6 +47,19 @@ module Alumna::Http
       keys.count("x-test").should eq 1
       keys.first.should eq "x-test"
     end
+
+    it "iterates source directly when no overlay exists, downcasing keys" do
+      src = HTTP::Headers{"Content-Type" => "application/json", "X-Request-Id" => "abc"}
+      view = HeadersView.new(src) # @overlay remains nil
+
+      result = {} of String => String
+      view.each { |k, v| result[k] = v }
+
+      result.should eq({
+        "content-type" => "application/json",
+        "x-request-id" => "abc",
+      })
+    end
   end
 
   describe ParamsView do
@@ -62,6 +75,16 @@ module Alumna::Http
       view.each { |k, v| result[k] = v }
 
       result.should eq({"c" => "3", "a" => "1", "b" => "2"})
+    end
+
+    it "iterates source directly when no overlay exists" do
+      src = HTTP::Params.parse("x=1&y=2")
+      view = ParamsView.new(src) # @overlay remains nil
+
+      result = {} of String => String
+      view.each { |k, v| result[k] = v }
+
+      result.should eq({"x" => "1", "y" => "2"})
     end
   end
 end
