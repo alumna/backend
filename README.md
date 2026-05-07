@@ -25,10 +25,11 @@ end
 app = Alumna::App.new
 
 # Messages service based on Memory adapter
-app.use "/messages", Alumna.memory(MessageSchema) do
+app.use "/messages", Alumna.memory(MessageSchema) {
   before Authenticate
-  before Alumna.validate(MessageSchema), on: :write
-end
+  before validate, on: :write
+}
+
 # Done
 app.listen(3000) # binds to 127.0.0.1:3000 by default
 ```
@@ -191,6 +192,7 @@ All fields are required unless you pass `required: false` or limit them with `re
 | `.str("title")` | required on every method |
 | `.str("title", required: false)` | optional on every method |
 | `.str("title", required_on: [:create, :update])` | required only for create and update, optional for patch |
+| `.str("title", required_on: :create)` | required only for create, optional for the rest |
 
 ### Validation: Built-in validation rule
 
@@ -224,6 +226,19 @@ end
 
 You still keep full control - write your own rule when you need custom messages, transformations, or conditional validation. `Alumna.validate` is just a zero-magic shortcut for the 90% case.
 
+#### Leaner way to use validation
+
+When registering rules, you can use the direct internal helper, and the `UserService` above can be:
+
+```crystal
+class UserService < Alumna::MemoryAdapter
+  def initialize
+    super(UserSchema)
+    before validate, on: :write
+  end
+end
+```
+
 ### Validation: custom validator
 
 Schemas are plain objects. When needed, inside your own rule, call `schema.validate(data, method)` to get back an `Array(Alumna::FieldError)`. Pass the current `ctx.method` so `required_on` is respected:
@@ -247,6 +262,13 @@ Alumna.rate_limit(limit: 100, window_seconds: 60) # in-memory rate limiting
 ```crystal
 before Alumna.validate(UserSchema), on: :write
 ```
+
+or the reduced helper, which already infers which is the schema used in the service:
+
+```crystal
+before validate, on: :write
+```
+
 Returns 422 with per-field details when validation fails. Respects `required_on`.
 
 **2. CORS**
@@ -448,7 +470,7 @@ class UserService < Alumna::MemoryAdapter
   def initialize
     super(UserSchema)
     before Authenticate
-    before Alumna.validate(UserSchema), on: :write
+    before validate, on: :write
     after AddRequestId
     error LogError
   end
@@ -462,7 +484,7 @@ For simple services that only need to configure rules, you can skip the class de
 ```crystal
 app.use "/messages", Alumna.memory(MessageSchema) do
   before Authenticate
-  before Alumna.validate(MessageSchema), on: :write
+  before validate, on: :write
   after AddRequestId
 end
 ```
@@ -575,30 +597,22 @@ Authenticate = Alumna::Rule.new do |ctx|
   token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
-class UserService < Alumna::MemoryAdapter
-  def initialize
-    super(UserSchema)
-    before Authenticate
-    before Alumna.validate(UserSchema), on: :write
-  end
-end
-
-class PostService < Alumna::MemoryAdapter
-  def initialize
-    super(PostSchema)
-    before Authenticate
-    before Alumna.validate(PostSchema), on: :write
-
-  end
-end
-
 app = Alumna::App.new
-app.use("/users", UserService.new)
-app.use("/posts", PostService.new)
+
+app.use "/users", Alumna.memory(UserSchema) {
+  before Authenticate
+  before validate, on: :write
+}
+
+app.use "/posts", Alumna.memory(PostSchema) {
+  before Authenticate
+  before validate, on: :write
+}
+
 app.listen(3000) # http://127.0.0.1:3000
 ```
 
-PATCH works without sending required fields, because `required_on` limits the requirement to create/update.
+In this example, `PATCH` works without sending required fields, because `required_on` limits the requirement to create/update.
 
 ---
 

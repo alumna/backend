@@ -1,8 +1,8 @@
 require "../src/alumna"
 
 UserSchema = Alumna::Schema.new
-  .str("name", required: true, min_length: 2, max_length: 100)
-  .str("email", required: true, format: :email)
+  .str("name", min_length: 2, max_length: 100)
+  .str("email", format: :email)
   .int("age", required: false)
 
 PostSchema = Alumna::Schema.new
@@ -14,23 +14,16 @@ Authenticate = Alumna::Rule.new do |ctx|
   token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
-class UserService < Alumna::MemoryAdapter
-  def initialize
-    super(UserSchema)
-    before Authenticate
-    before Alumna.validate(UserSchema), on: :write
-  end
-end
-
-class PostService < Alumna::MemoryAdapter
-  def initialize
-    super(PostSchema)
-    before Authenticate
-    before Alumna.validate(PostSchema), on: :write
-  end
-end
-
 app = Alumna::App.new
-app.use("/users", UserService.new)
-app.use("/posts", PostService.new)
+
+app.use "/users", Alumna.memory(UserSchema) {
+  before Authenticate
+  before validate, on: :write
+}
+
+app.use "/posts", Alumna.memory(PostSchema) {
+  before Authenticate
+  before validate, on: :write
+}
+
 app.listen(3000)

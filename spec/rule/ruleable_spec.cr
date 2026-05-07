@@ -120,6 +120,8 @@ describe Alumna::Ruleable do
     r = DummyRuleable.new.after(on: :write) { |_ctx| nil }
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After).size.should eq(1)
     r.collect_rules(Alumna::ServiceMethod::Update, Alumna::RulePhase::After).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Patch, Alumna::RulePhase::After).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::After).size.should eq(0)
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(0)
   end
 

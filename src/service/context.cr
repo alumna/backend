@@ -2,7 +2,7 @@ require "json"
 require "http"
 
 module Alumna
-  # forward declarations — full bodies live in http/router.cr
+  # forward declarations - full bodies live in http/router.cr
   module Http
     struct ParamsView; end
 
@@ -60,6 +60,23 @@ module Alumna
 
     def result_set? : Bool
       !@result.nil?
+    end
+
+    # ---- typed data accessors (zero-cost, inlined) ----
+    def data_str?(key) : String?
+      data[key]?.as?(String)
+    end
+
+    def data_int?(key) : Int64?
+      data[key]?.as?(Int64)
+    end
+
+    def data_float?(key) : Float64?
+      data[key]?.as?(Float64)
+    end
+
+    def data_bool?(key) : Bool?
+      data[key]?.as?(Bool)
     end
   end
 

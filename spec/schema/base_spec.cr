@@ -67,6 +67,16 @@ describe Alumna::Schema do
       fd.required_on.should eq([Alumna::ServiceMethod::Create, Alumna::ServiceMethod::Update])
     end
 
+    it "normalizes single symbol" do
+      fd = Alumna::Schema.new.str("t", required_on: :patch).fields.first
+      fd.required_on.should eq([Alumna::ServiceMethod::Patch])
+    end
+
+    it "normalizes single enum" do
+      fd = Alumna::Schema.new.str("t", required_on: Alumna::ServiceMethod::Create).fields.first
+      fd.required_on.should eq([Alumna::ServiceMethod::Create])
+    end
+
     it "normalizes mixed symbols and enums" do
       fd = Alumna::Schema.new.str("t",
         required_on: [Alumna::ServiceMethod::Patch, :remove]

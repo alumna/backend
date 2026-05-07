@@ -70,7 +70,7 @@ describe "Service::Base" do
     it "yields self for rule registration" do
       schema = Alumna::Schema.new.str("x")
 
-      svc = Alumna.memory(schema) do # use the factory, not .new directly
+      svc = Alumna.memory(schema) do # use the factory, not.new directly
         before { |_c| nil }
         after { |_c| nil }
         error { |_c| nil }
@@ -101,6 +101,66 @@ describe "Service::Base" do
       svc = Alumna::MemoryAdapter.new
       svc.schema.should be_nil
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).should be_empty
+    end
+  end
+
+  describe "validate helper" do
+    it "builds a rule from the service schema" do
+      schema = Alumna::Schema.new.str("name", min_length: 1)
+
+      svc = Alumna.memory(schema) do
+        before validate, on: :create
+      end
+
+      rules = svc.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before)
+      rules.size.should eq(1)
+
+      # Simulate a failing validation
+      ctx = Alumna::RuleContext.new(
+        app: Alumna::App.new,
+        service: svc,
+        path: "/test",
+        method: Alumna::ServiceMethod::Create,
+        phase: Alumna::RulePhase::Before,
+        params: Alumna::Http::ParamsView.new(HTTP::Params.new),
+        headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
+        data: {} of String => Alumna::AnyData
+      )
+
+      err = rules.first.call(ctx)
+      err.should_not be_nil
+      err.as(Alumna::ServiceError).status.should eq(422)
+    end
+
+    it "accepts an explicit schema override" do
+      schema1 = Alumna::Schema.new.str("a")
+      schema2 = Alumna::Schema.new.str("b", min_length: 1)
+
+      svc = Alumna.memory(schema1) do
+        before validate(schema2), on: :create
+      end
+
+      rules = svc.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before)
+      ctx = Alumna::RuleContext.new(
+        app: Alumna::App.new,
+        service: svc,
+        path: "/test",
+        method: Alumna::ServiceMethod::Create,
+        phase: Alumna::RulePhase::Before,
+        params: Alumna::Http::ParamsView.new(HTTP::Params.new),
+        headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
+        data: {"b" => ""} of String => Alumna::AnyData
+      )
+
+      err = rules.first.call(ctx)
+      err.as(Alumna::ServiceError).status.should eq(422)
+    end
+
+    it "raises at boot if service has no schema" do
+      svc = Alumna::MemoryAdapter.new
+      expect_raises(ArgumentError, "validate requires a schema") do
+        svc.validate
+      end
     end
   end
 end

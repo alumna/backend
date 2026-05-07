@@ -35,7 +35,7 @@ module Alumna
       @fields = [] of FieldDescriptor
     end
 
-    # Core API — accepts Symbols for ergonomics
+    # Core API - accepts Symbols for ergonomics
     def field(
       name : String,
       type : FieldType | Symbol,
@@ -43,7 +43,7 @@ module Alumna
       min_length : Int32? = nil,
       max_length : Int32? = nil,
       format : Symbol | String | Nil = nil,
-      required_on : Array(ServiceMethod | Symbol) | Nil = nil,
+      required_on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil,
     ) : self
       # normalize :str → FieldType::Str
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
@@ -69,10 +69,19 @@ module Alumna
         end
       end
 
-      # normalize :create → ServiceMethod::Create
-      norm_required_on = required_on.try &.map do |m|
-        m.is_a?(ServiceMethod) ? m : ServiceMethod.parse(m.to_s.capitalize)
-      end
+      # normalize :create → [ServiceMethod::Create], also accepts single symbol
+      norm_required_on = case required_on
+                         in Nil
+                           nil
+                         in Array
+                           required_on.map do |m|
+                             m.is_a?(ServiceMethod) ? m : ServiceMethod.parse(m.to_s.capitalize)
+                           end
+                         in ServiceMethod
+                           [required_on]
+                         in Symbol
+                           [ServiceMethod.parse(required_on.to_s.capitalize)]
+                         end
 
       @fields << FieldDescriptor.new(
         name: name,
