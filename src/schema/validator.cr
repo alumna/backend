@@ -8,8 +8,12 @@ module Alumna
   end
 
   class Schema
+    # Shared sentinel returned when validation passes.
+    # Treat as read-only - never mutate the result of validate directly.
+    EMPTY_ERRORS = [] of FieldError
+
     def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
-      errors = [] of FieldError
+      errors = nil
 
       @fields.each do |field|
         has_key = data.has_key?(field.name)
@@ -17,24 +21,20 @@ module Alumna
 
         # --- Presence check ---
         unless has_key
-          req_on = field.required_on
-          should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
-          errors << FieldError.new(field.name, "is required") if should_require
+          errors = push_error(errors, field.name, "is required") if required?(field, method)
           next
         end
 
         # --- Explicit null ---
         if value.nil?
           next if field.type.nullable?
-          req_on = field.required_on
-          should_require = req_on ? (method.nil? || req_on.includes?(method)) : field.required
-          errors << FieldError.new(field.name, "is required") if should_require
+          errors = push_error(errors, field.name, "is required") if required?(field, method)
           next
         end
 
         # --- Type check ---
         if type_error = check_type(field, value)
-          errors << FieldError.new(field.name, type_error)
+          errors = push_error(errors, field.name, type_error)
           next
         end
 
@@ -43,36 +43,52 @@ module Alumna
           str = value
           if min = field.min_length
             if str.size < min
-              errors << FieldError.new(field.name, "must be at least #{min} character#{min == 1 ? "" : "s"}")
+              errors = push_error(errors, field.name, "must be at least #{min} character#{min == 1 ? "" : "s"}")
             end
           end
           if max = field.max_length
             if str.size > max
-              errors << FieldError.new(field.name, "must be at most #{max} character#{max == 1 ? "" : "s"}")
+              errors = push_error(errors, field.name, "must be at most #{max} character#{max == 1 ? "" : "s"}")
             end
           end
           if validator = field.format_validator
             unless validator.call(str)
-              errors << FieldError.new(field.name, field.format_message || "has an invalid format")
+              errors = push_error(errors, field.name, field.format_message || "has an invalid format")
             end
           end
         end
       end
 
-      errors
+      errors || EMPTY_ERRORS
+    end
+
+    # Returns true if the field is required for the given method context.
+    # Extracted to eliminate the identical logic that appeared in both the
+    # presence check and the explicit-null check.
+    private def required?(field : FieldDescriptor, method : ServiceMethod?) : Bool
+      if req_on = field.required_on
+        method.nil? || req_on.includes?(method)
+      else
+        field.required
+      end
+    end
+
+    # Lazily allocates the errors array on the first error, then reuses it.
+    # Returns the (possibly newly created) array with the new entry appended.
+    @[AlwaysInline]
+    private def push_error(errors : Array(FieldError)?, field : String, message : String) : Array(FieldError)
+      arr = errors || [] of FieldError
+      arr << FieldError.new(field, message)
+      arr
     end
 
     private def check_type(field : FieldDescriptor, value : AnyData) : String?
       case field.type
-      when .str?
-        value.is_a?(String) ? nil : "must be a string"
-      when .int? then value.is_a?(Int64) ? nil : "must be an integer"
-      when .float?
-        (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
-      when .bool?
-        value.is_a?(Bool) ? nil : "must be true or false"
-      else
-        nil
+      when .str?   then value.is_a?(String) ? nil : "must be a string"
+      when .int?   then value.is_a?(Int64) ? nil : "must be an integer"
+      when .float? then (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
+      when .bool?  then value.is_a?(Bool) ? nil : "must be true or false"
+      else              nil
       end
     end
   end
