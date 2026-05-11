@@ -54,6 +54,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [Full example](#full-example)
 - [Writing a custom adapter](#writing-a-custom-adapter)
 - [Serialization](#serialization)
+- [Testing](#testing)
 - [Roadmap](#roadmap)
 - [Design decisions and trade-offs](#design-decisions-and-trade-offs)
 - [Contributing](#contributing)
@@ -684,6 +685,60 @@ abstract class Serializer
   abstract def decode(io : IO) : Hash(String, AnyData)
 end
 ```
+
+---
+
+## Testing
+
+Alumna includes a built-in testing toolkit (`Alumna::Testing`) designed to make unit and integration tests incredibly fast and boilerplate-free. It bypasses network sockets entirely while running through the exact same router and orchestrator logic used in production.
+
+### Testing Rules
+
+Test individual rules in isolation without spinning up mock services or applications. `Alumna::Testing.run_rule` automatically builds a mock context with the arguments you provide:
+
+```crystal
+require "alumna"
+require "alumna/testing" # or require "../src/testing" depending on your path
+
+describe "Authenticate Rule" do
+  it "blocks unauthorized requests" do
+    result = Alumna::Testing.run_rule(Authenticate, headers: {"Authorization" => "wrong"})
+    
+    result.error.should_not be_nil
+    result.error.try(&.status).should eq(401)
+  end
+
+  it "allows valid requests" do
+    result = Alumna::Testing.run_rule(Authenticate, headers: {"Authorization" => "Bearer my-secret"})
+    
+    result.error.should be_nil
+  end
+end
+```
+
+### Testing Applications
+
+Use `AppClient` to test full request lifecycles (routing, rule pipelines, services, and serializers) instantly in memory:
+
+```crystal
+describe "User API" do
+  app = Alumna::App.new
+  app.use("/users", UserService.new)
+  
+  client = Alumna::Testing::AppClient.new(app)
+  client.default_headers["Authorization"] = "Bearer my-secret"
+  client.default_headers["Content-Type"] = "application/json"
+
+  it "creates a user" do
+    res = client.post("/users", body: %({"name": "Alice"}))
+    
+    res.status.should eq(201)
+    res.json["name"].as_s.should eq("Alice")
+  end
+end
+```
+
+If you are writing a custom database adapter, you can also use `Alumna::Testing::AdapterSuite.run("MyAdapter") { MyAdapter.new }` to instantly run dozens of compliance specs against your implementation.
 
 ---
 

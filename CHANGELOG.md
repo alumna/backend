@@ -1,10 +1,25 @@
 # Alumna Backend changelog
 
+## 0.4.3 - 2026-05-11
+
+### Changed
+* **tests:** Massive refactor of the entire spec suite to utilize the new `Alumna::Testing` toolkit.
+* **tests:** Eradicated massive amounts of boilerplate. Eliminated the need for mock `TestService` classes and manual context builders in rule tests (CORS, Logger, RateLimiter).
+* **tests:** Replaced the legacy `test_ctx` helper with the robust `Alumna::Testing.build_ctx`.
+* **tests:** Maintained 100% strict code coverage while reducing test codebase size and improving test readability.
+
 ## 0.4.2 - 2026-05-11
 
-* introduce `Alumna::Testing`
-* migrate `MemoryAdapter` and `Integration specs`
-* isolate testing the real server on `app.listen` in a fast way, without sleep
+### Added
+* **testing:** Introduced the `Alumna::Testing` toolkit to provide first-class testing ergonomics.
+* **testing:** `AppClient` for blazing-fast, in-memory end-to-end testing without opening TCP sockets or requiring `sleep`.
+* **testing:** `RuleRunner` (`Testing.run_rule`) to easily test individual rules in complete isolation.
+* **testing:** `AdapterSuite` macro to automatically run universal compliance/behavior tests against any custom database adapter.
+* **testing:** `Testing.build_ctx` helper for fabricating custom request contexts effortlessly.
+
+### Changed
+* **tests:** Migrated `MemoryAdapter` specs to use the new `AdapterSuite`.
+* **tests:** Migrated Integration specs to use the new `AppClient`, drastically speeding up the suite.
 
 ## 0.4.1 - 2026-05-07
 
