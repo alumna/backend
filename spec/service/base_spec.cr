@@ -1,4 +1,5 @@
 require "../spec_helper"
+require "../../src/testing"
 
 private class ExplodingService < Alumna::Service
   def initialize
@@ -33,11 +34,11 @@ end
 private def dispatch(svc, method)
   app = Alumna::App.new
   app.use("/boom", svc)
-  ctx = Alumna::RuleContext.new(
-    app: app, service: svc, path: "/boom", method: method,
-    phase: Alumna::RulePhase::Before,
-    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
+  ctx = Alumna::Testing.build_ctx(
+    app: app,
+    service: svc,
+    path: "/boom",
+    method: method
   )
   app.dispatch(svc, ctx)
   ctx
@@ -116,15 +117,9 @@ describe "Service::Base" do
       rules.size.should eq(1)
 
       # Simulate a failing validation
-      ctx = Alumna::RuleContext.new(
-        app: Alumna::App.new,
+      ctx = Alumna::Testing.build_ctx(
         service: svc,
-        path: "/test",
-        method: Alumna::ServiceMethod::Create,
-        phase: Alumna::RulePhase::Before,
-        params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-        headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
-        data: {} of String => Alumna::AnyData
+        method: Alumna::ServiceMethod::Create
       )
 
       err = rules.first.call(ctx)
@@ -141,14 +136,9 @@ describe "Service::Base" do
       end
 
       rules = svc.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Before)
-      ctx = Alumna::RuleContext.new(
-        app: Alumna::App.new,
+      ctx = Alumna::Testing.build_ctx(
         service: svc,
-        path: "/test",
         method: Alumna::ServiceMethod::Create,
-        phase: Alumna::RulePhase::Before,
-        params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-        headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
         data: {"b" => ""} of String => Alumna::AnyData
       )
 

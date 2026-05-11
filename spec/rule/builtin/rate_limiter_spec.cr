@@ -1,109 +1,65 @@
 require "../../spec_helper"
-
-private def build_ctx_rate_limiter(app : Alumna::App, service : Alumna::Service, ip : String, method = "GET") : Alumna::RuleContext
-  svc_method = method == "OPTIONS" ? Alumna::ServiceMethod::Options : Alumna::ServiceMethod::Find
-
-  Alumna::RuleContext.new(
-    app: app, service: service, path: "/test",
-    method: svc_method, phase: Alumna::RulePhase::Before,
-    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
-    http_method: method, remote_ip: ip
-  )
-end
+require "../../../src/testing"
 
 module Alumna
-  class TestService < Service
-    def initialize
-      super()
-    end
-
-    def find(ctx : RuleContext) : Array(Hash(String, AnyData))
-      [] of Hash(String, AnyData)
-    end
-
-    def get(ctx : RuleContext) : Hash(String, AnyData)?
-      nil
-    end
-
-    def create(ctx : RuleContext) : Hash(String, AnyData)
-      {} of String => AnyData
-    end
-
-    def update(ctx : RuleContext) : Hash(String, AnyData)
-      {} of String => AnyData
-    end
-
-    def patch(ctx : RuleContext) : Hash(String, AnyData)
-      {} of String => AnyData
-    end
-
-    def remove(ctx : RuleContext) : Bool
-      false
-    end
-  end
-
-  describe "Rules::RateLimiter" do
-    app = uninitialized App
-    service = uninitialized TestService
-
-    before_each do
-      app = App.new
-      service = TestService.new
-    end
-
+  describe "Alumna.rate_limit" do
     it "allows requests under limit" do
       rule = Alumna.rate_limit(limit: 2, window_seconds: 60)
-      ctx = build_ctx_rate_limiter(app, service, "2.2.2")
-      rule.call(ctx)
-      ctx.http.headers["X-RateLimit-Remaining"].should eq("1")
-      rule.call(ctx)
-      ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
-      ctx.http.headers["X-RateLimit-Limit"].should eq("2")
-      ctx.http.headers["X-RateLimit-Reset"].should_not be_nil
+
+      res1 = Alumna::Testing.run_rule(rule, remote_ip: "2.2.2.2")
+      res1.ctx.http.headers["X-RateLimit-Remaining"].should eq("1")
+
+      res2 = Alumna::Testing.run_rule(rule, remote_ip: "2.2.2.2")
+      res2.ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
+      res2.ctx.http.headers["X-RateLimit-Limit"].should eq("2")
+      res2.ctx.http.headers["X-RateLimit-Reset"].should_not be_nil
     end
 
     it "blocks over limit with 429" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
-      ctx = build_ctx_rate_limiter(app, service, "3.3.3")
-      rule.call(ctx)
-      result = rule.call(ctx).should_not be_nil
-      result.status.should eq(429)
-      ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
+
+      Alumna::Testing.run_rule(rule, remote_ip: "3.3.3.3")
+      res2 = Alumna::Testing.run_rule(rule, remote_ip: "3.3.3.3")
+
+      res2.error.should_not be_nil
+      res2.error.try(&.status).should eq(429)
+      res2.ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
     end
 
     it "resets count after window expires" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 0)
-      ctx = build_ctx_rate_limiter(app, service, "5.5.5")
-      first = rule.call(ctx)
-      first.should be_nil
-      ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
+
+      res1 = Alumna::Testing.run_rule(rule, remote_ip: "5.5.5.5")
+      res1.error.should be_nil
+      res1.ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
+
       sleep 1.milliseconds
-      second = rule.call(ctx)
-      second.should be_nil
-      ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
+
+      res2 = Alumna::Testing.run_rule(rule, remote_ip: "5.5.5.5")
+      res2.error.should be_nil
+      res2.ctx.http.headers["X-RateLimit-Remaining"].should eq("0")
     end
 
     it "skips OPTIONS" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60)
-      ctx = build_ctx_rate_limiter(app, service, "4.4.4", "OPTIONS")
-      result = rule.call(ctx)
-      result.should be_nil
-      ctx.http.headers.has_key?("X-RateLimit-Limit").should be_false
+
+      res = Alumna::Testing.run_rule(rule, remote_ip: "4.4.4.4", http_method: "OPTIONS")
+
+      res.error.should be_nil
+      res.ctx.http.headers.has_key?("X-RateLimit-Limit").should be_false
     end
 
     # --- new tests for the bounded store ---
 
     it "isolates counts per key" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60, key: ->(ctx : RuleContext) { ctx.remote_ip })
-      ctx_a = build_ctx_rate_limiter(app, service, "10.0.0.1")
-      ctx_b = build_ctx_rate_limiter(app, service, "10.0.0.2")
 
-      rule.call(ctx_a).should be_nil
-      rule.call(ctx_b).should be_nil
+      Alumna::Testing.run_rule(rule, remote_ip: "10.0.0.1").error.should be_nil
+      Alumna::Testing.run_rule(rule, remote_ip: "10.0.0.2").error.should be_nil
+
       # second hit for A should block, B still has its own bucket
-      rule.call(ctx_a).should_not be_nil
-      rule.call(ctx_b).should_not be_nil
+      Alumna::Testing.run_rule(rule, remote_ip: "10.0.0.1").error.should_not be_nil
+      Alumna::Testing.run_rule(rule, remote_ip: "10.0.0.2").error.should_not be_nil
     end
 
     it "prunes expired entries to prevent unbounded growth" do

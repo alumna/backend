@@ -1,4 +1,5 @@
 require "../spec_helper"
+require "../../src/testing"
 
 private class TrackedService < Alumna::MemoryAdapter
   getter called : Array(String)
@@ -24,31 +25,19 @@ private class TrackedService < Alumna::MemoryAdapter
   end
 end
 
-private def make_ctx(
-  app : Alumna::App,
-  service : Alumna::Service,
-  method : Alumna::ServiceMethod,
-  id : String? = nil,
-  data : Hash(String, Alumna::AnyData) = {} of String => Alumna::AnyData,
-) : Alumna::RuleContext
-  Alumna::RuleContext.new(
-    app: app,
-    service: service,
-    path: service.path,
-    method: method,
-    phase: Alumna::RulePhase::Before,
-    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new),
-    id: id,
-    data: data
-  )
-end
-
 private def dispatch(service, method, id = nil, data = {} of String => Alumna::AnyData, app = nil)
   app ||= Alumna::App.new
   mount_path = "/tracked" # TrackedService is always mounted here in this spec
   app.use(mount_path, service) unless app.services.has_key?(mount_path)
-  ctx = make_ctx(app, service, method, id, data)
+
+  ctx = Alumna::Testing.build_ctx(
+    app: app,
+    service: service,
+    path: mount_path,
+    method: method,
+    id: id,
+    data: data
+  )
   app.dispatch(service, ctx)
   ctx
 end
@@ -125,7 +114,7 @@ describe "Dispatch" do
       app.error(Alumna::Rule.new { log << "app-error"; nil })
       app.use("/x", svc)
 
-      ctx = make_ctx(app, svc, Alumna::ServiceMethod::Update, "999")
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Update, id: "999")
       app.dispatch(svc, ctx)
 
       log.should eq(["app-error"])
@@ -166,7 +155,7 @@ describe "Dispatch" do
       svc.after(Alumna::Rule.new { log << "svc-after"; nil })
       app.use("/ordered", svc)
 
-      ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/ordered", method: Alumna::ServiceMethod::Find)
       app.dispatch(svc, ctx)
 
       log.should eq(["app-before", "svc-before", "svc-after", "app-after"])
@@ -181,7 +170,7 @@ describe "Dispatch" do
       app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
-      ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find)
       app.dispatch(svc, ctx)
 
       log.should eq(["app-before"])
@@ -200,7 +189,7 @@ describe "Dispatch" do
       app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
-      ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find)
       app.dispatch(svc, ctx)
 
       log.should eq(["app-before", "app-after"])
@@ -215,7 +204,7 @@ describe "Dispatch" do
       app.after(Alumna::Rule.new { log << "app-after"; nil })
       app.use("/x", svc)
 
-      ctx = make_ctx(app, svc, Alumna::ServiceMethod::Find)
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/x", method: Alumna::ServiceMethod::Find)
       app.dispatch(svc, ctx)
 
       log.should be_empty

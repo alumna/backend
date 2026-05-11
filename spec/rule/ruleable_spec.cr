@@ -1,4 +1,5 @@
 require "../spec_helper"
+require "../../src/testing"
 
 class DummyRuleable
   include Alumna::Ruleable
@@ -20,10 +21,11 @@ describe Alumna::Ruleable do
 
   it "registers specific after rules with symbols" do
     r = DummyRuleable.new.after(rule, on: [:create, :update])
-    creates = r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)
-    finds = r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After)
-    creates.size.should eq(1)
-    finds.size.should eq(0)
+    create_rules = r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)
+    find_rules = r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After)
+
+    create_rules.size.should eq(1)
+    find_rules.size.should eq(0)
   end
 
   it "normalizes symbols to enums" do
@@ -67,7 +69,10 @@ describe Alumna::Ruleable do
     r.before(specific, on: :get)
 
     rules = r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before)
-    Alumna::Orchestrator.run(rules, test_ctx(method: Alumna::ServiceMethod::Get))
+
+    # Use the test toolkit to build the context
+    ctx = Alumna::Testing.build_ctx(method: Alumna::ServiceMethod::Get)
+    Alumna::Orchestrator.run(rules, ctx)
 
     order.should eq(["global", "specific"])
   end

@@ -1,4 +1,5 @@
 require "../spec_helper"
+require "../../src/testing"
 require "http/server/response"
 
 private def fake_response
@@ -11,17 +12,7 @@ private def build_ctx(
   result : Alumna::ServiceResult = nil,
   error : Alumna::ServiceError? = nil,
 ) : Alumna::RuleContext
-  app = Alumna::App.new
-  service = Alumna::MemoryAdapter.new
-  ctx = Alumna::RuleContext.new(
-    app: app,
-    service: service,
-    path: "/test",
-    method: method,
-    phase: Alumna::RulePhase::After,
-    params: Alumna::Http::ParamsView.new(HTTP::Params.new),
-    headers: Alumna::Http::HeadersView.new(HTTP::Headers.new)
-  )
+  ctx = Alumna::Testing.build_ctx(method: method, phase: Alumna::RulePhase::After)
   ctx.result = result
   ctx.error = error
   ctx
