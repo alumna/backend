@@ -1,5 +1,11 @@
 # Alumna Backend changelog
 
+## 0.4.2 - 2026-05-11
+
+* introduce `Alumna::Testing`
+* migrate `MemoryAdapter` and `Integration specs`
+* isolate testing the real server on `app.listen` in a fast way, without sleep
+
 ## 0.4.1 - 2026-05-07
 
 ### Performance
