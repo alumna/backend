@@ -1,4 +1,5 @@
 require "../spec_helper"
+require "../../src/testing"
 
 # ── Helpers ───────────────────────────────────
 
@@ -23,8 +24,9 @@ end
 describe Alumna::Orchestrator do
   describe ".run with empty rule list" do
     it "returns true and leaves context unchanged" do
-      ctx = test_ctx
+      ctx = Alumna::Testing.build_ctx
       result = Alumna::Orchestrator.run([] of Alumna::Rule, ctx)
+
       result.should be_true
       ctx.error.should be_nil
       ctx.phase.should eq(Alumna::RulePhase::Before)
@@ -39,21 +41,27 @@ describe Alumna::Orchestrator do
         continuing_rule(log, "b"),
         continuing_rule(log, "c"),
       ]
-      result = Alumna::Orchestrator.run(rules, test_ctx)
+
+      result = Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx)
+
       result.should be_true
       log.should eq(["a", "b", "c"])
     end
 
     it "leaves ctx.error nil" do
-      ctx = test_ctx
+      ctx = Alumna::Testing.build_ctx
       rules = [continuing_rule([] of String, "a")]
+
       Alumna::Orchestrator.run(rules, ctx)
+
       ctx.error.should be_nil
     end
 
     it "leaves ctx.phase unchanged" do
-      ctx = test_ctx(phase: Alumna::RulePhase::Before)
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
       Alumna::Orchestrator.run([continuing_rule([] of String, "a")], ctx)
+
       ctx.phase.should eq(Alumna::RulePhase::Before)
     end
   end
@@ -61,8 +69,10 @@ describe Alumna::Orchestrator do
   describe "when a rule returns stop" do
     it "sets ctx.error to the ServiceError" do
       rule = Alumna::Rule.new { |_ctx| Alumna::ServiceError.unauthorized("no token") }
-      ctx = test_ctx
+      ctx = Alumna::Testing.build_ctx
+
       Alumna::Orchestrator.run([rule], ctx)
+
       error = ctx.error
       error.should_not be_nil
       if error
@@ -73,8 +83,10 @@ describe Alumna::Orchestrator do
 
     it "returns false and does not change ctx.phase" do
       rule = Alumna::Rule.new { |_ctx| Alumna::ServiceError.forbidden }
-      ctx = test_ctx(phase: Alumna::RulePhase::Before)
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
       result = Alumna::Orchestrator.run([rule], ctx)
+
       result.should be_false
       ctx.phase.should eq(Alumna::RulePhase::Before)
     end
@@ -86,7 +98,9 @@ describe Alumna::Orchestrator do
         stopping_rule(log, "stopper"),
         continuing_rule(log, "after"),
       ]
-      Alumna::Orchestrator.run(rules, test_ctx)
+
+      Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx)
+
       log.should eq(["before", "stopper"])
     end
 
@@ -96,8 +110,10 @@ describe Alumna::Orchestrator do
         stopping_rule(log, "first", "error-one"),
         stopping_rule(log, "second", "error-two"),
       ]
-      ctx = test_ctx
+      ctx = Alumna::Testing.build_ctx
+
       Alumna::Orchestrator.run(rules, ctx)
+
       error = ctx.error
       error.should_not be_nil
       if error
@@ -115,19 +131,25 @@ describe Alumna::Orchestrator do
         result_setting_rule(log, "b"),
         continuing_rule(log, "c"),
       ]
-      Alumna::Orchestrator.run(rules, test_ctx(phase: Alumna::RulePhase::Before), short_circuit: true)
+
+      Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before), short_circuit: true)
+
       log.should eq(["a", "b"])
     end
 
     it "does not set ctx.error" do
-      ctx = test_ctx(phase: Alumna::RulePhase::Before)
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
       Alumna::Orchestrator.run([result_setting_rule([] of String, "r")], ctx, short_circuit: true)
+
       ctx.error.should be_nil
     end
 
     it "preserves the result" do
-      ctx = test_ctx(phase: Alumna::RulePhase::Before)
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
       Alumna::Orchestrator.run([result_setting_rule([] of String, "r")], ctx, short_circuit: true)
+
       ctx.result_set?.should be_true
       ctx.result.as(Hash(String, Alumna::AnyData))["cached"].should eq(true)
     end
@@ -141,7 +163,9 @@ describe Alumna::Orchestrator do
         continuing_rule(log, "b"),
         continuing_rule(log, "c"),
       ]
-      Alumna::Orchestrator.run(rules, test_ctx(phase: Alumna::RulePhase::After), short_circuit: false)
+
+      Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx(phase: Alumna::RulePhase::After), short_circuit: false)
+
       log.should eq(["a", "b", "c"])
     end
   end
@@ -157,7 +181,7 @@ describe Alumna::Orchestrator do
       svc.error(Alumna::Rule.new { |_ctx| log << "svc-error"; nil })
       app.use("/x", svc)
 
-      ctx = test_ctx(app: app, service: svc, method: Alumna::ServiceMethod::Find)
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, method: Alumna::ServiceMethod::Find)
       app.dispatch(svc, ctx)
 
       log.should eq(["app-before", "app-error"]) # svc-error must NOT appear
