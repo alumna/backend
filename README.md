@@ -21,7 +21,6 @@ Authenticate = Alumna::Rule.new do |ctx|
   token == "Bearer my-secret" ? nil : Alumna::ServiceError.unauthorized
 end
 
-
 app = Alumna::App.new
 
 # Messages service based on Memory adapter
@@ -458,7 +457,7 @@ ServiceError.unprocessable("message", details) # 422
 ServiceError.internal("message")               # 500
 ```
 
-`details` is a `Hash(String, String)` for per-field error messages.
+`details` is a `Hash(String, AnyData)` for per-field error messages.
 
 ---
 
