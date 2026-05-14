@@ -26,8 +26,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-
       - run: shards install
-      - run: crystal spec --error-trace --verbose
       - run: crystal tool format --check
+
+      # 1. Run standard (Single-Threaded) tests
+      - name: Run specs (Single-Threaded)
+        run: crystal spec --error-trace --verbose
+
+      # 2. Run Execution Context (Multi-Threaded) tests
+      - name: Run specs (Multi-Threaded)
+        run: crystal spec -Dpreview_mt -Dexecution_context --error-trace --verbose
 
   coverage:
     runs-on: ubuntu-22.04
