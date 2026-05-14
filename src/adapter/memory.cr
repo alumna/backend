@@ -2,13 +2,13 @@ module Alumna
   class MemoryAdapter < Service
     @store : Hash(String, Hash(String, AnyData))
     @next_id : Int64
-    @mutex : Mutex
+    @mutex : Sync::Mutex
 
     def initialize(schema : Schema? = nil)
       super(schema)
       @store = {} of String => Hash(String, AnyData)
       @next_id = 1_i64
-      @mutex = Mutex.new
+      @mutex = Sync::Mutex.new
     end
 
     private def compare_values(a : AnyData, b : AnyData) : Int32

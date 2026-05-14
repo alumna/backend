@@ -13,7 +13,7 @@ require "mutex"
 #    - Each entry stores both a wall-clock `reset_at` (for HTTP headers) and a
 #      monotonic `deadline` (Time::Instant).
 #    - Once `deadline` passes, the entry is useless. It is removed by an
-#      amortized sweep that runs every 1,024 hits inside the same Mutex.
+#      amortized sweep that runs every 1,024 hits inside the same Sync::Mutex.
 #    - No background fiber, no timers, no hidden state. Memory usage is
 #      proportional to keys seen in the last window, not total history.
 #
@@ -29,7 +29,7 @@ require "mutex"
 #    - The same interface can later back a `RateLimitRedisStore` without
 #      touching the Rule API.
 #
-# Hot path remains O(1): one Hash lookup under a Mutex. Cleanup is O(N) but
+# Hot path remains O(1): one Hash lookup under a Sync::Mutex. Cleanup is O(N) but
 # amortized and infrequent, keeping throughput comparable to Go/Rust
 # implementations while staying fully explicit.
 
@@ -42,7 +42,7 @@ module Alumna
 
     def initialize(@window : Time::Span, @cleanup_every : Int32 = 1024)
       @store = Hash(String, Entry).new
-      @mutex = Mutex.new
+      @mutex = Sync::Mutex.new
       @ops = 0
     end
 

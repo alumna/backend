@@ -11,9 +11,13 @@ module Alumna
 
     property max_body_size : Int64 = 1_048_576
 
+    @pipeline_mutex : Sync::Mutex
+    @pipelines_compiled : Atomic(Bool)
+
     def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
-      @pipelines_compiled = false
+      @pipelines_compiled = Atomic(Bool).new(false)
+      @pipeline_mutex = Sync::Mutex.new
     end
 
     def use(path : String, service : Service) : self
@@ -30,29 +34,40 @@ module Alumna
     end
 
     private def compile_pipelines!
-      return if @pipelines_compiled
-      @services.each_value do |service|
-        # Compile merged pipelines once
-        ServiceMethod.values.each do |m|
-          app_b = collect_rules(m, RulePhase::Before)
-          svc_b = service.collect_rules(m, RulePhase::Before)
-          service.set_before_pipeline(m, app_b, svc_b)
+      # Outer fast path: :acquire pairs with the :release write below,
+      # ensuring all pipeline writes are visible once we see true.
+      return if @pipelines_compiled.get(:acquire)
 
-          svc_a = service.collect_rules(m, RulePhase::After)
-          app_a = collect_rules(m, RulePhase::After)
-          service.set_after_pipeline(m, svc_a, app_a)
+      @pipeline_mutex.synchronize do
+        # Inner check: the mutex lock already carries :acquire semantics,
+        # so :relaxed is sufficient here.
+        return if @pipelines_compiled.get(:relaxed)
 
-          svc_e = service.collect_rules(m, RulePhase::Error)
-          app_e = collect_rules(m, RulePhase::Error)
-          service.set_error_pipeline(m, svc_e, app_e)
+        @services.each_value do |service|
+          # Compile merged pipelines once
+          ServiceMethod.values.each do |m|
+            app_b = collect_rules(m, RulePhase::Before)
+            svc_b = service.collect_rules(m, RulePhase::Before)
+            service.set_before_pipeline(m, app_b, svc_b)
+
+            svc_a = service.collect_rules(m, RulePhase::After)
+            app_a = collect_rules(m, RulePhase::After)
+            service.set_after_pipeline(m, svc_a, app_a)
+
+            svc_e = service.collect_rules(m, RulePhase::Error)
+            app_e = collect_rules(m, RulePhase::Error)
+            service.set_error_pipeline(m, svc_e, app_e)
+          end
         end
+        # :release ensures all pipeline writes above are visible to any
+        # thread that subsequently reads with :acquire.
+        @pipelines_compiled.set(true, :release)
       end
-      @pipelines_compiled = true
     end
 
     # Central dispatch using merged pipelines
     def dispatch(service : Service, ctx : RuleContext) : RuleContext
-      compile_pipelines! unless @pipelines_compiled
+      compile_pipelines! unless @pipelines_compiled.get(:acquire)
       m = ctx.method
 
       # 1. BEFORE (app + service)
@@ -91,15 +106,35 @@ module Alumna
       ctx
     end
 
-    def listen(port : Int32 = 3000, *, host : String = "127.0.0.1", trusted_proxies : TrustedProxies = nil)
+    def listen(
+      port : Int32 = 3000,
+      *,
+      host : String = "127.0.0.1",
+      trusted_proxies : TrustedProxies = nil,
+      workers : Int32? = nil,
+    )
       compile_pipelines! # freeze once, after all rules are registered
+
+      workers_msg = ""
+      {% if flag?(:execution_context) %}
+        actual_workers = workers || Fiber::ExecutionContext.default_workers_count
+        Fiber::ExecutionContext.default.resize(actual_workers.clamp(1..))
+        workers_msg = " (#{actual_workers} workers)"
+      {% else %}
+        if workers && workers > 1
+          STDERR.puts "Warning: 'workers' argument ignored. To enable multithreading, compile with: -Dpreview_mt -Dexecution_context"
+        end
+        workers_msg = " (single-threaded)"
+      {% end %}
 
       router = Http::Router.new(self, trusted_proxies)
       server = HTTP::Server.new { |ctx| router.handle(ctx) }
-      server.bind_tcp(host, port, reuse_port: false)
+
+      # reuse_port is no longer needed since Crystal threads share the same socket
+      server.bind_tcp(host, port)
 
       display_host = host.includes?(':') ? "[#{host}]" : host
-      puts "Listening on http://#{display_host}:#{port}"
+      puts "Listening on http://#{display_host}:#{port}#{workers_msg}"
 
       if host == "0.0.0.0" || host == "::"
         STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
