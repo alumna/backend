@@ -8,16 +8,24 @@ module Alumna
 
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
+    getter active_requests : Atomic(Int32)
 
     property max_body_size : Int64 = 1_048_576
 
     @pipeline_mutex : Sync::Mutex
     @pipelines_compiled : Atomic(Bool)
+    @server : HTTP::Server?
 
     def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
       @pipelines_compiled = Atomic(Bool).new(false)
       @pipeline_mutex = Sync::Mutex.new
+      @active_requests = Atomic(Int32).new(0)
+      @server = nil
+    end
+
+    def close : Nil
+      @server.try(&.close)
     end
 
     def use(path : String, service : Service) : self
@@ -112,6 +120,8 @@ module Alumna
       host : String = "127.0.0.1",
       trusted_proxies : TrustedProxies = nil,
       workers : Int32? = nil,
+      shutdown_timeout : Time::Span? = 10.seconds,
+      trap_signals : Bool = true,
     )
       compile_pipelines! # freeze once, after all rules are registered
 
@@ -128,7 +138,30 @@ module Alumna
       {% end %}
 
       router = Http::Router.new(self, trusted_proxies)
-      server = HTTP::Server.new { |ctx| router.handle(ctx) }
+
+      # We wrap the router handle in a counter to track active connections
+      server = HTTP::Server.new do |ctx|
+        @active_requests.add(1)
+        begin
+          router.handle(ctx)
+        ensure
+          @active_requests.sub(1)
+        end
+      end
+      @server = server
+
+      if trap_signals
+        trap_handler = ->(sig : Signal) do
+          puts "\nReceived #{sig}, shutting down gracefully..."
+          # Reset traps so a second Ctrl+C forces an immediate, ungraceful exit if desired
+          Signal::INT.reset
+          Signal::TERM.reset
+          close
+        end
+
+        Signal::INT.trap { trap_handler.call(Signal::INT) }
+        Signal::TERM.trap { trap_handler.call(Signal::TERM) }
+      end
 
       # reuse_port is no longer needed since Crystal threads share the same socket
       server.bind_tcp(host, port)
@@ -140,7 +173,29 @@ module Alumna
         STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
       end
 
-      server.listen
+      begin
+        server.listen # Blocks until server.close is called, or an error occurs
+      ensure
+        if trap_signals
+          Signal::INT.reset
+          Signal::TERM.reset
+        end
+
+        if timeout = shutdown_timeout
+          deadline = Time.instant + timeout
+
+          # Wait loop blocking the process from exiting as long as we have active requests
+          while @active_requests.get > 0 && Time.instant < deadline
+            sleep 0.05.seconds
+          end
+
+          if (rem = @active_requests.get) > 0
+            puts "Shutdown timeout reached. Exiting with #{rem} active requests."
+          else
+            puts "Graceful shutdown complete."
+          end
+        end
+      end
     end
   end
 end
