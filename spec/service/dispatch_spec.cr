@@ -248,6 +248,16 @@ describe "Dispatch" do
       service.called.should be_empty
     end
 
+    it "short-circuits even if the result is explicitly set to nil" do
+      service = TrackedService.new
+      service.before(Alumna::Rule.new do |ctx|
+        ctx.result = nil
+        nil.as(Alumna::ServiceError?)
+      end)
+      dispatch(service, Alumna::ServiceMethod::Find)
+      service.called.should be_empty
+    end
+
     it "run after rules even with result already set" do
       log = [] of String
       service = TrackedService.new

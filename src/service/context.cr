@@ -29,6 +29,7 @@ module Alumna
     property http : HttpOverrides
     property headers : Http::HeadersView
 
+    @result_set : Bool = false
     @store : Hash(String, AnyData)?
     @query : Query?
 
@@ -57,12 +58,18 @@ module Alumna
       @data : Hash(String, AnyData) = {} of String => AnyData,
     )
       @result = nil
+      @result_set = false
       @error = nil
       @http = HttpOverrides.new
     end
 
+    def result=(value : ServiceResult)
+      @result = value
+      @result_set = true
+    end
+
     def result_set? : Bool
-      !@result.nil?
+      @result_set
     end
 
     # ---- typed data accessors (zero-cost, inlined) ----

@@ -2,6 +2,27 @@ require "../spec_helper"
 require "../../src/testing"
 
 describe Alumna::RuleContext do
+  describe "result handling" do
+    it "is not set initially" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.result_set?.should be_false
+      ctx.result.should be_nil
+    end
+
+    it "is set when explicitly assigned nil" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.result = nil
+      ctx.result_set?.should be_true
+      ctx.result.should be_nil
+    end
+
+    it "is set when assigned a Hash" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.result = {"ok" => true} of String => Alumna::AnyData
+      ctx.result_set?.should be_true
+    end
+  end
+
   describe "typed data accessors" do
     it "returns String for data_str?" do
       ctx = Alumna::Testing.build_ctx(data: {"name" => "Alice"} of String => Alumna::AnyData)

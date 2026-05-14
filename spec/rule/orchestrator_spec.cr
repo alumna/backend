@@ -169,6 +169,19 @@ describe Alumna::Orchestrator do
       ctx.result_set?.should be_true
       ctx.result.as(Hash(String, Alumna::AnyData))["cached"].should eq(true)
     end
+
+    it "short-circuits even if the result is explicitly set to nil" do
+      rule = Alumna::Rule.new do |ctx|
+        ctx.result = nil
+        nil.as(Alumna::ServiceError?)
+      end
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
+      Alumna::Orchestrator.run([rule], ctx, short_circuit: true)
+
+      ctx.result_set?.should be_true
+      ctx.result.should be_nil
+    end
   end
 
   describe "early exit does not apply in After phase" do
