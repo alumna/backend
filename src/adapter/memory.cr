@@ -11,6 +11,33 @@ module Alumna
       @mutex = Mutex.new
     end
 
+    private def compare_values(a : AnyData, b : AnyData) : Int32
+      # Handle nil / missing fields (nils come first)
+      return 0 if a.nil? && b.nil?
+      return -1 if a.nil?
+      return 1 if b.nil?
+
+      # Safely compare numbers by arithmetic value (Int64 and Float64)
+      if (a.is_a?(Int64) || a.is_a?(Float64)) && (b.is_a?(Int64) || b.is_a?(Float64))
+        # Float64#<=> returns Int32? (returns nil when comparing with NaN)
+        # We fallback to 0 (equal) to satisfy the strict Int32 return requirement.
+        return (a.as(Int64 | Float64) <=> b.as(Int64 | Float64)) || 0
+      end
+
+      # Compare identical string or boolean types
+      if a.class == b.class
+        case a
+        when String
+          return a <=> b.as(String)
+        when Bool
+          return (a ? 1 : 0) <=> (b.as(Bool) ? 1 : 0)
+        end
+      end
+
+      # Deterministic fallback for mismatched types or complex structures
+      a.to_s <=> b.to_s
+    end
+
     def find(ctx : RuleContext) : Array(Hash(String, AnyData))
       @mutex.synchronize do
         q = ctx.query
@@ -28,9 +55,7 @@ module Alumna
           records.sort! do |a, b|
             sort.reduce(0) do |cmp, (field, dir)|
               next cmp if cmp != 0
-              av = a[field]?.try(&.to_s) || ""
-              bv = b[field]?.try(&.to_s) || ""
-              (av <=> bv) * dir
+              compare_values(a[field]?, b[field]?) * dir
             end
           end
         end

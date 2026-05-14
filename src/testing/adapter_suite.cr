@@ -16,6 +16,10 @@ module Alumna
         v.to_i64
       end
 
+      def self.any(v : Float) : AnyData
+        v.to_f64
+      end
+
       def self.insert(adapter : Service, data : Hash(String, AnyData))
         ctx = Alumna::Testing.build_ctx(
           service: adapter,
@@ -118,12 +122,32 @@ module Alumna
               results.map(&.["n"]).should eq(["1", "2"])
             end
 
-            it "applies $sort" do
+            it "applies $sort correctly with numeric types (not lexicographical)" do
               adapter = {{factory.body}}
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any("30")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any("20")} of String => Alumna::AnyData)
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "age:1"})
-              adapter.find(ctx).first["age"].should eq("20")
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(100)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(9)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(25)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "score:1"})
+              results = adapter.find(ctx)
+              results.map(&.["score"]).should eq([9_i64, 25_i64, 100_i64])
+            end
+
+            it "applies $sort correctly with mixed numbers (Int64 and Float64)" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"val" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"val" => Alumna::Testing::AdapterSuiteHelpers.any(9.5)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "val:1"})
+              adapter.find(ctx).map(&.["val"]).should eq([9.5_f64, 10_i64])
+            end
+
+            it "handles missing values in $sort gracefully" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("A"), "pos" => Alumna::Testing::AdapterSuiteHelpers.any(2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("B")} of String => Alumna::AnyData) # Missing pos
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "pos:1"})
+              results = adapter.find(ctx)
+              # Missing fields are evaluated as nil, so B should come before A
+              results.map(&.["name"]).should eq(["B", "A"])
             end
 
             it "applies $select" do
