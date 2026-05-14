@@ -22,6 +22,22 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 describe Alumna::Orchestrator do
+  describe ".run with start parameter" do
+    it "starts execution from the given index" do
+      log = [] of String
+      rules = [
+        continuing_rule(log, "a"),
+        continuing_rule(log, "b"),
+        continuing_rule(log, "c"),
+      ]
+
+      result = Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx, start: 1)
+
+      result.should be_true
+      log.should eq(["b", "c"])
+    end
+  end
+
   describe ".run with empty rule list" do
     it "returns true and leaves context unchanged" do
       ctx = Alumna::Testing.build_ctx

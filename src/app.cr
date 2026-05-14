@@ -41,12 +41,16 @@ module Alumna
           svc_a = service.collect_rules(m, RulePhase::After)
           app_a = collect_rules(m, RulePhase::After)
           service.set_after_pipeline(m, svc_a, app_a)
+
+          svc_e = service.collect_rules(m, RulePhase::Error)
+          app_e = collect_rules(m, RulePhase::Error)
+          service.set_error_pipeline(m, svc_e, app_e)
         end
       end
       @pipelines_compiled = true
     end
 
-    # Central dispatch using merged pipelines (2 Orchestrator calls)
+    # Central dispatch using merged pipelines
     def dispatch(service : Service, ctx : RuleContext) : RuleContext
       compile_pipelines! unless @pipelines_compiled
       m = ctx.method
@@ -59,8 +63,8 @@ module Alumna
       unless ok
         ctx.phase = RulePhase::Error
         # run service error only if stop happened in service part
-        Orchestrator.run(service.collect_rules(m, RulePhase::Error), ctx) unless stopped_in_app
-        Orchestrator.run(collect_rules(m, RulePhase::Error), ctx)
+        start_idx = stopped_in_app ? service.error_svc_len(m) : 0
+        Orchestrator.run(service.error_pipeline(m), ctx, start: start_idx)
         return ctx
       end
 
@@ -71,8 +75,7 @@ module Alumna
         if error
           ctx.error = error
           ctx.phase = RulePhase::Error
-          Orchestrator.run(service.collect_rules(m, RulePhase::Error), ctx)
-          Orchestrator.run(collect_rules(m, RulePhase::Error), ctx)
+          Orchestrator.run(service.error_pipeline(m), ctx)
           return ctx
         end
         ctx.result = result
@@ -83,8 +86,7 @@ module Alumna
       after_rules = service.after_pipeline(m)
       unless Orchestrator.run(after_rules, ctx)
         ctx.phase = RulePhase::Error
-        Orchestrator.run(service.collect_rules(m, RulePhase::Error), ctx)
-        Orchestrator.run(collect_rules(m, RulePhase::Error), ctx)
+        Orchestrator.run(service.error_pipeline(m), ctx)
       end
       ctx
     end

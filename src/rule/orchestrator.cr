@@ -1,7 +1,7 @@
 module Alumna
   module Orchestrator
-    def self.run(rules : Array(Rule), ctx : RuleContext, short_circuit = false) : Bool
-      i = 0
+    def self.run(rules : Array(Rule), ctx : RuleContext, short_circuit = false, *, start : Int32 = 0) : Bool
+      i = start
       size = rules.size
       while i < size
         if err = rules.unsafe_fetch(i).call(ctx)

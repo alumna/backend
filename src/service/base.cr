@@ -8,20 +8,21 @@ module Alumna
     # Merged pipelines built by App.use
     @before_pipeline : Array(Array(Rule))
     @after_pipeline : Array(Array(Rule))
+    @error_pipeline : Array(Array(Rule))
     @before_app_len : Array(Int32)
+    @error_svc_len : Array(Int32)
 
     def initialize(@schema : Schema? = nil)
       size = ServiceMethod.values.size
       @before_pipeline = Array.new(size) { [] of Rule }
       @after_pipeline = Array.new(size) { [] of Rule }
+      @error_pipeline = Array.new(size) { [] of Rule }
       @before_app_len = Array.new(size, 0)
+      @error_svc_len = Array.new(size, 0)
     end
 
     # ---- convenience helpers ----
 
-    # Returns a validation Rule for this service's schema.
-    # Use inside a service block: `before validate, on: :write`
-    # You can override with `validate(other_schema)` if needed.
     def validate(schema : Schema? = nil) : Rule
       s = schema || self.schema
       raise ArgumentError.new("validate requires a schema - service has none and none was passed") unless s
@@ -47,6 +48,12 @@ module Alumna
       @after_pipeline[method.value] = svc_rules + app_rules
     end
 
+    def set_error_pipeline(method : ServiceMethod, svc_rules : Array(Rule), app_rules : Array(Rule))
+      idx = method.value
+      @error_pipeline[idx] = svc_rules + app_rules
+      @error_svc_len[idx] = svc_rules.size
+    end
+
     def before_pipeline(method) : Array(Rule)
       @before_pipeline[method.value]
     end
@@ -55,8 +62,16 @@ module Alumna
       @after_pipeline[method.value]
     end
 
+    def error_pipeline(method) : Array(Rule)
+      @error_pipeline[method.value]
+    end
+
     def before_app_len(method) : Int32
       @before_app_len[method.value]
+    end
+
+    def error_svc_len(method) : Int32
+      @error_svc_len[method.value]
     end
 
     protected def call_method(ctx : RuleContext) : {ServiceResult, ServiceError?}
