@@ -151,11 +151,38 @@ UserSchema = Alumna::Schema.new
   .field("admin", :bool, required: false)
 ```
 
-**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable` (or `Alumna::FieldType::Str`, etc.)
+**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.)
 
 **Supported formats:** `:email`, `:url`, `:uuid` - these are built-in and backed by Crystal's stdlib (`URI.parse`, `UUID.parse`). Formats are resolved once when the schema is defined, so validation is a direct Proc call with no hash lookups at runtime.
 
 **Supported constraints:** `required`, `required_on`, `min_length`, `max_length`, `format`
+
+#### Nested fields (Objects and Arrays)
+
+Alumna fully supports validating nested JSON structures. You can define nested objects (`hash`) and arrays of either primitives or objects. 
+
+Under the hood, the validation engine walks the data tree using a zero-allocation path tracer, ensuring that deep validation remains incredibly fast.
+
+```crystal
+OrganizationSchema = Alumna::Schema.new
+  .str("name")
+  # Nested object
+  .hash("billing") do |sub|
+    sub.str("plan", min_length: 1)
+    sub.str("card_last_four", min_length: 4, max_length: 4)
+  end
+  # Array of primitives (min_length and max_length check the array's size)
+  .array("tags", of: :str, min_length: 1, max_length: 10)
+  # Array of nested objects
+  .array("members") do |sub|
+    sub.str("email", format: :email)
+    sub.str("role")
+  end
+```
+
+When a nested field fails validation, Alumna uses standard dot/bracket notation to explicitly tell the client exactly where the error occurred (e.g., `{"billing.plan": "is required"}`, or `{"members[0].email": "must be a valid email address"}`).
+
+#### Conditional Requirements
 
 `required_on` lets a field be required only for specific operations - perfect for PATCH:
 
