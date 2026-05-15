@@ -31,12 +31,12 @@ module Alumna
 
     # -----------------------------
 
-    abstract def find(ctx : RuleContext) : Array(Hash(String, AnyData))
-    abstract def get(ctx : RuleContext) : Hash(String, AnyData)?
-    abstract def create(ctx : RuleContext) : Hash(String, AnyData)
-    abstract def update(ctx : RuleContext) : Hash(String, AnyData)
-    abstract def patch(ctx : RuleContext) : Hash(String, AnyData)
-    abstract def remove(ctx : RuleContext) : Bool
+    abstract def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
+    abstract def get(ctx : RuleContext) : Hash(String, AnyData)? | ServiceError
+    abstract def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
+    abstract def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
+    abstract def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
+    abstract def remove(ctx : RuleContext) : Bool | ServiceError
 
     def set_before_pipeline(method : ServiceMethod, app_rules : Array(Rule), svc_rules : Array(Rule))
       idx = method.value
@@ -75,25 +75,29 @@ module Alumna
     end
 
     protected def call_method(ctx : RuleContext) : {ServiceResult, ServiceError?}
-      case ctx.method
-      when .find? then {find(ctx), nil}
-      when .get?
-        result = get(ctx)
-        raise ServiceError.not_found unless result
-        {result, nil}
-      when .create? then {create(ctx), nil}
-      when .update? then {update(ctx), nil}
-      when .patch?  then {patch(ctx), nil}
-      when .remove?
-        removed = {"removed" => remove(ctx)} of String => AnyData
-        {removed, nil}
-      when .options? then { {} of String => AnyData, nil }
+      result = case ctx.method
+               when .find?    then find(ctx)
+               when .get?     then get(ctx)
+               when .create?  then create(ctx)
+               when .update?  then update(ctx)
+               when .patch?   then patch(ctx)
+               when .remove?  then remove(ctx)
+               when .options? then {} of String => AnyData
+               else
+                 return {nil, ServiceError.internal("Unknown service method")}
+               end
+
+      if result.is_a?(ServiceError)
+        {nil, result}
+      elsif ctx.method.get? && result.nil?
+        {nil, ServiceError.not_found}
+      elsif ctx.method.remove? && result.is_a?(Bool)
+        { {"removed" => result} of String => AnyData, nil }
       else
-        {nil, ServiceError.internal("Unknown service method")}
+        {result.as(ServiceResult), nil}
       end
-    rescue ex : ServiceError
-      {nil, ex}
     rescue ex : Exception
+      # Catching raw Exception acts as a safety net for DB connection drops, math faults, etc.
       {nil, ServiceError.internal(ex.message || "Unexpected error")}
     end
   end

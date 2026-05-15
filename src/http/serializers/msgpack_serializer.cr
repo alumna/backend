@@ -15,7 +15,7 @@ module Alumna
         data.to_msgpack(io)
       end
 
-      def decode(io : IO) : Hash(String, AnyData)
+      def decode(io : IO) : Hash(String, AnyData) | ServiceError
         unpacker = MessagePack::IOUnpacker.new(io)
         result = {} of String => AnyData
         unpacker.consume_table do |key|
@@ -23,7 +23,7 @@ module Alumna
         end
         result
       rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
-        raise ServiceError.new("Malformed MessagePack", 400)
+        ServiceError.new("Malformed MessagePack", 400)
       end
 
       private def normalize(value : MessagePack::Type) : AnyData

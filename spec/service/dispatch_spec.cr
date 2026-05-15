@@ -9,17 +9,17 @@ private class TrackedService < Alumna::MemoryAdapter
     @called = [] of String
   end
 
-  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData))
+  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
     @called << "find"
     super
   end
 
-  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     @called << "create"
     super
   end
 
-  def update(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def update(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     @called << "update"
     super
   end

@@ -11,7 +11,7 @@ private def roundtrip(hash : Hash(String, Alumna::AnyData)) : Hash(String, Alumn
   io = IO::Memory.new
   json_serializer.encode(hash, io)
   io.rewind
-  json_serializer.decode(io)
+  json_serializer.decode(io).as(Hash(String, Alumna::AnyData))
 end
 
 # Encodes a hash and returns the raw JSON string for structural assertions.
@@ -108,14 +108,20 @@ describe Alumna::Http::JsonSerializer do
   # ── decode: malformed input ───────────────────────────────────────────────────
 
   describe "#decode with malformed input" do
-    it "raises ServiceError for invalid JSON" do
+    it "returns ServiceError for invalid JSON" do
       io = IO::Memory.new("not valid json")
-      expect_raises(Alumna::ServiceError) { json_serializer.decode(io) }
+      result = json_serializer.decode(io)
+
+      result.should be_a(Alumna::ServiceError)
+      result.as(Alumna::ServiceError).status.should eq(400)
     end
 
-    it "raises ServiceError for an empty body" do
+    it "returns ServiceError for an empty body" do
       io = IO::Memory.new("")
-      expect_raises(Alumna::ServiceError) { json_serializer.decode(io) }
+      result = json_serializer.decode(io)
+
+      result.should be_a(Alumna::ServiceError)
+      result.as(Alumna::ServiceError).status.should eq(400)
     end
   end
 end

@@ -14,22 +14,6 @@ describe Alumna::ServiceError do
       err.status.should eq(400)
       err.details.empty?.should be_true
     end
-
-    it "is an Exception" do
-      err = Alumna::ServiceError.new("x")
-      (err.is_a?(Exception)).should be_true
-    end
-
-    it "can be raised and rescued" do
-      rescued = false
-      begin
-        raise Alumna::ServiceError.new("test", 400)
-      rescue ex : Alumna::ServiceError
-        rescued = true
-        ex.message.should eq("test")
-      end
-      rescued.should be_true
-    end
   end
 
   describe ".bad_request" do

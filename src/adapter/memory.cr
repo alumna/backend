@@ -123,7 +123,7 @@ module Alumna
       end
     end
 
-    def find(ctx : RuleContext) : Array(Hash(String, AnyData))
+    def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
       @mutex.synchronize do
         q = ctx.query
         records = @store.values
@@ -171,7 +171,7 @@ module Alumna
       end
     end
 
-    def get(ctx : RuleContext) : Hash(String, AnyData)?
+    def get(ctx : RuleContext) : Hash(String, AnyData)? | ServiceError
       @mutex.synchronize do
         id = ctx.id
         return nil if id.nil?
@@ -179,7 +179,7 @@ module Alumna
       end
     end
 
-    def create(ctx : RuleContext) : Hash(String, AnyData)
+    def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
       @mutex.synchronize do
         id = @next_id.to_s
         @next_id += 1
@@ -190,10 +190,12 @@ module Alumna
       end
     end
 
-    def update(ctx : RuleContext) : Hash(String, AnyData)
+    def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
       @mutex.synchronize do
-        id = ctx.id || raise ServiceError.bad_request("ID required for update")
-        raise ServiceError.not_found unless @store.has_key?(id)
+        id = ctx.id
+        return ServiceError.bad_request("ID required for update") unless id
+        return ServiceError.not_found unless @store.has_key?(id)
+
         record = ctx.data.dup
         record["id"] = id
         @store[id] = record
@@ -201,10 +203,14 @@ module Alumna
       end
     end
 
-    def patch(ctx : RuleContext) : Hash(String, AnyData)
+    def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
       @mutex.synchronize do
-        id = ctx.id || raise ServiceError.bad_request("ID required for patch")
-        existing = @store[id]? || raise ServiceError.not_found
+        id = ctx.id
+        return ServiceError.bad_request("ID required for patch") unless id
+
+        existing = @store[id]?
+        return ServiceError.not_found unless existing
+
         record = existing.merge(ctx.data)
         record["id"] = id
         @store[id] = record
@@ -212,9 +218,10 @@ module Alumna
       end
     end
 
-    def remove(ctx : RuleContext) : Bool
+    def remove(ctx : RuleContext) : Bool | ServiceError
       @mutex.synchronize do
-        id = ctx.id || raise ServiceError.bad_request("ID required for remove")
+        id = ctx.id
+        return ServiceError.bad_request("ID required for remove") unless id
         !@store.delete(id).nil?
       end
     end

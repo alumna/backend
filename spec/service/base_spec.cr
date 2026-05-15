@@ -6,27 +6,27 @@ private class ExplodingService < Alumna::Service
     super()
   end
 
-  def find(ctx) : Array(Hash(String, Alumna::AnyData))
+  def find(ctx) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
     raise "kaboom"
   end
 
-  def get(ctx) : Hash(String, Alumna::AnyData)?
+  def get(ctx) : Hash(String, Alumna::AnyData)? | Alumna::ServiceError
     raise Exception.new
   end
 
-  def create(ctx) : Hash(String, Alumna::AnyData)
+  def create(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {} of String => Alumna::AnyData
   end
 
-  def update(ctx) : Hash(String, Alumna::AnyData)
+  def update(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {} of String => Alumna::AnyData
   end
 
-  def patch(ctx) : Hash(String, Alumna::AnyData)
+  def patch(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {} of String => Alumna::AnyData
   end
 
-  def remove(ctx) : Bool
+  def remove(ctx) : Bool | Alumna::ServiceError
     true
   end
 end

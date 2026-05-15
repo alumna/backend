@@ -674,32 +674,32 @@ class PostgresUserService < Alumna::Service
     self.before(Authenticate)
   end
 
-  def find(ctx : RuleContext) : Array(Hash(String, AnyData))
+  def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
     # query @db using ctx.query.filters, limit, skip, and sort
     [] of Hash(String, AnyData)
   end
 
-  def get(ctx : RuleContext) : Hash(String, AnyData)?
+  def get(ctx : RuleContext) : Hash(String, AnyData)? | ServiceError
     # query @db using ctx.id
     nil
   end
 
-  def create(ctx : RuleContext) : Hash(String, AnyData)
+  def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # insert ctx.data into @db, return the created record
     {} of String => AnyData
   end
 
-  def update(ctx : RuleContext) : Hash(String, AnyData)
+  def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # full replace of ctx.id with ctx.data
     {} of String => AnyData
   end
 
-  def patch(ctx : RuleContext) : Hash(String, AnyData)
+  def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # partial update of ctx.id with ctx.data
     {} of String => AnyData
   end
 
-  def remove(ctx : RuleContext) : Bool
+  def remove(ctx : RuleContext) : Bool | ServiceError
     # delete record at ctx.id, return true if deleted
     false
   end

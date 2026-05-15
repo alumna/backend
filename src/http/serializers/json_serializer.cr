@@ -15,17 +15,17 @@ module Alumna
         data.to_json(io)
       end
 
-      def decode(io : IO) : Hash(String, AnyData)
+      def decode(io : IO) : Hash(String, AnyData) | ServiceError
         parsed = JSON.parse(io)
         result = convert(parsed)
 
         unless result.is_a?(Hash)
-          raise ServiceError.new("Request body must be a JSON object", 400)
+          return ServiceError.new("Request body must be a JSON object", 400)
         end
 
         result.as(Hash(String, AnyData))
       rescue JSON::ParseException
-        raise ServiceError.new("Malformed JSON", 400)
+        ServiceError.new("Malformed JSON", 400)
       end
 
       private def convert(value : JSON::Any) : AnyData

@@ -8,7 +8,7 @@ class IpEchoService < Alumna::MemoryAdapter
     super(Alumna::Schema.new)
   end
 
-  def find(ctx) : Array(Hash(String, Alumna::AnyData))
+  def find(ctx) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
     [{"ip" => ctx.remote_ip} of String => Alumna::AnyData]
   end
 end
