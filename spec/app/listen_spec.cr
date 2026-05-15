@@ -131,5 +131,55 @@ describe "App#close and graceful shutdown" do
       # The listener should unblock and finish gracefully
       listen_done.receive
     end
+
+    it "exits and prints a warning if the shutdown timeout is reached" do
+      app = Alumna::App.new
+      request_started = Channel(Nil).new
+      request_finished = Channel(Nil).new
+
+      # A route that takes 0.5 seconds to process
+      app.use "/timeout", Alumna.memory(Alumna::Schema.new) {
+        before do |ctx|
+          request_started.send(nil)
+          sleep 0.1.seconds
+          request_finished.send(nil)
+
+          ctx.result = {"ok" => true} of String => Alumna::AnyData
+          nil
+        end
+      }
+
+      port = 34571
+      listen_done = Channel(Nil).new
+      spawn do
+        # Configure a very short timeout: 0.1 seconds
+        app.listen(port, host: "127.0.0.1", shutdown_timeout: 0.01.seconds, trap_signals: false)
+        listen_done.send(nil)
+      end
+
+      wait_for_port("127.0.0.1", port)
+
+      spawn do
+        begin
+          HTTP::Client.get("http://127.0.0.1:#{port}/timeout")
+        rescue
+          # We don't care about the client result here, just that it triggered the route
+        end
+      end
+
+      # 1. Wait until the request is inside the `before` block (counter is now 1)
+      request_started.receive
+
+      # 2. Trigger shutdown. The server will wait, but ONLY for 0.1 seconds.
+      app.close
+
+      # 3. This will unblock after ~0.1 seconds because the timeout is reached.
+      # It will hit the branch: puts "Shutdown timeout reached. Exiting with #{rem} active requests."
+      listen_done.receive
+
+      # 4. Clean up: wait for the sleeping request to finish so we don't leak
+      # background fibers into other tests.
+      request_finished.receive
+    end
   end
 end

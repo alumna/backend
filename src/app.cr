@@ -174,7 +174,9 @@ module Alumna
       end
 
       begin
+        # LCOV_EXCL_START - kcov wrongly misses this block
         server.listen # Blocks until server.close is called, or an error occurs
+        # LCOV_EXCL_STOP
       ensure
         if trap_signals
           Signal::INT.reset
