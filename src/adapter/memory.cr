@@ -1,6 +1,3 @@
-# ================================================
-# FILE: src/adapter/memory.cr
-# ================================================
 module Alumna
   class MemoryAdapter < Service
     @store : Hash(String, Hash(String, AnyData))

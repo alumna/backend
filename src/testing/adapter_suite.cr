@@ -120,15 +120,58 @@ module Alumna
               results.first["role"].should eq("user")
             end
 
-            it "filters records using $gt and $lt operators" do
+            it "filters records using $gt and $lt operators on Int64" do
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(20)} of String => Alumna::AnyData)
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData)
+
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "15", "age[$lt]" => "25"})
               results = adapter.find(ctx)
               results.size.should eq(1)
               results.first["age"].should eq(20)
+
+              # Test invalid integer parsing gracefully falling back
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "abc"})
+              adapter.find(ctx2).should be_empty
+            end
+
+            it "filters records using $gt and $lt operators on Float64" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(3.5)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(4.5)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(5.0)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"rating[$gt]" => "4.0", "rating[$lt]" => "4.9"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["rating"].should eq(4.5)
+
+              # Test invalid float parsing gracefully falling back
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"rating[$gt]" => "abc"})
+              adapter.find(ctx2).should be_empty
+            end
+
+            it "filters records using $gt and $lt operators on Bool" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"active" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"active" => Alumna::Testing::AdapterSuiteHelpers.any(false)} of String => Alumna::AnyData)
+
+              # true (1) > false (0)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$gt]" => "false"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["active"].should eq(true)
+
+              # false (0) < true (1)
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$lt]" => "true"})
+              results2 = adapter.find(ctx2)
+              results2.size.should eq(1)
+              results2.first["active"].should eq(false)
+
+              # Test invalid bool parsing gracefully falling back
+              ctx3 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$gt]" => "not-a-bool"})
+              adapter.find(ctx3).should be_empty
             end
 
             it "filters strings using $gt operator lexicographically" do
