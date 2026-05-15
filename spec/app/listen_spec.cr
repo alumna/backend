@@ -87,4 +87,49 @@ describe "App#close and graceful shutdown" do
     # Proof 2: The listen loop unblocked and gracefully exited.
     listen_done.receive
   end
+
+  describe "App signals and graceful shutdown" do
+    it "traps SIGINT to trigger shutdown" do
+      app = Alumna::App.new
+      port = 34569
+      listen_done = Channel(Nil).new
+
+      spawn do
+        # trap_signals is true by default, but we pass it explicitly for clarity
+        app.listen(port, host: "127.0.0.1", trap_signals: true)
+        listen_done.send(nil)
+      end
+
+      # Wait for the server to be fully booted. This guarantees that
+      # Signal::INT.trap has already been successfully registered.
+      wait_for_port("127.0.0.1", port)
+
+      # Send SIGINT (Ctrl+C) to the current process (the spec runner).
+      # Because we trapped it, this will safely invoke our `trap_handler`,
+      # print the shutdown message, and call `app.close` without killing the test suite!
+      Process.signal(Signal::INT, Process.pid)
+
+      # The listener should unblock and finish gracefully
+      listen_done.receive
+    end
+
+    it "traps SIGTERM to trigger shutdown" do
+      app = Alumna::App.new
+      port = 34570
+      listen_done = Channel(Nil).new
+
+      spawn do
+        app.listen(port, host: "127.0.0.1", trap_signals: true)
+        listen_done.send(nil)
+      end
+
+      wait_for_port("127.0.0.1", port)
+
+      # Send SIGTERM. This ensures the second block in `src/app.cr` is covered.
+      Process.signal(Signal::TERM, Process.pid)
+
+      # The listener should unblock and finish gracefully
+      listen_done.receive
+    end
+  end
 end
