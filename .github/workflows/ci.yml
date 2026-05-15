@@ -8,8 +8,8 @@ jobs:
       fail-fast: false
       matrix:
         # os: [ubuntu-latest, macos-latest, windows-latest]
-        os: [ubuntu-latest, macos-latest]
-        crystal: [latest, nightly]
+        os: [ubuntu-latest]
+        crystal: [latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4

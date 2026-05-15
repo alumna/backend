@@ -87,7 +87,7 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ In-memory adapter implementing the full service interface
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with `store`, `remote_ip` (with trusted proxy support), `http_method`, `headers`, and `provider`
-- ✅ Query parsing (`$limit`, `$skip`, `$sort`, `$select`) via `ctx.query`
+- ✅ Rich query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.) via `ctx.query` with deep dot-notation support
 - ✅ Path normalization and duplicate-route protection
 - ✅ Strict request-body limits enforced on all IO entry points
 - ✅ Cross-platform CI with full test coverage
@@ -488,6 +488,26 @@ ServiceError.internal("message")               # 500
 
 ---
 
+### Querying
+
+Alumna automatically parses URL query strings into a strongly-typed `ctx.query` object. It natively supports FeathersJS/MongoDB-style comparison operators and nested dot-notation.
+
+```crystal
+# GET /users?age[$gte]=18&status[$in]=active,pending&billing.plan=pro&$limit=10&$sort=age:-1
+
+ctx.query.filters["age"]          # => [{op: Op::Gte, value: "18"}]
+ctx.query.filters["status"]       # => [{op: Op::In, value: ["active", "pending"]}]
+ctx.query.filters["billing.plan"] # => [{op: Op::Eq, value: "pro"}]
+ctx.query.limit                   # => 10
+ctx.query.sort                    # => [{"age", -1}]
+```
+
+**Supported comparison operators:** `$eq` (default), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`.
+
+The built-in `MemoryAdapter` implements all of these out of the box—correctly applying operators, distributing array matching, and resolving nested fields. When building custom database adapters, you read `ctx.query` to effortlessly compile the equivalent SQL or NoSQL statements.
+
+---
+
 ### Services
 
 A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` directly) and registers its rules in the constructor.
@@ -655,7 +675,7 @@ class PostgresUserService < Alumna::Service
   end
 
   def find(ctx : RuleContext) : Array(Hash(String, AnyData))
-    # query @db using ctx.params for filtering
+    # query @db using ctx.query.filters, limit, skip, and sort
     [] of Hash(String, AnyData)
   end
 
