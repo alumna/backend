@@ -2,7 +2,6 @@ require "spec"
 
 module Alumna
   module Testing
-    # Helper methods used internally by the AdapterSuite to avoid polluting the spec namespace
     module AdapterSuiteHelpers
       def self.any(v : String) : AnyData
         v
@@ -31,8 +30,6 @@ module Alumna
     end
 
     module AdapterSuite
-      # A macro that injects the universal behavioral tests for any Alumna::Service adapter.
-      # It accepts a string name and a block that initializes and returns a fresh instance of the adapter.
       macro run(name, &factory)
         describe {{name}} do
           describe "#create" do
@@ -69,7 +66,7 @@ module Alumna
             end
           end
 
-          describe "#find" do
+          describe "#find (filtering)" do
             it "returns an empty array when the store is empty" do
               adapter = {{factory.body}}
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
@@ -113,6 +110,103 @@ module Alumna
               adapter.find(ctx).should be_empty
             end
 
+            it "filters records using $ne operator" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"role[$ne]" => "admin"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["role"].should eq("user")
+            end
+
+            it "filters records using $gt and $lt operators" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(20)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "15", "age[$lt]" => "25"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["age"].should eq(20)
+            end
+
+            it "filters strings using $gt operator lexicographically" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"letter" => Alumna::Testing::AdapterSuiteHelpers.any("a")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"letter" => Alumna::Testing::AdapterSuiteHelpers.any("b")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"letter" => Alumna::Testing::AdapterSuiteHelpers.any("c")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"letter[$gt]" => "a", "letter[$lt]" => "c"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["letter"].should eq("b")
+            end
+
+            it "filters records using $gte and $lte operators" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(20)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gte]" => "20", "age[$lte]" => "30"})
+              results = adapter.find(ctx)
+              results.size.should eq(2)
+              results.map(&.["age"]).should eq([20_i64, 30_i64])
+            end
+
+            it "filters records using $in operator" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("pending")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("active")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("archived")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"status[$in]" => "pending,active"})
+              results = adapter.find(ctx)
+              results.size.should eq(2)
+              results.map(&.["status"]).should eq(["pending", "active"])
+            end
+
+            it "filters records using $nin operator" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("pending")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("active")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("archived")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"status[$nin]" => "pending,active"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["status"].should eq("archived")
+            end
+
+            it "filters records by nested fields using dot notation" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Bob"), "age" => Alumna::Testing::AdapterSuiteHelpers.any(40)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"user.name" => "Bob"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["user"].as(Hash(String, Alumna::AnyData))["name"].should eq("Bob")
+            end
+
+            it "filters array fields where an element matches the condition" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("tech"), Alumna::Testing::AdapterSuiteHelpers.any("science")] of Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("art")] of Alumna::AnyData} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"tags" => "tech"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["tags"].as(Array(Alumna::AnyData)).first.should eq("tech")
+            end
+
+            it "filters array fields where no element matches $ne" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("tech"), Alumna::Testing::AdapterSuiteHelpers.any("science")] of Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("art")] of Alumna::AnyData} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"tags[$ne]" => "tech"})
+              results = adapter.find(ctx)
+              results.size.should eq(1)
+              results.first["tags"].as(Array(Alumna::AnyData)).first.should eq("art")
+            end
+          end
+
+          describe "#find (sorting and limit/skip)" do
             it "applies $limit and $skip" do
               adapter = {{factory.body}}
               5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"n" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
@@ -143,10 +237,9 @@ module Alumna
             it "handles missing values in $sort gracefully" do
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("A"), "pos" => Alumna::Testing::AdapterSuiteHelpers.any(2)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("B")} of String => Alumna::AnyData) # Missing pos
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("B")} of String => Alumna::AnyData)
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "pos:1"})
               results = adapter.find(ctx)
-              # Missing fields are evaluated as nil, so B should come before A
               results.map(&.["name"]).should eq(["B", "A"])
             end
 
@@ -163,22 +256,26 @@ module Alumna
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"flag" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"flag" => Alumna::Testing::AdapterSuiteHelpers.any(false)} of String => Alumna::AnyData)
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "flag:1"})
-              # false is 0, true is 1. So false comes before true.
               adapter.find(ctx).map(&.["flag"]).should eq([false, true])
             end
 
             it "applies $sort using string fallback for mismatched types or complex structures" do
               adapter = {{factory.body}}
-              # Insert a string, an integer, and an array to trigger the fallback
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"mixed" => Alumna::Testing::AdapterSuiteHelpers.any("10")} of String => Alumna::AnyData)
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"mixed" => Alumna::Testing::AdapterSuiteHelpers.any(2)} of String => Alumna::AnyData)
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"mixed" => [Alumna::Testing::AdapterSuiteHelpers.any(1)] of Alumna::AnyData} of String => Alumna::AnyData)
-
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "mixed:1"})
-
-              # Fallback uses to_s: "10", "2", and "[1]"
-              # Lexicographically: "10" < "2" < "[1]"
               adapter.find(ctx).map(&.["mixed"]).should eq(["10", 2_i64, [1_i64] of Alumna::AnyData])
+            end
+
+            it "sorts records by nested fields using dot notation" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"age" => Alumna::Testing::AdapterSuiteHelpers.any(40)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "user.age:1"})
+              results = adapter.find(ctx)
+              results.size.should eq(2)
+              results.first["user"].as(Hash(String, Alumna::AnyData))["age"].should eq(30)
             end
 
             it "applies $select" do
@@ -188,7 +285,7 @@ module Alumna
               rec = adapter.find(ctx).first
               rec.has_key?("a").should be_true
               rec.has_key?("b").should be_false
-              rec.has_key?("id").should be_true # id always preserved
+              rec.has_key?("id").should be_true
             end
 
             it "applies $select when id is explicitly requested" do
