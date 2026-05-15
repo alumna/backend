@@ -1,5 +1,25 @@
 # Alumna Backend changelog
 
+## 0.5.0 - 2026-05-18
+
+### Added
+* **schema:** introduced nested field validation. The `Schema` now fully supports nested objects via `.hash` and arrays (of both primitives and nested objects) via `.array`.
+* **app:** graceful shutdown. `app.listen` now safely traps `SIGINT` and `SIGTERM`, waiting for active requests to finish before exiting, with a configurable `shutdown_timeout`.
+* **app:** automatic multi-thread worker configuration when compiling with `-Dpreview_mt` and `-Dexecution_context`.
+* **query:** comprehensive comparison operators. `Alumna::Query` now natively parses `$gt`, `$gte`, `$lt`, `$lte`, `$ne`, `$in`, and `$nin`.
+* **tests:** CI/CD now tests the framework in both single-threaded and multi-threaded (`-Dpreview_mt`) environments.
+
+### Changed
+* **service:** eliminated Exception allocation on the hot path. `Service#call_method` now returns a `{ServiceResult, ServiceError?}` tuple instead of raising `ServiceError` for expected control flow (like 404s).
+* **context:** resolved semantic ambiguity around `nil` results. Added an explicit `@result_set` flag to `RuleContext` so that a rule intentionally returning `nil` is indistinguishable from an unset result.
+* **app:** `compile_pipelines!` is now strictly thread-safe. Secured with a `Sync::Mutex` to prevent race conditions during boot under multi-threaded environments.
+
+### Fixed
+* **adapter:** `MemoryAdapter#find` now uses type-aware comparison for `$sort`. Integers, floats, and booleans are sorted correctly by their actual values instead of falling back to lexicographic string sorting. Mismatched types safely fall back to string comparison.
+
+### Performance
+* **rules:** error pipelines are now pre-compiled at boot. Previously, error rules were collected dynamically on every error path. Now they share the exact same pre-compiled array walk as the `before` and `after` phases, ensuring symmetrical behavior and zero runtime allocations.
+
 ## 0.4.3 - 2026-05-11
 
 ### Changed
