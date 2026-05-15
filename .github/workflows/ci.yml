@@ -1,6 +1,24 @@
 name: Crystal CI
 
-on: [push, pull_request]
+on:
+  # Triggers when a PR is opened or updated
+  pull_request:
+    branches:
+      - main
+
+  # Triggers when code is merged to main, OR directly pushed to main
+  push:
+    branches:
+      - main
+    # Do not trigger a run if the ONLY changes are to these files:
+    paths-ignore:
+      - '**.md'      # Ignores README.md, CHANGELOG.md, etc.
+      - 'LICENSE'
+
+# Automatically cancel in-progress runs if a new commit is pushed to the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
