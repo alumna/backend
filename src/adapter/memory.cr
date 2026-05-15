@@ -158,7 +158,9 @@ module Alumna
 
         # 4) select
         if fields = q.select
+          # LCOV_EXCL_START - kcov wrongly misses.map
           records.map do |rec|
+            # LCOV_EXCL_STOP
             selected = rec.select(fields)
             selected["id"] = rec["id"] if rec["id"]? && !selected.has_key?("id")
             selected
