@@ -790,41 +790,36 @@ If you are writing a custom database adapter, you can also use `Alumna::Testing:
 
 ## Roadmap
 
-### v0.5 - Security and authentication
+### v0.6 - Security and authentication
 - JWT authentication helper rule
 - session authentication helper rule
 
-### v0.6 - First real database adapter: SQLite
+### v0.7 - First real database adapter: SQLite
 - SQLite adapter for lightweight single-file deployments
 - Using [crystal-sqlite3](https://github.com/crystal-lang/crystal-sqlite3)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.7 - MySQl and PostgreSQL database adapters
+### v0.8 - MySQl and PostgreSQL database adapters
 - MySQl adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-mysql](https://github.com/crystal-lang/crystal-mysql)
 - PostgreSQL adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-pg](https://github.com/will/crystal-pg)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.8 - Real-time events via WebSocket
+### v0.9 - Real-time events via WebSocket
 - Emit service events automatically after successful mutations (`created`, `updated`, `patched`, `removed`)
 - Allow clients to subscribe to specific service paths over a WebSocket connection
 - Rules gain access to an `event` field on the context to suppress or transform events before they are emitted
 - Provider field on context already distinguishes `"rest"` from `"websocket"` in preparation for this
 
-### v0.9 - Redis adapter for cache
+### v0.10 - Redis adapter for cache
 - Redis adapter using [jgaskins/redis](https://github.com/jgaskins/redis)
 
-### v0.10 - NATS integration for horizontal scaling
+### v0.11 - NATS integration for horizontal scaling
 - Stateless service instances publish events to NATS subjects mirroring the service path and method (e.g. `alumna.users.created`)
 - WebSocket gateway subscribes to NATS and fans events out to connected clients
 - Enables multiple Alumna instances behind a load balancer to correctly propagate real-time events across all nodes
 - NATS chosen over AMQP for operational simplicity and natural subject-based routing
-
-### v0.11 - Automated test helpers
-- `Alumna::Testing::ServiceClient` - call service methods directly without an HTTP layer, for fast unit tests
-- `Alumna::Testing::RuleRunner` - execute a single rule against a fabricated context and assert on the result
-- Spec helpers for asserting on context state after dispatch
 
 
 
@@ -850,6 +845,9 @@ alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
 ```
 
 This lets every layer - context, services, rules, and serializers - work with native Crystal values instead of a wrapper type. The responder can dispatch on the actual type, MessagePack serializes without unwrapping, and validation errors flow through as plain hashes. It removes the `JSON::Any` dependency from the core, makes the context format-agnostic, and gives the compiler full visibility into data shapes for better errors and zero-cost abstractions.
+
+**Why is `ServiceError` a struct instead of an Exception?** 
+In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type (e.g., `Hash | ServiceError`), Alumna achieves zero-allocation error paths. Expected API control flow (like a missing record or invalid input) never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
 
 **Why Crystal?** Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. AOT compilation and a single binary output that eliminates runtime dependency management at deploy time. Performance that competes with Go, C and Rust _(see [LangArena](https://kostya.github.io/LangArena/))_ without sacrificing readability. The type system catches a large class of bugs at compile time that dynamic languages surface only in production.
 
