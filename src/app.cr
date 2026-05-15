@@ -173,10 +173,10 @@ module Alumna
         STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
       end
 
+      # LCOV_EXCL_START - kcov wrongly misses this block
       begin
-        # LCOV_EXCL_START - kcov wrongly misses this block
-        server.listen # Blocks until server.close is called, or an error occurs
         # LCOV_EXCL_STOP
+        server.listen # Blocks until server.close is called, or an error occurs
       ensure
         if trap_signals
           Signal::INT.reset
