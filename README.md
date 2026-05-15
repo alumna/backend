@@ -2,7 +2,7 @@
 
 # Alumna
 
-A minimalist, service-oriented backend framework for [Crystal](https://crystal-lang.org), inspired by the core architecture of [FeathersJS](https://feathersjs.com) and designed around three ideas: simplicity, explicitness, and performance.
+A minimalist, service-oriented backend framework for [Crystal](https://crystal-lang.org), inspired by Service Oriented Architecture (SOA) from frameworks like FeathersJS and designed around three ideas: simplicity, explicitness, and performance.
 
 ## Backend can be simple
 
