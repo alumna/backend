@@ -4,12 +4,12 @@ on:
   # Triggers when a PR is opened or updated
   pull_request:
     branches:
-      - main
+      - master
 
   # Triggers when code is merged to main, OR directly pushed to main
   push:
     branches:
-      - main
+      - master
     # Do not trigger a run if the ONLY changes are to these files:
     paths-ignore:
       - '**.md'      # Ignores README.md, CHANGELOG.md, etc.
