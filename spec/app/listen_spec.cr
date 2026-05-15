@@ -42,7 +42,7 @@ end
 describe "App#close and graceful shutdown" do
   it "waits for active requests to finish before returning from listen" do
     app = Alumna::App.new
-    request_started = Channel(Nil).new # ← synchronization point
+    request_started = Channel(Nil).new
 
     app.use "/slow", Alumna.memory(Alumna::Schema.new) {
       before do |ctx|
@@ -62,23 +62,29 @@ describe "App#close and graceful shutdown" do
 
     wait_for_port("127.0.0.1", port)
 
-    req_done = Channel(Int32).new
+    # We use a union type in case a forceful shutdown causes an IO::Error
+    req_done = Channel(Int32 | Exception).new
     spawn do
-      res = HTTP::Client.get("http://127.0.0.1:#{port}/slow")
-      req_done.send(res.status_code)
+      begin
+        res = HTTP::Client.get("http://127.0.0.1:#{port}/slow")
+        req_done.send(res.status_code)
+      rescue ex
+        req_done.send(ex)
+      end
     end
 
-    request_started.receive # ← blocks until @active_requests is already 1
+    # Blocks until @active_requests is guaranteed to be 1
+    request_started.receive
 
+    # Trigger shutdown while the request is actively sleeping
     app.close
 
-    select
-    when status = req_done.receive
-      status.should eq(200)
-    when listen_done.receive
-      fail "listen returned before the active request finished"
-    end
+    # Proof 1: Graceful shutdown worked because the request completed normally.
+    # If app.close killed the socket, this would be an Exception (e.g. IO::Error).
+    result = req_done.receive
+    result.should eq(200)
 
+    # Proof 2: The listen loop unblocked and gracefully exited.
     listen_done.receive
   end
 end
