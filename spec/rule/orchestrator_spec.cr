@@ -22,6 +22,22 @@ end
 # ─────────────────────────────────────────────────────────────────────────────
 
 describe Alumna::Orchestrator do
+  describe ".run with start parameter" do
+    it "starts execution from the given index" do
+      log = [] of String
+      rules = [
+        continuing_rule(log, "a"),
+        continuing_rule(log, "b"),
+        continuing_rule(log, "c"),
+      ]
+
+      result = Alumna::Orchestrator.run(rules, Alumna::Testing.build_ctx, start: 1)
+
+      result.should be_true
+      log.should eq(["b", "c"])
+    end
+  end
+
   describe ".run with empty rule list" do
     it "returns true and leaves context unchanged" do
       ctx = Alumna::Testing.build_ctx
@@ -152,6 +168,19 @@ describe Alumna::Orchestrator do
 
       ctx.result_set?.should be_true
       ctx.result.as(Hash(String, Alumna::AnyData))["cached"].should eq(true)
+    end
+
+    it "short-circuits even if the result is explicitly set to nil" do
+      rule = Alumna::Rule.new do |ctx|
+        ctx.result = nil
+        nil.as(Alumna::ServiceError?)
+      end
+      ctx = Alumna::Testing.build_ctx(phase: Alumna::RulePhase::Before)
+
+      Alumna::Orchestrator.run([rule], ctx, short_circuit: true)
+
+      ctx.result_set?.should be_true
+      ctx.result.should be_nil
     end
   end
 

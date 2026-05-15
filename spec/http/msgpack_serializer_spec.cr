@@ -11,7 +11,7 @@ private def roundtrip(hash : Hash(String, Alumna::AnyData)) : Hash(String, Alumn
   io = IO::Memory.new
   msgpack_serializer.encode(hash, io)
   io.rewind
-  msgpack_serializer.decode(io)
+  msgpack_serializer.decode(io).as(Hash(String, Alumna::AnyData))
 end
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -100,14 +100,20 @@ describe Alumna::Http::MsgpackSerializer do
   # ── decode: malformed input ───────────────────────────────────────────────────
 
   describe "#decode with malformed input" do
-    it "returns an empty hash for garbage bytes" do
+    it "returns a ServiceError for garbage bytes" do
       io = IO::Memory.new(Bytes[0xFF, 0xFE, 0x00, 0x01])
-      expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
+      result = msgpack_serializer.decode(io)
+
+      result.should be_a(Alumna::ServiceError)
+      result.as(Alumna::ServiceError).status.should eq(400)
     end
 
-    it "raises ServiceError for an empty body" do
+    it "returns a ServiceError for an empty body" do
       io = IO::Memory.new
-      expect_raises(Alumna::ServiceError) { msgpack_serializer.decode(io) }
+      result = msgpack_serializer.decode(io)
+
+      result.should be_a(Alumna::ServiceError)
+      result.as(Alumna::ServiceError).status.should eq(400)
     end
   end
 

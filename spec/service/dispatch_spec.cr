@@ -9,17 +9,17 @@ private class TrackedService < Alumna::MemoryAdapter
     @called = [] of String
   end
 
-  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData))
+  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
     @called << "find"
     super
   end
 
-  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def create(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     @called << "create"
     super
   end
 
-  def update(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData)
+  def update(ctx : Alumna::RuleContext) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     @called << "update"
     super
   end
@@ -244,6 +244,16 @@ describe "Dispatch" do
     it "does not call the service method" do
       service = TrackedService.new
       service.before(result_setting_rule("cached"))
+      dispatch(service, Alumna::ServiceMethod::Find)
+      service.called.should be_empty
+    end
+
+    it "short-circuits even if the result is explicitly set to nil" do
+      service = TrackedService.new
+      service.before(Alumna::Rule.new do |ctx|
+        ctx.result = nil
+        nil.as(Alumna::ServiceError?)
+      end)
       dispatch(service, Alumna::ServiceMethod::Find)
       service.called.should be_empty
     end

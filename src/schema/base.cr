@@ -9,6 +9,8 @@ module Alumna
     getter format_name : String?
     getter format_validator : Proc(String, Bool)?
     getter format_message : String?
+    getter sub_schema : Schema?
+    getter element_type : FieldType?
 
     def initialize(
       @name : String,
@@ -20,12 +22,14 @@ module Alumna
       @format_validator : Proc(String, Bool)? = nil,
       @format_message : String? = nil,
       @required_on : Array(ServiceMethod)? = nil,
+      @sub_schema : Schema? = nil,
+      @element_type : FieldType? = nil,
     )
     end
   end
 
   enum FieldType
-    Str; Int; Float; Bool; Nullable
+    Str; Int; Float; Bool; Nullable; Hash; Array
   end
 
   class Schema
@@ -35,7 +39,6 @@ module Alumna
       @fields = [] of FieldDescriptor
     end
 
-    # Core API - accepts Symbols for ergonomics
     def field(
       name : String,
       type : FieldType | Symbol,
@@ -44,11 +47,11 @@ module Alumna
       max_length : Int32? = nil,
       format : Symbol | String | Nil = nil,
       required_on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil,
+      sub_schema : Schema? = nil,
+      element_type : FieldType? = nil,
     ) : self
-      # normalize :str → FieldType::Str
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
 
-      # normalize format to downcased string, resolve validator once
       format_name = nil
       format_validator = nil
       format_message = nil
@@ -69,7 +72,6 @@ module Alumna
         end
       end
 
-      # normalize :create → [ServiceMethod::Create], also accepts single symbol
       norm_required_on = case required_on
                          in Nil
                            nil
@@ -93,11 +95,13 @@ module Alumna
         format_validator: format_validator,
         format_message: format_message,
         required_on: norm_required_on,
+        sub_schema: sub_schema,
+        element_type: element_type
       )
       self
     end
 
-    # --- tiny helpers for readability ---
+    # --- Standard helpers ---
     def str(name, **opts)
       field(name, :str, **opts)
     end
@@ -118,7 +122,28 @@ module Alumna
       field(name, :nullable, **opts)
     end
 
-    # optional block-style builder
+    # --- Nested helpers ---
+
+    # For objects/hashes
+    def hash(name : String, **opts, &block : Schema ->)
+      sub = Schema.new
+      yield sub
+      field(name, :hash, **opts, sub_schema: sub)
+    end
+
+    # For arrays of primitives
+    def array(name : String, of : FieldType | Symbol, **opts)
+      el_type = of.is_a?(Symbol) ? FieldType.parse(of.to_s.capitalize) : of
+      field(name, :array, **opts, element_type: el_type.as(FieldType))
+    end
+
+    # For arrays of objects
+    def array(name : String, **opts, &block : Schema ->)
+      sub = Schema.new
+      yield sub
+      field(name, :array, **opts, sub_schema: sub)
+    end
+
     def self.build(& : self ->) : self
       schema = new
       yield schema

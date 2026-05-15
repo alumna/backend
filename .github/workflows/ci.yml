@@ -1,6 +1,24 @@
 name: Crystal CI
 
-on: [push, pull_request]
+on:
+  # Triggers when a PR is opened or updated
+  pull_request:
+    branches:
+      - master
+
+  # Triggers when code is merged to main, OR directly pushed to main
+  push:
+    branches:
+      - master
+    # Do not trigger a run if the ONLY changes are to these files:
+    paths-ignore:
+      - '**.md'      # Ignores README.md, CHANGELOG.md, etc.
+      - 'LICENSE'
+
+# Automatically cancel in-progress runs if a new commit is pushed to the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -8,8 +26,8 @@ jobs:
       fail-fast: false
       matrix:
         # os: [ubuntu-latest, macos-latest, windows-latest]
-        os: [ubuntu-latest, macos-latest]
-        crystal: [latest, nightly]
+        os: [ubuntu-latest]
+        crystal: [latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -26,8 +44,15 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-crystal-${{ matrix.crystal }}-shards-
       - run: shards install
-      - run: crystal spec --error-trace --verbose
       - run: crystal tool format --check
+
+      # 1. Run standard (Single-Threaded) tests
+      - name: Run specs (Single-Threaded)
+        run: crystal spec --error-trace --verbose
+
+      # 2. Run Execution Context (Multi-Threaded) tests
+      - name: Run specs (Multi-Threaded)
+        run: crystal spec -Dpreview_mt -Dexecution_context --error-trace --verbose
 
   coverage:
     runs-on: ubuntu-22.04

@@ -2,7 +2,6 @@ require "json"
 require "http"
 
 module Alumna
-  # forward declarations - full bodies live in http/router.cr
   module Http
     struct ParamsView; end
 
@@ -29,6 +28,7 @@ module Alumna
     property http : HttpOverrides
     property headers : Http::HeadersView
 
+    @result_set : Bool = false
     @store : Hash(String, AnyData)?
     @query : Query?
 
@@ -57,15 +57,20 @@ module Alumna
       @data : Hash(String, AnyData) = {} of String => AnyData,
     )
       @result = nil
+      @result_set = false
       @error = nil
       @http = HttpOverrides.new
     end
 
-    def result_set? : Bool
-      !@result.nil?
+    def result=(value : ServiceResult)
+      @result = value
+      @result_set = true
     end
 
-    # ---- typed data accessors (zero-cost, inlined) ----
+    def result_set? : Bool
+      @result_set
+    end
+
     def data_str?(key) : String?
       data[key]?.as?(String)
     end
@@ -103,14 +108,33 @@ module Alumna
   end
 
   class Query
-    getter filters : Hash(String, String)
+    enum Op
+      Eq
+      Ne
+      Gt
+      Gte
+      Lt
+      Lte
+      In
+      Nin
+    end
+
+    struct Condition
+      getter op : Op
+      getter value : String | Array(String)
+
+      def initialize(@op : Op, @value : String | Array(String))
+      end
+    end
+
+    getter filters : Hash(String, Array(Condition))
     getter limit : Int32?
     getter skip : Int32?
     getter sort : Array(Tuple(String, Int32))?
     getter select : Array(String)?
 
     def initialize(params : Http::ParamsView)
-      @filters = {} of String => String
+      @filters = Hash(String, Array(Condition)).new { |h, k| h[k] = [] of Condition }
       @limit = nil
       @skip = nil
       @sort = nil
@@ -123,7 +147,6 @@ module Alumna
         when "$skip"
           @skip = parse_positive_int v
         when "$sort"
-          # "age:-1,name:1" → [{"age",-1},{"name",1}]
           @sort = v.split(',').compact_map do |part|
             field, dir = part.split(':', 2)
             next if field.empty?
@@ -133,7 +156,28 @@ module Alumna
         when "$select"
           @select = v.split(',').map(&.strip).reject(&.empty?)
         else
-          @filters[k] = v unless k.starts_with?('$')
+          next if k.starts_with?('$')
+
+          field = k
+          op_str = "$eq"
+
+          if k.ends_with?(']') && (bracket_idx = k.index('['))
+            field = k[0...bracket_idx]
+            op_str = k[bracket_idx + 1...-1]
+          end
+
+          op = parse_op(op_str)
+          if op.nil?
+            field = k
+            op = Op::Eq
+          end
+
+          if op.in? || op.nin?
+            val = v.split(',')
+            @filters[field] << Condition.new(op, val)
+          else
+            @filters[field] << Condition.new(op, v)
+          end
         end
       end
     end
@@ -142,10 +186,24 @@ module Alumna
       @filters.empty? && @limit.nil? && @skip.nil? && @sort.nil? && @select.nil?
     end
 
+    private def parse_op(s : String) : Op?
+      case s
+      when "$eq"  then Op::Eq
+      when "$ne"  then Op::Ne
+      when "$gt"  then Op::Gt
+      when "$gte" then Op::Gte
+      when "$lt"  then Op::Lt
+      when "$lte" then Op::Lte
+      when "$in"  then Op::In
+      when "$nin" then Op::Nin
+      else             nil
+      end
+    end
+
     @[AlwaysInline]
     private def parse_positive_int(str : String) : Int32?
       return nil if str.empty?
-      str.each_byte { |b| return nil unless 48 <= b <= 57 } # '0'..'9'
+      str.each_byte { |b| return nil unless 48 <= b <= 57 }
       str.to_i?
     end
   end

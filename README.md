@@ -87,7 +87,7 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ In-memory adapter implementing the full service interface
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with `store`, `remote_ip` (with trusted proxy support), `http_method`, `headers`, and `provider`
-- ✅ Query parsing (`$limit`, `$skip`, `$sort`, `$select`) via `ctx.query`
+- ✅ Rich query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.) via `ctx.query` with deep dot-notation support
 - ✅ Path normalization and duplicate-route protection
 - ✅ Strict request-body limits enforced on all IO entry points
 - ✅ Cross-platform CI with full test coverage
@@ -151,11 +151,38 @@ UserSchema = Alumna::Schema.new
   .field("admin", :bool, required: false)
 ```
 
-**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable` (or `Alumna::FieldType::Str`, etc.)
+**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.)
 
 **Supported formats:** `:email`, `:url`, `:uuid` - these are built-in and backed by Crystal's stdlib (`URI.parse`, `UUID.parse`). Formats are resolved once when the schema is defined, so validation is a direct Proc call with no hash lookups at runtime.
 
 **Supported constraints:** `required`, `required_on`, `min_length`, `max_length`, `format`
+
+#### Nested fields (Objects and Arrays)
+
+Alumna fully supports validating nested JSON structures. You can define nested objects (`hash`) and arrays of either primitives or objects. 
+
+Under the hood, the validation engine walks the data tree using a zero-allocation path tracer, ensuring that deep validation remains incredibly fast.
+
+```crystal
+OrganizationSchema = Alumna::Schema.new
+  .str("name")
+  # Nested object
+  .hash("billing") do |sub|
+    sub.str("plan", min_length: 1)
+    sub.str("card_last_four", min_length: 4, max_length: 4)
+  end
+  # Array of primitives (min_length and max_length check the array's size)
+  .array("tags", of: :str, min_length: 1, max_length: 10)
+  # Array of nested objects
+  .array("members") do |sub|
+    sub.str("email", format: :email)
+    sub.str("role")
+  end
+```
+
+When a nested field fails validation, Alumna uses standard dot/bracket notation to explicitly tell the client exactly where the error occurred (e.g., `{"billing.plan": "is required"}`, or `{"members[0].email": "must be a valid email address"}`).
+
+#### Conditional Requirements
 
 `required_on` lets a field be required only for specific operations - perfect for PATCH:
 
@@ -461,6 +488,26 @@ ServiceError.internal("message")               # 500
 
 ---
 
+### Querying
+
+Alumna automatically parses URL query strings into a strongly-typed `ctx.query` object. It natively supports FeathersJS/MongoDB-style comparison operators and nested dot-notation.
+
+```crystal
+# GET /users?age[$gte]=18&status[$in]=active,pending&billing.plan=pro&$limit=10&$sort=age:-1
+
+ctx.query.filters["age"]          # => [{op: Op::Gte, value: "18"}]
+ctx.query.filters["status"]       # => [{op: Op::In, value: ["active", "pending"]}]
+ctx.query.filters["billing.plan"] # => [{op: Op::Eq, value: "pro"}]
+ctx.query.limit                   # => 10
+ctx.query.sort                    # => [{"age", -1}]
+```
+
+**Supported comparison operators:** `$eq` (default), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`.
+
+The built-in `MemoryAdapter` implements all of these out of the box—correctly applying operators, distributing array matching, and resolving nested fields. When building custom database adapters, you read `ctx.query` to effortlessly compile the equivalent SQL or NoSQL statements.
+
+---
+
 ### Services
 
 A service inherits from `Alumna::MemoryAdapter` (or from `Alumna::Service` directly) and registers its rules in the constructor.
@@ -627,32 +674,32 @@ class PostgresUserService < Alumna::Service
     self.before(Authenticate)
   end
 
-  def find(ctx : RuleContext) : Array(Hash(String, AnyData))
-    # query @db using ctx.params for filtering
+  def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
+    # query @db using ctx.query.filters, limit, skip, and sort
     [] of Hash(String, AnyData)
   end
 
-  def get(ctx : RuleContext) : Hash(String, AnyData)?
+  def get(ctx : RuleContext) : Hash(String, AnyData)? | ServiceError
     # query @db using ctx.id
     nil
   end
 
-  def create(ctx : RuleContext) : Hash(String, AnyData)
+  def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # insert ctx.data into @db, return the created record
     {} of String => AnyData
   end
 
-  def update(ctx : RuleContext) : Hash(String, AnyData)
+  def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # full replace of ctx.id with ctx.data
     {} of String => AnyData
   end
 
-  def patch(ctx : RuleContext) : Hash(String, AnyData)
+  def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     # partial update of ctx.id with ctx.data
     {} of String => AnyData
   end
 
-  def remove(ctx : RuleContext) : Bool
+  def remove(ctx : RuleContext) : Bool | ServiceError
     # delete record at ctx.id, return true if deleted
     false
   end
@@ -743,41 +790,36 @@ If you are writing a custom database adapter, you can also use `Alumna::Testing:
 
 ## Roadmap
 
-### v0.5 - Security and authentication
+### v0.6 - Security and authentication
 - JWT authentication helper rule
 - session authentication helper rule
 
-### v0.6 - First real database adapter: SQLite
+### v0.7 - First real database adapter: SQLite
 - SQLite adapter for lightweight single-file deployments
 - Using [crystal-sqlite3](https://github.com/crystal-lang/crystal-sqlite3)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.7 - MySQl and PostgreSQL database adapters
+### v0.8 - MySQl and PostgreSQL database adapters
 - MySQl adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-mysql](https://github.com/crystal-lang/crystal-mysql)
 - PostgreSQL adapter using [crystal-db](https://github.com/crystal-lang/crystal-db) and [crystal-pg](https://github.com/will/crystal-pg)
 - Adapter reads the service schema to introspect column names and types
 - Supports schema-driven migration hints (not full migration management, which is left to dedicated tools)
 
-### v0.8 - Real-time events via WebSocket
+### v0.9 - Real-time events via WebSocket
 - Emit service events automatically after successful mutations (`created`, `updated`, `patched`, `removed`)
 - Allow clients to subscribe to specific service paths over a WebSocket connection
 - Rules gain access to an `event` field on the context to suppress or transform events before they are emitted
 - Provider field on context already distinguishes `"rest"` from `"websocket"` in preparation for this
 
-### v0.9 - Redis adapter for cache
+### v0.10 - Redis adapter for cache
 - Redis adapter using [jgaskins/redis](https://github.com/jgaskins/redis)
 
-### v0.10 - NATS integration for horizontal scaling
+### v0.11 - NATS integration for horizontal scaling
 - Stateless service instances publish events to NATS subjects mirroring the service path and method (e.g. `alumna.users.created`)
 - WebSocket gateway subscribes to NATS and fans events out to connected clients
 - Enables multiple Alumna instances behind a load balancer to correctly propagate real-time events across all nodes
 - NATS chosen over AMQP for operational simplicity and natural subject-based routing
-
-### v0.11 - Automated test helpers
-- `Alumna::Testing::ServiceClient` - call service methods directly without an HTTP layer, for fast unit tests
-- `Alumna::Testing::RuleRunner` - execute a single rule against a fabricated context and assert on the result
-- Spec helpers for asserting on context state after dispatch
 
 
 
@@ -803,6 +845,9 @@ alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
 ```
 
 This lets every layer - context, services, rules, and serializers - work with native Crystal values instead of a wrapper type. The responder can dispatch on the actual type, MessagePack serializes without unwrapping, and validation errors flow through as plain hashes. It removes the `JSON::Any` dependency from the core, makes the context format-agnostic, and gives the compiler full visibility into data shapes for better errors and zero-cost abstractions.
+
+**Why is `ServiceError` a struct instead of an Exception?** 
+In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type (e.g., `Hash | ServiceError`), Alumna achieves zero-allocation error paths. Expected API control flow (like a missing record or invalid input) never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
 
 **Why Crystal?** Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. AOT compilation and a single binary output that eliminates runtime dependency management at deploy time. Performance that competes with Go, C and Rust _(see [LangArena](https://kostya.github.io/LangArena/))_ without sacrificing readability. The type system catches a large class of bugs at compile time that dynamic languages surface only in production.
 

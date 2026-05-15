@@ -270,4 +270,64 @@ describe Alumna::Schema do
       errors_for(schema, empty_data, Alumna::ServiceMethod::Patch).should be_empty
     end
   end
+
+  describe "Nested Fields" do
+    it "validates a nested hash object" do
+      schema = Alumna::Schema.new.hash("profile") do |s|
+        s.str("username", min_length: 3)
+        s.int("age")
+      end
+
+      # Valid
+      valid_data = {"profile" => {"username" => any("Alice"), "age" => any(30)} of String => Alumna::AnyData}
+      errors_for(schema, valid_data).should be_empty
+
+      # Invalid nested fields
+      invalid_data = {"profile" => {"username" => any("Al"), "age" => any("old")} of String => Alumna::AnyData}
+      errs = errors_for(schema, invalid_data)
+
+      errs.find { |e| e.field == "profile.username" }.try(&.message).should eq("must be at least 3 characters")
+      errs.find { |e| e.field == "profile.age" }.try(&.message).should eq("must be an integer")
+    end
+
+    it "validates an array of primitives" do
+      schema = Alumna::Schema.new.array("tags", of: :str, min_length: 1, max_length: 3)
+
+      # Valid array size & type
+      errors_for(schema, {"tags" => [any("crystal"), any("alumna")] of Alumna::AnyData}).should be_empty
+
+      # Invalid element type
+      errs = errors_for(schema, {"tags" => [any("crystal"), any(123)] of Alumna::AnyData})
+      errs.first.field.should eq("tags[1]")
+      errs.first.message.should eq("must be a string")
+
+      # Invalid array constraints (min_length applied to array size!)
+      errs_len = errors_for(schema, {"tags" => [] of Alumna::AnyData})
+      errs_len.first.field.should eq("tags")
+      errs_len.first.message.should eq("must contain at least 1 item")
+    end
+
+    it "validates an array of objects" do
+      schema = Alumna::Schema.new.array("users") do |s|
+        s.str("id")
+        s.bool("admin")
+      end
+
+      valid_data = {"users" => [
+        {"id" => any("u1"), "admin" => any(true)} of String => Alumna::AnyData,
+        {"id" => any("u2"), "admin" => any(false)} of String => Alumna::AnyData,
+      ] of Alumna::AnyData}
+
+      errors_for(schema, valid_data).should be_empty
+
+      invalid_data = {"users" => [
+        {"id" => any("u1"), "admin" => any("yes")} of String => Alumna::AnyData,
+        any("not-an-object"),
+      ] of Alumna::AnyData}
+
+      errs = errors_for(schema, invalid_data)
+      errs.find { |e| e.field == "users[0].admin" }.try(&.message).should eq("must be true or false")
+      errs.find { |e| e.field == "users[1]" }.try(&.message).should eq("must be an object")
+    end
+  end
 end

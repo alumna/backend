@@ -33,10 +33,9 @@ module Alumna
         output_serializer = resolve_output_serializer(request) || input_serializer
         response.content_type = output_serializer.content_type
 
-        begin
-          data = parse_body(request, input_serializer)
-        rescue ex : ServiceError
-          Responder.write_error(response, ex, output_serializer)
+        data = parse_body(request, input_serializer)
+        if data.is_a?(ServiceError)
+          Responder.write_error(response, data, output_serializer)
           return
         end
 
@@ -64,7 +63,7 @@ module Alumna
           params: ParamsView.new(request.query_params),
           headers: HeadersView.new(request.headers),
           id: id,
-          data: data
+          data: data # Flow-typing knows this is a Hash(String, AnyData) here
         )
 
         ctx.app.dispatch(service, ctx)
@@ -121,7 +120,7 @@ module Alumna
         Serializers.from_accept?(request.headers["accept"]?)
       end
 
-      private def parse_body(request : HTTP::Request, serializer : Serializer) : Hash(String, AnyData)
+      private def parse_body(request : HTTP::Request, serializer : Serializer) : Hash(String, AnyData) | ServiceError
         body = request.body
         return {} of String => AnyData if body.nil?
 
@@ -132,14 +131,14 @@ module Alumna
 
         if limit = @app.max_body_size
           if (len = request.content_length) && len > limit
-            raise ServiceError.new("Payload Too Large", 413)
+            return ServiceError.new("Payload Too Large", 413)
           end
           body = LimitedIO.new(body, limit)
         end
 
         serializer.decode(body)
       rescue IO::Error
-        raise ServiceError.new("Payload Too Large", 413)
+        ServiceError.new("Payload Too Large", 413)
       end
 
       private def remote_ip(ctx : HTTP::Server::Context) : String

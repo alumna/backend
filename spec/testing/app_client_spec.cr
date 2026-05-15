@@ -2,23 +2,23 @@ require "../spec_helper"
 require "../../src/testing"
 
 class EchoService < Alumna::MemoryAdapter
-  def find(ctx)
+  def find(ctx) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
     [{"echo" => ctx.http_method} of String => Alumna::AnyData]
   end
 
-  def create(ctx)
+  def create(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {"echo" => ctx.http_method, "body" => ctx.data["msg"]?} of String => Alumna::AnyData
   end
 
-  def update(ctx)
+  def update(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {"echo" => ctx.http_method} of String => Alumna::AnyData
   end
 
-  def patch(ctx)
+  def patch(ctx) : Hash(String, Alumna::AnyData) | Alumna::ServiceError
     {"echo" => ctx.http_method} of String => Alumna::AnyData
   end
 
-  def remove(ctx)
+  def remove(ctx) : Bool | Alumna::ServiceError
     true
   end
 end

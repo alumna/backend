@@ -1,11 +1,11 @@
 module Alumna
-  class ServiceError < Exception
+  struct ServiceError
     getter status : Int32
     getter details : Hash(String, AnyData)
+    getter message : String
 
-    def initialize(message : String, @status : Int32 = 400, details : Hash(String, AnyData) = {} of String => AnyData)
-      @details = details
-      super(message)
+    def initialize(@message : String, @status : Int32 = 400, details : Hash(String, AnyData)? = nil)
+      @details = details || {} of String => AnyData
     end
 
     def self.bad_request(message : String, details = {} of String => AnyData)
