@@ -17,32 +17,50 @@ module Alumna
 
       def decode(io : IO) : Hash(String, AnyData) | ServiceError
         unpacker = MessagePack::IOUnpacker.new(io)
-        result = {} of String => AnyData
-        unpacker.consume_table do |key|
-          # Force to_s in case a misbehaving client sent non-string keys
-          result[key.to_s] = normalize(unpacker.read_value)
+        result = decode_value(unpacker)
+        unless result.is_a?(Hash(String, AnyData))
+          return ServiceError.new("Request body must be a MessagePack map", 400)
         end
         result
-      rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
+      rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError | OverflowError
         ServiceError.new("Malformed MessagePack", 400)
       end
 
-      private def normalize(value : MessagePack::Type) : AnyData
-        case value
-        when Int8, Int16, Int32, Int64, UInt8, UInt16, UInt32, UInt64
-          value.to_i64
-        when Float32
-          value.to_f64
-        when Float64, String, Bool, Nil, Bytes
-          value
-        when Array
-          value.map { |v| normalize(v) }
-        when Hash
-          value.each_with_object({} of String => AnyData) do |(k, v), memo|
-            memo[k.to_s] = normalize(v)
-          end
-        else
+      private def decode_value(unpacker : MessagePack::Unpacker) : AnyData
+        case token = unpacker.current_token
+        when MessagePack::Token::NullT
+          unpacker.finish_token!
           nil
+        when MessagePack::Token::BoolT
+          unpacker.finish_token!
+          token.value
+        when MessagePack::Token::IntT
+          unpacker.finish_token!
+          token.value.to_i64
+        when MessagePack::Token::FloatT
+          unpacker.finish_token!
+          token.value
+        when MessagePack::Token::StringT
+          unpacker.finish_token!
+          token.value
+        when MessagePack::Token::BytesT
+          unpacker.finish_token!
+          token.value
+        when MessagePack::Token::ArrayT
+          # Cap pre-allocation to prevent OOM DoS from maliciously crafted headers
+          cap = Math.min(token.size, 65536).to_i
+          ary = Array(AnyData).new(initial_capacity: cap)
+          unpacker.consume_array { ary << decode_value(unpacker) }
+          ary
+        when MessagePack::Token::HashT
+          cap = Math.min(token.size, 65536).to_i
+          hash = Hash(String, AnyData).new(initial_capacity: cap)
+          unpacker.consume_table { |key| hash[key] = decode_value(unpacker) }
+          hash
+        else
+          raise MessagePack::TypeCastError.new(
+            "Unexpected token: #{MessagePack::Token.to_s(token)}", token.byte_number
+          )
         end
       end
     end
