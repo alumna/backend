@@ -29,15 +29,15 @@ module Alumna
     property headers : Http::HeadersView
 
     @result_set : Bool = false
-    @store : Hash(String, AnyData)?
+    @store : Hash(String, StoreType)?
     @query : Query?
 
     def query : Query
       @query ||= Query.new(@params)
     end
 
-    def store : Hash(String, AnyData)
-      @store ||= {} of String => AnyData
+    def store : Hash(String, StoreType)
+      @store ||= {} of String => StoreType
     end
 
     protected setter phase

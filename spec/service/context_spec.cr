@@ -1,7 +1,50 @@
 require "../spec_helper"
 require "../../src/testing"
 
+private class DummyUser
+  include Alumna::Storeable
+  property name : String
+
+  def initialize(@name)
+  end
+end
+
+private struct DummyTransaction
+  include Alumna::Storeable
+  property id : Int32
+
+  def initialize(@id)
+  end
+end
+
 describe Alumna::RuleContext do
+  describe "store" do
+    it "can store and retrieve arbitrary classes (Reference) via Storeable" do
+      ctx = Alumna::Testing.build_ctx
+      user = DummyUser.new("Alice")
+      ctx.store["user"] = user
+      retrieved = ctx.store["user"].as(DummyUser)
+      retrieved.name.should eq("Alice")
+    end
+
+    it "can store and retrieve arbitrary structs (Value) via Storeable" do
+      ctx = Alumna::Testing.build_ctx
+      tx = DummyTransaction.new(42)
+      ctx.store["tx"] = tx
+      retrieved = ctx.store["tx"].as(DummyTransaction)
+      retrieved.id.should eq(42)
+    end
+
+    it "can store and retrieve AnyData types without compile errors" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.store["count"] = 100_i64
+      ctx.store["flag"] = true
+
+      ctx.store["count"].as(Int64).should eq(100)
+      ctx.store["flag"].as(Bool).should be_true
+    end
+  end
+
   describe "result handling" do
     it "is not set initially" do
       ctx = Alumna::Testing.build_ctx
