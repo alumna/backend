@@ -419,6 +419,31 @@ ctx.params["locale"] = "en" unless ctx.params["locale"]?
 
 The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response – copy values to `ctx.http.headers` if you need to send them back.
 
+### Sharing State with `ctx.store`
+
+`ctx.store` is a per-request scratchpad used to pass data between rules and services (e.g., passing an authenticated `User` from an auth rule to your database adapter).
+
+It natively accepts standard JSON-like primitives (Strings, Integers, Booleans, Hashes, Arrays). To store your own custom classes or structs, you must explicitly mark them by including `Alumna::Storeable`:
+
+```crystal
+class User
+  include Alumna::Storeable
+  
+  getter id : Int32
+  def initialize(@id); end
+end
+
+Authenticate = Alumna::Rule.new do |ctx|
+  # Store the custom object safely
+  ctx.store["user"] = User.new(42)
+  nil
+end
+```
+
+Downstream rules or services can then retrieve and cast it safely using standard Crystal semantics: `user = ctx.store["user"].as(User)`.
+
+> **Tip:** While `Alumna::Storeable` works perfectly with both `class` and `struct`, prefer using `class` for very large data structures. Because `ctx.store` uses a mixed union type under the hood, massive structs will artificially inflate the memory footprint of the hash buffer.
+
 ---
 
 ## 4. Built-in Rules
