@@ -671,6 +671,11 @@ In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` 
 **Why Crystal?** 
 Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. Ahead-Of-Time (AOT) compilation and a single binary output eliminates runtime dependency management at deploy time. Performance that competes with Go and Rust without sacrificing readability.
 
+**100% coverage strategy**
+Alumna enforces 100% code coverage by design. This delivers immediate feedback on regressions in pull requests and gives developers the confidence to refactor, optimize, and introduce new features without fear of breaking existing behavior.
+
+As foundational infrastructure, Alumna treats complete behavioral correctness as non-negotiable.
+
 ---
 
 ## Contributing
