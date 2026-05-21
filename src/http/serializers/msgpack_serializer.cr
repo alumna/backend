@@ -19,7 +19,8 @@ module Alumna
         unpacker = MessagePack::IOUnpacker.new(io)
         result = {} of String => AnyData
         unpacker.consume_table do |key|
-          result[key] = normalize(unpacker.read_value)
+          # Force to_s in case a misbehaving client sent non-string keys
+          result[key.to_s] = normalize(unpacker.read_value)
         end
         result
       rescue MessagePack::UnpackError | MessagePack::TypeCastError | MessagePack::EofError
@@ -32,7 +33,7 @@ module Alumna
           value.to_i64
         when Float32
           value.to_f64
-        when Float64, String, Bool, Nil
+        when Float64, String, Bool, Nil, Bytes
           value
         when Array
           value.map { |v| normalize(v) }

@@ -19,6 +19,14 @@ module Alumna
         v.to_f64
       end
 
+      def self.any(v : Time) : AnyData
+        v
+      end
+
+      def self.any(v : Bytes) : AnyData
+        v
+      end
+
       def self.insert(adapter : Service, data : Hash(String, AnyData))
         ctx = Alumna::Testing.build_ctx(
           service: adapter,
@@ -241,6 +249,41 @@ module Alumna
               results.size.should eq(1)
               results.first["tags"].as(Array(Alumna::AnyData)).first.should eq("art")
             end
+
+            it "filters records using $gt and $lt operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1)
+              t2 = Time.utc(2024, 2, 1)
+              t3 = Time.utc(2024, 3, 1)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t3)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "2024-01-15T00:00:00Z", "created[$lt]" => "2024-02-15T00:00:00Z"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.size.should eq(1)
+              results.first["created"].should eq(t2)
+
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "invalid-date"})
+              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+            end
+
+            it "filters records using $eq and $in operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1, 12, 0, 0)
+              t2 = Time.utc(2024, 1, 2, 12, 0, 0)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created" => "2024-01-01T12:00:00Z"})
+              res1 = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              res1.size.should eq(1)
+              res1.first["created"].should eq(t1)
+
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$in]" => "2024-01-01T12:00:00Z,2024-01-02T12:00:00Z"})
+              res2 = adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData)))
+              res2.size.should eq(2)
+            end
           end
 
           describe "#find (sorting and limit/skip)" do
@@ -337,6 +380,16 @@ module Alumna
               adapter = {{factory.body}}
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$select" => "a"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+            end
+
+            it "applies $sort correctly with Time types" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1)
+              t2 = Time.utc(2024, 2, 1)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "created:1"})
+              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["created"]).should eq([t1, t2])
             end
           end
 

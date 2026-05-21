@@ -26,6 +26,11 @@ module Alumna
           return a <=> b.as(String)
         when Bool
           return (a ? 1 : 0) <=> (b.as(Bool) ? 1 : 0)
+        when Time
+          return a <=> b.as(Time)
+        when Bytes
+          # Crystal's Slice(UInt8) implements <=>
+          return a <=> b.as(Bytes)
         end
       end
 
@@ -66,6 +71,37 @@ module Alumna
     end
 
     private def match_single_value?(val : AnyData, cond : Query::Condition) : Bool
+      # Time requires a proper RFC3339 string match, not simple to_s checking
+      if val.is_a?(Time)
+        cv = cond.value
+        case cond.op
+        when .eq?
+          return false unless cv.is_a?(String)
+          return compare_query_value(val, cv) == 0
+        when .ne?
+          return false unless cv.is_a?(String)
+          return compare_query_value(val, cv) != 0
+        when .in?
+          return false unless cv.is_a?(Array)
+          return cv.any? { |v| compare_query_value(val, v) == 0 }
+        when .nin?
+          return false unless cv.is_a?(Array)
+          return cv.none? { |v| compare_query_value(val, v) == 0 }
+        else
+          return false unless cv.is_a?(String)
+          cmp = compare_query_value(val, cv)
+          return false unless cmp
+          case cond.op
+          when .gt?  then return cmp > 0
+          when .gte? then return cmp >= 0
+          when .lt?  then return cmp < 0
+          when .lte? then return cmp <= 0
+          else            return false
+          end
+        end
+      end
+
+      # For everything else, the original string-based comparison is highly optimized
       str_val = val.try(&.to_s)
 
       case cond.op
@@ -118,6 +154,15 @@ module Alumna
         (record_val ? 1 : 0) <=> (q_bool ? 1 : 0)
       when String
         record_val <=> query_val
+      when Time
+        begin
+          q_time = Time::Format::RFC_3339.parse(query_val)
+          record_val <=> q_time
+        rescue Time::Format::Error
+          nil
+        end
+      when Bytes
+        nil # Unsafe to compare arbitrary binary blobs via URL query strings
       else
         nil
       end

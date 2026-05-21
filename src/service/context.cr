@@ -86,6 +86,14 @@ module Alumna
     def data_bool?(key) : Bool?
       data[key]?.as?(Bool)
     end
+
+    def data_time?(key) : Time?
+      data[key]?.as?(Time)
+    end
+
+    def data_bytes?(key) : Bytes?
+      data[key]?.as?(Bytes)
+    end
   end
 
   struct HttpOverrides

@@ -94,6 +94,18 @@ describe Alumna::RuleContext do
       ctx.data_bool?("missing").should be_nil
     end
 
+    it "returns Time for data_time?" do
+      t = Time.utc
+      ctx = Alumna::Testing.build_ctx(data: {"created" => t} of String => Alumna::AnyData)
+      ctx.data_time?("created").should eq(t)
+    end
+
+    it "returns Bytes for data_bytes?" do
+      b = Bytes[1, 2]
+      ctx = Alumna::Testing.build_ctx(data: {"blob" => b} of String => Alumna::AnyData)
+      ctx.data_bytes?("blob").should eq(b)
+    end
+
     it "returns nil when type mismatches" do
       ctx = Alumna::Testing.build_ctx(data: {"age" => "not-a-number"} of String => Alumna::AnyData)
 

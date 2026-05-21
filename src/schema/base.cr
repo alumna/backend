@@ -29,7 +29,7 @@ module Alumna
   end
 
   enum FieldType
-    Str; Int; Float; Bool; Nullable; Hash; Array
+    Str; Int; Float; Bool; Time; Bytes; Nullable; Hash; Array
   end
 
   class Schema
@@ -116,6 +116,14 @@ module Alumna
 
     def bool(name, **opts)
       field(name, :bool, **opts)
+    end
+
+    def time(name, **opts)
+      field(name, :time, **opts)
+    end
+
+    def bytes(name, **opts)
+      field(name, :bytes, **opts)
     end
 
     def nullable(name, **opts)

@@ -124,4 +124,22 @@ describe Alumna::Http::JsonSerializer do
       result.as(Alumna::ServiceError).status.should eq(400)
     end
   end
+
+  # ── encode special types ─────────────────────────────────────────────────────
+
+  describe "encode special types" do
+    it "encodes Time as an ISO8601 string" do
+      t = Time.utc(2024, 1, 1, 12, 0, 0)
+      io = IO::Memory.new
+      json_serializer.encode({"created" => t} of String => Alumna::AnyData, io)
+      io.to_s.should contain("2024-01-01T12:00:00Z")
+    end
+
+    it "encodes Bytes as a JSON array of integers" do
+      b = Bytes[1, 255]
+      io = IO::Memory.new
+      json_serializer.encode({"blob" => b} of String => Alumna::AnyData, io)
+      io.to_s.should contain("[1,255]")
+    end
+  end
 end

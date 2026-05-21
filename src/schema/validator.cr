@@ -135,6 +135,8 @@ module Alumna
       when .int?   then value.is_a?(Int64) ? nil : "must be an integer"
       when .float? then (value.is_a?(Float64) || value.is_a?(Int64)) ? nil : "must be a number"
       when .bool?  then value.is_a?(Bool) ? nil : "must be true or false"
+      when .time?  then value.is_a?(Time) ? nil : "must be a time"
+      when .bytes? then value.is_a?(Bytes) ? nil : "must be bytes"
       when .hash?  then value.is_a?(Hash(String, AnyData)) ? nil : "must be an object"
       when .array? then value.is_a?(Array(AnyData)) ? nil : "must be an array"
       else              nil

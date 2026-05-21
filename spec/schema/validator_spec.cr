@@ -17,6 +17,34 @@ private def any(v : Bool) : Alumna::AnyData
   v
 end
 
+private def any(v : Time) : Alumna::AnyData
+  v
+end
+
+private def any(v : Bytes) : Alumna::AnyData
+  v
+end
+
+# Accepts ANY array (e.g. Array(Int64), Array(String)) and safely
+# builds an Array(AnyData) to bypass compiler type-narrowing quirks.
+private def any(v : Array) : Alumna::AnyData
+  arr = [] of Alumna::AnyData
+  v.each { |x| arr << any(x) }
+  arr.as(Alumna::AnyData)
+end
+
+# Accepts ANY hash and safely builds a Hash(String, AnyData)
+private def any(v : Hash) : Alumna::AnyData
+  h = {} of String => Alumna::AnyData
+  v.each { |k, val| h[k.to_s] = any(val) }
+  h.as(Alumna::AnyData)
+end
+
+# Fallback for when the value is ALREADY an AnyData (e.g., from inside nested loops)
+private def any(v : Alumna::AnyData) : Alumna::AnyData
+  v
+end
+
 private def any_nil : Alumna::AnyData
   nil
 end
@@ -134,6 +162,20 @@ describe Alumna::Schema do
     it "accepts false" { errors_for(schema, {"v" => any(false)}).should be_empty }
     it "rejects a string" { error_on(schema, {"v" => any("true")}, "v").should eq("must be true or false") }
     it "rejects an int" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be true or false") }
+  end
+
+  describe "Time type" do
+    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Time)
+
+    it "accepts a time" { errors_for(schema, {"v" => any(Time.utc)}).should be_empty }
+    it "rejects a string" { error_on(schema, {"v" => any("2024-01-01")}, "v").should eq("must be a time") }
+  end
+
+  describe "Bytes type" do
+    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bytes)
+
+    it "accepts bytes" { errors_for(schema, {"v" => any(Bytes[1, 2])}).should be_empty }
+    it "rejects an array" { error_on(schema, {"v" => any([any(1_i64)])}, "v").should eq("must be bytes") }
   end
 
   describe "Nullable type" do
