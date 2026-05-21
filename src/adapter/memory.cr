@@ -28,7 +28,9 @@ module Alumna
           return (a ? 1 : 0) <=> (b.as(Bool) ? 1 : 0)
         when Time
           return a <=> b.as(Time)
+          # LCOV_EXCL_START - kcov wrongly missed the "when Bytes"
         when Bytes
+          # LCOV_EXCL_STOP
           # Crystal's Slice(UInt8) implements <=>
           return a <=> b.as(Bytes)
         end

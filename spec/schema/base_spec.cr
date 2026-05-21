@@ -103,6 +103,8 @@ describe Alumna::Schema do
         .float("c")
         .bool("d")
         .nullable("e", required_on: [:patch])
+        .time("f")
+        .bytes("g")
 
       s.fields.map(&.type).should eq([
         Alumna::FieldType::Str,
@@ -110,6 +112,8 @@ describe Alumna::Schema do
         Alumna::FieldType::Float,
         Alumna::FieldType::Bool,
         Alumna::FieldType::Nullable,
+        Alumna::FieldType::Time,
+        Alumna::FieldType::Bytes,
       ])
       s.fields[1].required.should be_false
       s.fields[4].required_on.should eq([Alumna::ServiceMethod::Patch])

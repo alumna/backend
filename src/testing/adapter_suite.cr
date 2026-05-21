@@ -71,6 +71,15 @@ module Alumna
               record = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
             end
+
+            it "persists and retrieves Bytes" do
+              adapter = {{factory.body}}
+              b = Bytes[10, 20]
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"blob" => Alumna::Testing::AdapterSuiteHelpers.any(b)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              rec = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
+              rec["blob"].should eq(b)
+            end
           end
 
           describe "#find (filtering)" do
@@ -283,6 +292,42 @@ module Alumna
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$in]" => "2024-01-01T12:00:00Z,2024-01-02T12:00:00Z"})
               res2 = adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData)))
               res2.size.should eq(2)
+            end
+
+            it "filters records using $ne and $nin operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1, 12, 0, 0)
+              t2 = Time.utc(2024, 1, 2, 12, 0, 0)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+
+              # Cover the $ne branch
+              ctx_ne = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$ne]" => "2024-01-01T12:00:00Z"})
+              res_ne = adapter.find(ctx_ne).as(Array(Hash(String, Alumna::AnyData)))
+              res_ne.size.should eq(1)
+              res_ne.first["created"].should eq(t2)
+
+              # Cover the $nin branch
+              ctx_nin = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$nin]" => "2024-01-01T12:00:00Z"})
+              res_nin = adapter.find(ctx_nin).as(Array(Hash(String, Alumna::AnyData)))
+              res_nin.size.should eq(1)
+              res_nin.first["created"].should eq(t2)
+            end
+
+            it "safely rejects maliciously forged programmatic query types on Time" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(Time.utc)} of String => Alumna::AnyData)
+
+              # Programmatically forge a Query to bypass string parsing and hit the type guards
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
+
+              # Hit: `return false unless cv.is_a?(String)` inside the `.ne?` block
+              ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Ne, ["array", "instead", "of", "string"])
+              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+
+              # Hit: `return false unless cv.is_a?(Array)` inside the `.nin?` block
+              ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Nin, "string instead of array")
+              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
             end
           end
 
