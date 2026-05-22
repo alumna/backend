@@ -136,4 +136,12 @@ describe Alumna::Ruleable do
     r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Error).size.should eq(1)
     r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).size.should eq(0)
   end
+
+  it "raises when registering rules after freeze_rules!" do
+    r = DummyRuleable.new
+    r.freeze_rules!
+    expect_raises(Exception, "Cannot register rules after pipelines are compiled") do
+      r.before { |_ctx| nil }
+    end
+  end
 end

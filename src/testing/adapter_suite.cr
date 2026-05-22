@@ -19,6 +19,14 @@ module Alumna
         v.to_f64
       end
 
+      def self.any(v : Time) : AnyData
+        v
+      end
+
+      def self.any(v : Bytes) : AnyData
+        v
+      end
+
       def self.insert(adapter : Service, data : Hash(String, AnyData))
         ctx = Alumna::Testing.build_ctx(
           service: adapter,
@@ -62,6 +70,15 @@ module Alumna
               get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
               record = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
+            end
+
+            it "persists and retrieves Bytes" do
+              adapter = {{factory.body}}
+              b = Bytes[10, 20]
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"blob" => Alumna::Testing::AdapterSuiteHelpers.any(b)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              rec = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
+              rec["blob"].should eq(b)
             end
           end
 
@@ -131,7 +148,9 @@ module Alumna
               results.first["age"].should eq(20)
 
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "abc"})
-              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters records using $gt and $lt operators on Float64" do
@@ -146,7 +165,9 @@ module Alumna
               results.first["rating"].should eq(4.5)
 
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"rating[$gt]" => "abc"})
-              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters records using $gt and $lt operators on Bool" do
@@ -165,7 +186,9 @@ module Alumna
               results2.first["active"].should eq(false)
 
               ctx3 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$gt]" => "not-a-bool"})
-              adapter.find(ctx3).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx3)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters strings using $gt operator lexicographically" do
@@ -241,6 +264,80 @@ module Alumna
               results.size.should eq(1)
               results.first["tags"].as(Array(Alumna::AnyData)).first.should eq("art")
             end
+
+            it "filters records using $gt and $lt operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1)
+              t2 = Time.utc(2024, 2, 1)
+              t3 = Time.utc(2024, 3, 1)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t3)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "2024-01-15T00:00:00Z", "created[$lt]" => "2024-02-15T00:00:00Z"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.size.should eq(1)
+              results.first["created"].should eq(t2)
+
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "invalid-date"})
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
+            end
+
+            it "filters records using $eq and $in operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1, 12, 0, 0)
+              t2 = Time.utc(2024, 1, 2, 12, 0, 0)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created" => "2024-01-01T12:00:00Z"})
+              res1 = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              res1.size.should eq(1)
+              res1.first["created"].should eq(t1)
+
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$in]" => "2024-01-01T12:00:00Z,2024-01-02T12:00:00Z"})
+              res2 = adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData)))
+              res2.size.should eq(2)
+            end
+
+            it "filters records using $ne and $nin operators on Time" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1, 12, 0, 0)
+              t2 = Time.utc(2024, 1, 2, 12, 0, 0)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+
+              # Cover the $ne branch
+              ctx_ne = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$ne]" => "2024-01-01T12:00:00Z"})
+              res_ne = adapter.find(ctx_ne).as(Array(Hash(String, Alumna::AnyData)))
+              res_ne.size.should eq(1)
+              res_ne.first["created"].should eq(t2)
+
+              # Cover the $nin branch
+              ctx_nin = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$nin]" => "2024-01-01T12:00:00Z"})
+              res_nin = adapter.find(ctx_nin).as(Array(Hash(String, Alumna::AnyData)))
+              res_nin.size.should eq(1)
+              res_nin.first["created"].should eq(t2)
+            end
+
+            it "safely rejects maliciously forged programmatic query types on Time" do
+              adapter = {{factory.body}}
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(Time.utc)} of String => Alumna::AnyData)
+
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
+              ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Ne, ["array", "instead", "of", "string"])
+              err1 = adapter.find(ctx)
+              err1.should be_a(Alumna::ServiceError)
+              err1.as(Alumna::ServiceError).status.should eq(400)
+
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
+              ctx2.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Nin, "string instead of array")
+              err2 = adapter.find(ctx2)
+              err2.should be_a(Alumna::ServiceError)
+              err2.as(Alumna::ServiceError).status.should eq(400)
+            end
           end
 
           describe "#find (sorting and limit/skip)" do
@@ -251,6 +348,23 @@ module Alumna
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(2)
               results.map(&.["n"]).should eq(["1", "2"])
+            end
+
+            it "applies $skip without $limit" do
+              adapter = {{factory.body}}
+              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"n" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "2"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.size.should eq(3)
+              results.map(&.["n"]).should eq(["2", "3", "4"])
+            end
+
+            it "safely handles $skip greater than the dataset size" do
+              adapter = {{factory.body}}
+              3.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"n" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "10"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.should be_empty
             end
 
             it "applies $sort correctly with numeric types (not lexicographical)" do
@@ -338,6 +452,16 @@ module Alumna
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$select" => "a"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
             end
+
+            it "applies $sort correctly with Time types" do
+              adapter = {{factory.body}}
+              t1 = Time.utc(2024, 1, 1)
+              t2 = Time.utc(2024, 2, 1)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "created:1"})
+              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["created"]).should eq([t1, t2])
+            end
           end
 
           describe "#get" do
@@ -414,11 +538,11 @@ module Alumna
           end
 
           describe "#remove" do
-            it "deletes the record and returns true" do
+            it "deletes the record and returns nil" do
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
-              adapter.remove(ctx).as(Bool).should be_true
+              adapter.remove(ctx).should be_nil
             end
 
             it "makes the record unretrievable after deletion" do
@@ -431,15 +555,12 @@ module Alumna
               adapter.get(get_ctx).should be_nil
             end
 
-            it "returns false when the id does not exist" do
+            it "returns a 404 error when the id does not exist" do
               adapter = {{factory.body}}
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "99")
               result = adapter.remove(ctx)
-              if result.is_a?(Bool)
-                result.should be_false
-              elsif result.is_a?(Alumna::ServiceError)
-                result.status.should eq(404)
-              end
+              result.should be_a(Alumna::ServiceError)
+              result.as(Alumna::ServiceError).status.should eq(404)
             end
 
             it "returns a 400 error when ctx.id is nil" do

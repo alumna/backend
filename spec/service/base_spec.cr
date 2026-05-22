@@ -26,8 +26,8 @@ private class ExplodingService < Alumna::Service
     {} of String => Alumna::AnyData
   end
 
-  def remove(ctx) : Bool | Alumna::ServiceError
-    true
+  def remove(ctx) : Nil | Alumna::ServiceError
+    nil
   end
 end
 

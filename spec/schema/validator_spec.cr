@@ -17,6 +17,34 @@ private def any(v : Bool) : Alumna::AnyData
   v
 end
 
+private def any(v : Time) : Alumna::AnyData
+  v
+end
+
+private def any(v : Bytes) : Alumna::AnyData
+  v
+end
+
+# Accepts ANY array (e.g. Array(Int64), Array(String)) and safely
+# builds an Array(AnyData) to bypass compiler type-narrowing quirks.
+private def any(v : Array) : Alumna::AnyData
+  arr = [] of Alumna::AnyData
+  v.each { |x| arr << any(x) }
+  arr.as(Alumna::AnyData)
+end
+
+# Accepts ANY hash and safely builds a Hash(String, AnyData)
+private def any(v : Hash) : Alumna::AnyData
+  h = {} of String => Alumna::AnyData
+  v.each { |k, val| h[k.to_s] = any(val) }
+  h.as(Alumna::AnyData)
+end
+
+# Fallback for when the value is ALREADY an AnyData (e.g., from inside nested loops)
+private def any(v : Alumna::AnyData) : Alumna::AnyData
+  v
+end
+
 private def any_nil : Alumna::AnyData
   nil
 end
@@ -136,6 +164,20 @@ describe Alumna::Schema do
     it "rejects an int" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be true or false") }
   end
 
+  describe "Time type" do
+    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Time)
+
+    it "accepts a time" { errors_for(schema, {"v" => any(Time.utc)}).should be_empty }
+    it "rejects a string" { error_on(schema, {"v" => any("2024-01-01")}, "v").should eq("must be a time") }
+  end
+
+  describe "Bytes type" do
+    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bytes)
+
+    it "accepts bytes" { errors_for(schema, {"v" => any(Bytes[1, 2])}).should be_empty }
+    it "rejects an array" { error_on(schema, {"v" => any([any(1_i64)])}, "v").should eq("must be bytes") }
+  end
+
   describe "Nullable type" do
     schema = Alumna::Schema.new.field("v", Alumna::FieldType::Nullable, required: false)
 
@@ -244,8 +286,8 @@ describe Alumna::Schema do
       errs.size.should eq(2)
     end
 
-    it "ignores fields not defined in schema" do
-      schema = Alumna::Schema.new.field("name", Alumna::FieldType::Str)
+    it "ignores fields not defined in schema when strict is false" do
+      schema = Alumna::Schema.new(strict: false).field("name", Alumna::FieldType::Str)
       errors_for(schema, {"name" => any("ok"), "extra" => any("ignored")}).should be_empty
     end
 
@@ -328,6 +370,57 @@ describe Alumna::Schema do
       errs = errors_for(schema, invalid_data)
       errs.find { |e| e.field == "users[0].admin" }.try(&.message).should eq("must be true or false")
       errs.find { |e| e.field == "users[1]" }.try(&.message).should eq("must be an object")
+    end
+  end
+
+  describe "Strict Validation" do
+    it "rejects unknown fields by default" do
+      schema = Alumna::Schema.new.str("name")
+      errs = errors_for(schema, {"name" => any("Alice"), "age" => any(30)})
+      errs.size.should eq(1)
+      errs.first.field.should eq("age")
+      errs.first.message.should eq("is not allowed")
+    end
+
+    it "cascades strictness to nested hashes" do
+      schema = Alumna::Schema.new.hash("profile") do |s|
+        s.str("username")
+      end
+      errs = errors_for(schema, {"profile" => {"username" => any("bob"), "extra" => any(1)} of String => Alumna::AnyData})
+      errs.size.should eq(1)
+      errs.first.field.should eq("profile.extra")
+      errs.first.message.should eq("is not allowed")
+    end
+  end
+
+  describe "Read-Only Fields" do
+    schema = Alumna::Schema.new
+      .str("id", read_only: true)
+      .str("name")
+
+    it "allows read-only fields on read operations" do
+      errors_for(schema, {"id" => any("123"), "name" => any("Alice")}, Alumna::ServiceMethod::Find).should be_empty
+    end
+
+    it "rejects read-only fields on create" do
+      errs = errors_for(schema, {"id" => any("123"), "name" => any("Alice")}, Alumna::ServiceMethod::Create)
+      errs.size.should eq(1)
+      errs.first.field.should eq("id")
+      errs.first.message.should eq("is read-only")
+    end
+
+    it "rejects read-only fields on update" do
+      errs = errors_for(schema, {"id" => any("123"), "name" => any("Alice")}, Alumna::ServiceMethod::Update)
+      errs.first.message.should eq("is read-only")
+    end
+
+    it "rejects read-only fields on patch" do
+      errs = errors_for(schema, {"id" => any("123"), "name" => any("Alice")}, Alumna::ServiceMethod::Patch)
+      errs.first.message.should eq("is read-only")
+    end
+
+    it "allows missing read-only fields on write" do
+      errors_for(schema, {"name" => any("Alice")}, Alumna::ServiceMethod::Create).should be_empty
     end
   end
 end

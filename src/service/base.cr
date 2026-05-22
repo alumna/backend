@@ -36,7 +36,7 @@ module Alumna
     abstract def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     abstract def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     abstract def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
-    abstract def remove(ctx : RuleContext) : Bool | ServiceError
+    abstract def remove(ctx : RuleContext) : Nil | ServiceError
 
     def set_before_pipeline(method : ServiceMethod, app_rules : Array(Rule), svc_rules : Array(Rule))
       idx = method.value
@@ -91,13 +91,11 @@ module Alumna
         {nil, result}
       elsif ctx.method.get? && result.nil?
         {nil, ServiceError.not_found}
-      elsif ctx.method.remove? && result.is_a?(Bool)
-        { {"removed" => result} of String => AnyData, nil }
       else
+        # Remove natively returns nil now, and ServiceResult permits Nil!
         {result.as(ServiceResult), nil}
       end
     rescue ex : Exception
-      # Catching raw Exception acts as a safety net for DB connection drops, math faults, etc.
       {nil, ServiceError.internal(ex.message || "Unexpected error")}
     end
   end

@@ -1,7 +1,50 @@
 require "../spec_helper"
 require "../../src/testing"
 
+private class DummyUser
+  include Alumna::Storeable
+  property name : String
+
+  def initialize(@name)
+  end
+end
+
+private struct DummyTransaction
+  include Alumna::Storeable
+  property id : Int32
+
+  def initialize(@id)
+  end
+end
+
 describe Alumna::RuleContext do
+  describe "store" do
+    it "can store and retrieve arbitrary classes (Reference) via Storeable" do
+      ctx = Alumna::Testing.build_ctx
+      user = DummyUser.new("Alice")
+      ctx.store["user"] = user
+      retrieved = ctx.store["user"].as(DummyUser)
+      retrieved.name.should eq("Alice")
+    end
+
+    it "can store and retrieve arbitrary structs (Value) via Storeable" do
+      ctx = Alumna::Testing.build_ctx
+      tx = DummyTransaction.new(42)
+      ctx.store["tx"] = tx
+      retrieved = ctx.store["tx"].as(DummyTransaction)
+      retrieved.id.should eq(42)
+    end
+
+    it "can store and retrieve AnyData types without compile errors" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.store["count"] = 100_i64
+      ctx.store["flag"] = true
+
+      ctx.store["count"].as(Int64).should eq(100)
+      ctx.store["flag"].as(Bool).should be_true
+    end
+  end
+
   describe "result handling" do
     it "is not set initially" do
       ctx = Alumna::Testing.build_ctx
@@ -49,6 +92,18 @@ describe Alumna::RuleContext do
 
       ctx.data_bool?("active").should be_true
       ctx.data_bool?("missing").should be_nil
+    end
+
+    it "returns Time for data_time?" do
+      t = Time.utc
+      ctx = Alumna::Testing.build_ctx(data: {"created" => t} of String => Alumna::AnyData)
+      ctx.data_time?("created").should eq(t)
+    end
+
+    it "returns Bytes for data_bytes?" do
+      b = Bytes[1, 2]
+      ctx = Alumna::Testing.build_ctx(data: {"blob" => b} of String => Alumna::AnyData)
+      ctx.data_bytes?("blob").should eq(b)
     end
 
     it "returns nil when type mismatches" do

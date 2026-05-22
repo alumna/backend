@@ -1,5 +1,7 @@
 module Alumna
   module Ruleable
+    @frozen = Atomic(Bool).new(false)
+
     # Eager, non-nilable storage - each App/Service gets its own hashes
     @before_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
     @after_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
@@ -10,9 +12,20 @@ module Alumna
     WRITE_METHODS = [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch]
     ALL_METHODS   = ServiceMethod.values.reject(&.options?)
 
+    def freeze_rules!
+      @frozen.set(true)
+    end
+
+    private def ensure_not_frozen!
+      if @frozen.get
+        raise "Cannot register rules after pipelines are compiled (server is listening)"
+      end
+    end
+
     # ---- public API ----
 
     def before(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      ensure_not_frozen!
       register_rule(:before, rule, on)
       self
     end
@@ -22,6 +35,7 @@ module Alumna
     end
 
     def after(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      ensure_not_frozen!
       register_rule(:after, rule, on)
       self
     end
@@ -31,6 +45,7 @@ module Alumna
     end
 
     def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      ensure_not_frozen!
       register_rule(:error, rule, on)
       self
     end

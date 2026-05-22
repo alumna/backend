@@ -47,6 +47,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [2. Schemas](#2-schemas)
     - [Nested Fields](#nested-fields-objects-and-arrays)
     - [Conditional Requirements](#conditional-requirements)
+    - [Strict Validation and Read-Only Fields](#strict-validation-and-read-only-fields)
     - [Pluggable Formats](#pluggable-formats)
 - [3. Rules](#3-rules)
     - [Defining Rules](#defining-rules)
@@ -56,6 +57,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Headers, Params, and Views](#headers-params-and-views)
 - [4. Built-in Rules](#4-built-in-rules)
     - [Validation](#validation)
+    - [Timestamp](#timestamp)
     - [CORS](#cors)
     - [Logger](#logger)
     - [Rate Limiter](#rate-limiter)
@@ -255,7 +257,7 @@ UserSchema = Alumna::Schema.new
   .bool("admin", required: false) # required is true by default
 ```
 
-**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.).
+**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:time`, `:bytes`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.).
 
 You can also use the more explicit `field` helper:
 
@@ -290,12 +292,47 @@ If a nested field fails validation, Alumna replies with explicit dot/bracket not
 
 ### Conditional Requirements
 
-`required_on` lets a field be required only for specific operations, perfect for `PATCH` operations:
+`required_on` lets a field be required only for specific operations, perfect for `PATCH` operations where missing fields mean "do not update":
 
 ```crystal
 PostSchema = Alumna::Schema.new
   .str("title", required_on: [:create, :update], min_length: 1)
   .str("body",  required_on: :create)
+```
+*(Note: If a field is `read_only: true`, Alumna is smart enough to never require it from the client during write operations, keeping your schema definitions clean.)*
+
+### Strict Validation and Read-Only Fields
+
+Alumna schemas are **strict by default**. If a client attempts to send extra fields that are not defined in the schema (e.g., a Mass Assignment attack), the validator will automatically reject the payload with an `"is not allowed"` error. 
+
+To opt out and allow unknown fields, initialize the schema with `Alumna::Schema.new(strict: false)`. Strictness settings automatically cascade to all nested hashes and arrays.
+
+For fields that belong to your data model but should never be manipulated directly by the client (such as `id`, `created_at`, or `account_balance`), use `read_only: true`:
+
+```crystal
+AccountSchema = Alumna::Schema.new
+  .str("id", read_only: true)
+  .str("email", format: :email)
+  .time("created_at", read_only: true)
+  .time("updated_at", read_only: true)
+```
+
+When a field is marked as `read_only`:
+1. If the client tries to send it during a write operation (`POST`, `PUT`, `PATCH`), the validator will reject it with an `"is read-only"` error.
+2. The validator automatically waives the presence check (`required`) for these fields during write operations, so clients don't have to send them.
+3. Because the block happens purely at the validation layer, your internal Rules and Database Adapters remain entirely free to safely compute and inject these values into `ctx.data` downstream!
+
+Alumna includes a built-in `timestamp` rule to make handling dates completely effortless:
+
+```crystal
+app.use "/accounts", Alumna.memory(AccountSchema) {
+  # 1. Reject any read-only fields if sent by the client
+  before validate, on: :write
+  
+  # 2. Inject computed dates automatically
+  before Alumna.timestamp("created_at"), on: :create
+  before Alumna.timestamp("updated_at"), on: :write
+}
 ```
 
 ### Pluggable Formats
@@ -419,6 +456,31 @@ ctx.params["locale"] = "en" unless ctx.params["locale"]?
 
 The overlay is visible to all downstream rules and to the service, but it is not automatically reflected in the HTTP response – copy values to `ctx.http.headers` if you need to send them back.
 
+### Sharing State with `ctx.store`
+
+`ctx.store` is a per-request scratchpad used to pass data between rules and services (e.g., passing an authenticated `User` from an auth rule to your database adapter).
+
+It natively accepts standard JSON-like primitives (Strings, Integers, Floats, Booleans, Times, Bytes, Hashes, Arrays). To store your own custom classes or structs, you must explicitly mark them by including `Alumna::Storeable`:
+
+```crystal
+class User
+  include Alumna::Storeable
+  
+  getter id : Int32
+  def initialize(@id); end
+end
+
+Authenticate = Alumna::Rule.new do |ctx|
+  # Store the custom object safely
+  ctx.store["user"] = User.new(42)
+  nil
+end
+```
+
+Downstream rules or services can then retrieve and cast it safely using standard Crystal semantics: `user = ctx.store["user"].as(User)`.
+
+> **Tip:** While `Alumna::Storeable` works perfectly with both `class` and `struct`, prefer using `class` for very large data structures. Because `ctx.store` uses a mixed union type under the hood, massive structs will artificially inflate the memory footprint of the hash buffer.
+
 ---
 
 ## 4. Built-in Rules
@@ -452,6 +514,17 @@ When you need custom messages or transformations, call the schema directly insid
 ```crystal
 errors = UserSchema.validate(ctx.data, ctx.method)
 ```
+
+### Timestamp
+
+```crystal
+before Alumna.timestamp("created_at"), on: :create
+before Alumna.timestamp("updated_at"), on: :write
+```
+
+- Injects current `Time.utc` into specified field(s) of `ctx.data`.
+- Can be paired with `read_only: true` on the field during schema definition, securing it to be only manipulated by the backend, not the client.
+- Accepts multiple fields at once: `Alumna.timestamp("created_at", "updated_at")`.
 
 ### CORS
 
@@ -580,6 +653,8 @@ app.listen(3000)
 
 Alumna supports JSON (default) and MessagePack out of the box. Format is negotiated dynamically per request using standard HTTP headers (`Content-Type` / `Accept`).
 
+Under the hood, Alumna uses custom-built, zero-allocation stream parsers (`JSON::PullParser` and MessagePack's unbuffered lexer). This bypasses heavy intermediate wrapper types like `JSON::Any`, streaming payloads directly into Alumna's strict `AnyData` memory layout. `Time` objects are natively encoded and decoded as ISO8601 strings in JSON, and `Bytes` flow safely through both formats.
+
 If you need a new serialization format (e.g. XML), simply implement `Alumna::Http::Serializer` and override the `encode` and `decode` methods.
 
 ---
@@ -659,7 +734,7 @@ FeathersJS resolvers automatically transform the result payload based on context
 Alumna defines its own recursive union:
 
 ```crystal
-alias AnyData = Nil | Bool | Int64 | Float64 | String | Array(AnyData) | Hash(String, AnyData)
+alias AnyData = Nil | Bool | Int64 | Float64 | String | Time | Bytes | Array(AnyData) | Hash(String, AnyData)
 alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
 ```
 
@@ -667,6 +742,9 @@ This lets every layer – context, services, rules, and serializers – work wit
 
 **Why is `ServiceError` a struct instead of an Exception?** 
 In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type, Alumna achieves zero-allocation error paths. Expected API control flow never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
+
+**Flat routing API decision**
+Alumna enforces flat routing by design to maintain O(1) routing performance and a more efficient caching on both server-side and client-side. Nested relationships should be handled via query parameters (e.g., /posts?userId=123).
 
 **Why Crystal?** 
 Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. Ahead-Of-Time (AOT) compilation and a single binary output eliminates runtime dependency management at deploy time. Performance that competes with Go and Rust without sacrificing readability.

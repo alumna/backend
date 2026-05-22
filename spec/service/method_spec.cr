@@ -12,9 +12,20 @@ describe Alumna::ServiceMethod do
   end
 
   it "round-trips through parse when lowercased then capitalized" do
-    # this is the path used by your symbol-friendly API
     method = Alumna::ServiceMethod::Create
     parsed = Alumna::ServiceMethod.parse(method.to_s.capitalize)
     parsed.should eq(method)
+  end
+
+  it "identifies read and write methods" do
+    Alumna::ServiceMethod::Find.read?.should be_true
+    Alumna::ServiceMethod::Get.read?.should be_true
+    Alumna::ServiceMethod::Create.read?.should be_false
+
+    Alumna::ServiceMethod::Create.write?.should be_true
+    Alumna::ServiceMethod::Update.write?.should be_true
+    Alumna::ServiceMethod::Patch.write?.should be_true
+    Alumna::ServiceMethod::Find.write?.should be_false
+    Alumna::ServiceMethod::Remove.write?.should be_false
   end
 end

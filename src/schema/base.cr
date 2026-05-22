@@ -1,8 +1,11 @@
+require "set"
+
 module Alumna
   struct FieldDescriptor
     getter name : String
     getter type : FieldType
     getter required : Bool
+    getter read_only : Bool
     getter required_on : Array(ServiceMethod)?
     getter min_length : Int32?
     getter max_length : Int32?
@@ -16,6 +19,7 @@ module Alumna
       @name : String,
       @type : FieldType,
       @required : Bool = true,
+      @read_only : Bool = false,
       @min_length : Int32? = nil,
       @max_length : Int32? = nil,
       @format_name : String? = nil,
@@ -29,20 +33,24 @@ module Alumna
   end
 
   enum FieldType
-    Str; Int; Float; Bool; Nullable; Hash; Array
+    Str; Int; Float; Bool; Time; Bytes; Nullable; Hash; Array
   end
 
   class Schema
     getter fields : Array(FieldDescriptor)
+    getter strict : Bool
+    getter field_names : Set(String)
 
-    def initialize
+    def initialize(@strict : Bool = true)
       @fields = [] of FieldDescriptor
+      @field_names = Set(String).new
     end
 
     def field(
       name : String,
       type : FieldType | Symbol,
       required : Bool = true,
+      read_only : Bool = false,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
       format : Symbol | String | Nil = nil,
@@ -89,6 +97,7 @@ module Alumna
         name: name,
         type: field_type,
         required: required,
+        read_only: read_only,
         min_length: min_length,
         max_length: max_length,
         format_name: format_name,
@@ -98,6 +107,7 @@ module Alumna
         sub_schema: sub_schema,
         element_type: element_type
       )
+      @field_names << name
       self
     end
 
@@ -118,6 +128,14 @@ module Alumna
       field(name, :bool, **opts)
     end
 
+    def time(name, **opts)
+      field(name, :time, **opts)
+    end
+
+    def bytes(name, **opts)
+      field(name, :bytes, **opts)
+    end
+
     def nullable(name, **opts)
       field(name, :nullable, **opts)
     end
@@ -126,7 +144,7 @@ module Alumna
 
     # For objects/hashes
     def hash(name : String, **opts, &block : Schema ->)
-      sub = Schema.new
+      sub = Schema.new(strict: @strict)
       yield sub
       field(name, :hash, **opts, sub_schema: sub)
     end
@@ -139,13 +157,36 @@ module Alumna
 
     # For arrays of objects
     def array(name : String, **opts, &block : Schema ->)
-      sub = Schema.new
+      sub = Schema.new(strict: @strict)
       yield sub
       field(name, :array, **opts, sub_schema: sub)
     end
 
-    def self.build(& : self ->) : self
-      schema = new
+    def find_field(path : String) : FieldDescriptor?
+      parts = path.split('.')
+      current_schema = self
+      field = nil
+
+      parts.each_with_index do |part, i|
+        # Ignore array indices in query params (e.g. users[0].age -> users.age)
+        clean_part = part.sub(/\[\d+\]/, "")
+        field = current_schema.fields.find { |f| f.name == clean_part }
+        return nil unless field
+
+        if i < parts.size - 1
+          if sub = field.sub_schema
+            current_schema = sub
+          else
+            return nil
+          end
+        end
+      end
+
+      field
+    end
+
+    def self.build(strict : Bool = true, & : self ->) : self
+      schema = new(strict: strict)
       yield schema
       schema
     end
