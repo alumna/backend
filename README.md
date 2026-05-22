@@ -743,6 +743,9 @@ This lets every layer – context, services, rules, and serializers – work wit
 **Why is `ServiceError` a struct instead of an Exception?** 
 In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type, Alumna achieves zero-allocation error paths. Expected API control flow never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
 
+**Flat routing API decision**
+Alumna enforces flat routing by design to maintain O(1) routing performance and a more efficient caching on both server-side and client-side. Nested relationships should be handled via query parameters (e.g., /posts?userId=123).
+
 **Why Crystal?** 
 Expressive syntax that lowers the barrier for developers coming from Ruby or TypeScript. Ahead-Of-Time (AOT) compilation and a single binary output eliminates runtime dependency management at deploy time. Performance that competes with Go and Rust without sacrificing readability.
 
