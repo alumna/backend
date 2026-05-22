@@ -3,6 +3,11 @@ require "spec"
 module Alumna
   module Testing
     module AdapterSuiteHelpers
+      # Crystal's compiler sometimes struggles to auto-cast literals (like `10` or `"Alice"`)
+      # deep inside nested Hash literals into union types like `AnyData`.
+      # These `.any` overloads exist solely as a workaround to force the correct cast,
+      # avoiding confusing type-mismatch compilation errors when users write adapter compliance tests.
+
       def self.any(v : String) : AnyData
         v
       end

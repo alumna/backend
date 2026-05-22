@@ -99,6 +99,18 @@ module Alumna::Http
       view["missing"]?.should be_nil
     end
 
+    it "does not duplicate keys when overlay shadows source" do
+      src = HTTP::Params.parse("x=1")
+      view = ParamsView.new(src)
+      view["x"] = "2"
+
+      keys = [] of String
+      view.each { |k, _| keys << k }
+
+      keys.count("x").should eq 1
+      keys.first.should eq "x"
+    end
+
     it "iterates source directly when no overlay exists" do
       src = HTTP::Params.parse("x=1&y=2")
       view = ParamsView.new(src)

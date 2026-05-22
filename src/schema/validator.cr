@@ -65,51 +65,49 @@ module Alumna
           next
         end
 
-        # --- Length Constraints (Shared for String & Array) ---
-        if (field.type.str? && value.is_a?(String)) || (field.type.array? && value.is_a?(Array(AnyData)))
-          if min = field.min_length
-            if value.size < min
-              msg = field.type.array? ? "must contain at least #{min} item#{min == 1 ? "" : "s"}" : "must be at least #{min} character#{min == 1 ? "" : "s"}"
-              errors = push_error(errors, path, msg)
+        # --- Type-specific checks (type already verified above) ---
+        case value
+        when String
+          if field.type.str?
+            if min = field.min_length
+              errors = push_error(errors, path, "must be at least #{min} character#{min == 1 ? "" : "s"}") if value.size < min
+            end
+            if max = field.max_length
+              errors = push_error(errors, path, "must be at most #{max} character#{max == 1 ? "" : "s"}") if value.size > max
+            end
+            if validator = field.format_validator
+              errors = push_error(errors, path, field.format_message || "has an invalid format") unless validator.call(value)
             end
           end
-          if max = field.max_length
-            if value.size > max
-              msg = field.type.array? ? "must contain at most #{max} item#{max == 1 ? "" : "s"}" : "must be at most #{max} character#{max == 1 ? "" : "s"}"
-              errors = push_error(errors, path, msg)
+        when Array(AnyData)
+          if field.type.array?
+            if min = field.min_length
+              errors = push_error(errors, path, "must contain at least #{min} item#{min == 1 ? "" : "s"}") if value.size < min
+            end
+            if max = field.max_length
+              errors = push_error(errors, path, "must contain at most #{max} item#{max == 1 ? "" : "s"}") if value.size > max
+            end
+            value.each_with_index do |item, idx|
+              path.push(idx)
+              if sub = field.sub_schema
+                if item.is_a?(Hash(String, AnyData))
+                  errors = sub._validate(item, method, path, errors)
+                else
+                  errors = push_error(errors, path, "must be an object")
+                end
+              elsif el_type = field.element_type
+                if type_err = check_type(el_type, item)
+                  errors = push_error(errors, path, type_err)
+                end
+              end
+              path.pop
             end
           end
-        end
-
-        # --- String-only Formats ---
-        if field.type.str? && value.is_a?(String)
-          if validator = field.format_validator
-            unless validator.call(value)
-              errors = push_error(errors, path, field.format_message || "has an invalid format")
-            end
-          end
-        end
-
-        # --- Nested Traversal ---
-        if field.type.hash? && value.is_a?(Hash(String, AnyData))
-          if sub = field.sub_schema
-            errors = sub._validate(value, method, path, errors)
-          end
-        elsif field.type.array? && value.is_a?(Array(AnyData))
-          value.each_with_index do |item, idx|
-            path.push(idx)
+        when Hash(String, AnyData)
+          if field.type.hash?
             if sub = field.sub_schema
-              if item.is_a?(Hash(String, AnyData))
-                errors = sub._validate(item, method, path, errors)
-              else
-                errors = push_error(errors, path, "must be an object")
-              end
-            elsif el_type = field.element_type
-              if type_err = check_type(el_type, item)
-                errors = push_error(errors, path, type_err)
-              end
+              errors = sub._validate(value, method, path, errors)
             end
-            path.pop
           end
         end
 
