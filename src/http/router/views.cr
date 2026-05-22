@@ -30,33 +30,14 @@ module Alumna
         def each(& : {String, String} ->)
           ov = @overlay
           if ov.nil?
-            {% if downcase %}
-              @src.each { |k, vs| yield({k.downcase, vs.first}) }
-            # LCOV_EXCL_START - kcov is wrongly reporting the else case as not covered
-            {% else %}
-            # LCOV_EXCL_STOP
-              @src.each { |k, v| yield({k, v}) }
-            {% end %}
+            {% if downcase %} @src.each { |k, vs| yield({k.downcase, vs.first}) } {% else %} @src.each { |k, v| yield({k, v}) } {% end %}
             return
           end
 
           seen = Set(String).new
           ov.each { |k, v| seen << k; yield({k, v}) }
 
-          {% if downcase %}
-            @src.each do |k, vs|
-              lk = k.downcase
-              next if seen.includes?(lk)
-              yield({lk, vs.first})
-            end
-          # LCOV_EXCL_START - kcov is wrongly reporting the else case as not covered
-          {% else %}
-          # LCOV_EXCL_STOP
-            @src.each do |k, v|
-              next if seen.includes?(k)
-              yield({k, v})
-            end
-          {% end %}
+          {% if downcase %} @src.each { |k, vs| lk = k.downcase; next if seen.includes?(lk); yield({lk, vs.first}) } {% else %} @src.each { |k, v| next if seen.includes?(k); yield({k, v}) } {% end %}
         end
       end
     end
