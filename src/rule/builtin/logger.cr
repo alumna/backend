@@ -1,15 +1,17 @@
 module Alumna
-  # One process-wide reference — subtraction stays monotonic
-  START = Time.instant
+  private module LoggerState
+    # One process-wide reference - subtraction stays monotonic
+    START = Time.instant
+  end
 
   def self.logger(io : IO = STDOUT) : Rule
     Rule.new do |ctx|
       if ctx.phase.before?
         # store as Int64, not Float64
-        ctx.store["t0"] = (Time.instant - START).total_nanoseconds.to_i64
+        ctx.store["t0"] = (Time.instant - LoggerState::START).total_nanoseconds.to_i64
       else
         t0 = ctx.store["t0"]?.as?(Int64)
-        now = (Time.instant - START).total_nanoseconds.to_i64
+        now = (Time.instant - LoggerState::START).total_nanoseconds.to_i64
         ms = t0 ? ((now - t0) / 1_000_000.0).round(1) : 0.0
 
         status = ctx.http.status || ctx.error.try(&.status) || 200

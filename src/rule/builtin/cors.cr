@@ -44,7 +44,7 @@ module Alumna
       h["Access-Control-Allow-Credentials"] = "true" if credentials
       h["Vary"] = "Origin" unless wildcard
 
-      if ctx.http_method == "OPTIONS" && ctx.headers["access-control-request-method"]?
+      if ctx.method.options? && ctx.headers["access-control-request-method"]?
         h["Access-Control-Allow-Methods"] = allow_methods
         h["Access-Control-Allow-Headers"] = allow_headers
         h["Access-Control-Max-Age"] = max_age_s

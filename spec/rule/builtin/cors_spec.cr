@@ -49,6 +49,7 @@ describe "Alumna.cors" do
   it "short-circuits real preflight" do
     rule = Alumna.cors(origins: ["https://example.com"])
     res = Alumna::Testing.run_rule(rule,
+      method: Alumna::ServiceMethod::Options,
       http_method: "OPTIONS",
       headers: {
         "Origin"                        => "https://example.com",
@@ -66,6 +67,7 @@ describe "Alumna.cors" do
   it "does not short-circuit OPTIONS without preflight header" do
     rule = Alumna.cors
     res = Alumna::Testing.run_rule(rule,
+      method: Alumna::ServiceMethod::Options,
       http_method: "OPTIONS",
       headers: {"Origin" => "https://example.com"}
     )
@@ -78,6 +80,7 @@ describe "Alumna.cors" do
   it "does not short-circuit preflight for disallowed origin" do
     rule = Alumna.cors(origins: ["https://example.com"])
     res = Alumna::Testing.run_rule(rule,
+      method: Alumna::ServiceMethod::Options,
       http_method: "OPTIONS",
       headers: {
         "Origin"                        => "https://evil.com",
@@ -91,7 +94,6 @@ describe "Alumna.cors" do
   end
 
   it "normalizes origins case-insensitively and ignores trailing slash" do
-    # config has upper case, spaces, and a trailing slash
     rule = Alumna.cors(origins: ["  HTTPS://example.com/ "])
     res = Alumna::Testing.run_rule(rule, headers: {"Origin" => "https://EXAMPLE.COM"})
 
