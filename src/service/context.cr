@@ -23,9 +23,9 @@ module Alumna
     property provider : String
     property id : String?
     property data : Hash(String, AnyData)
-    property result : ServiceResult
-    property error : ServiceError?
-    property http : HttpOverrides
+    property result : ServiceResult = nil
+    property error : ServiceError? = nil
+    property http : HttpOverrides = HttpOverrides.new
     property headers : Http::HeadersView
 
     @result_set : Bool = false
@@ -56,10 +56,6 @@ module Alumna
       @id : String? = nil,
       @data : Hash(String, AnyData) = {} of String => AnyData,
     )
-      @result = nil
-      @result_set = false
-      @error = nil
-      @http = HttpOverrides.new
     end
 
     def result=(value : ServiceResult)
@@ -67,44 +63,24 @@ module Alumna
       @result_set = true
     end
 
+    @[AlwaysInline]
     def result_set? : Bool
       @result_set
     end
 
-    def data_str?(key) : String?
-      data[key]?.as?(String)
-    end
-
-    def data_int?(key) : Int64?
-      data[key]?.as?(Int64)
-    end
-
-    def data_float?(key) : Float64?
-      data[key]?.as?(Float64)
-    end
-
-    def data_bool?(key) : Bool?
-      data[key]?.as?(Bool)
-    end
-
-    def data_time?(key) : Time?
-      data[key]?.as?(Time)
-    end
-
-    def data_bytes?(key) : Bytes?
-      data[key]?.as?(Bytes)
-    end
+    # Typed accessors for ctx.data — generated at compile time, zero runtime cost.
+    {% for type, suffix in {String => "str", Int64 => "int", Float64 => "float",
+                            Bool => "bool", Time => "time", Bytes => "bytes"} %}
+      def data_{{suffix.id}}?(key) : {{type}}?
+        data[key]?.as?({{type}})
+      end
+    {% end %}
   end
 
   struct HttpOverrides
     property status : Int32?
     property location : String?
     @headers : Hash(String, String)?
-
-    def initialize
-      @status = nil
-      @location = nil
-    end
 
     def headers : Hash(String, String)
       @headers ||= {} of String => String

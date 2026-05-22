@@ -11,54 +11,51 @@ module Alumna
       @mutex = Sync::Mutex.new
     end
 
+    @[AlwaysInline]
     private def compare_values(a : AnyData, b : AnyData) : Int32
       return 0 if a.nil? && b.nil?
       return -1 if a.nil?
       return 1 if b.nil?
 
-      if (a.is_a?(Int64) || a.is_a?(Float64)) && (b.is_a?(Int64) || b.is_a?(Float64))
-        return (a.as(Int64 | Float64) <=> b.as(Int64 | Float64)) || 0
+      # Union type narrowing: handles Int64 vs Float64 cross-comparison.
+      if a.is_a?(Int64 | Float64) && b.is_a?(Int64 | Float64)
+        return (a <=> b) || 0
       end
 
-      if a.class == b.class
-        case a
-        when String
-          return a <=> b.as(String)
-        when Bool
-          return (a ? 1 : 0) <=> (b.as(Bool) ? 1 : 0)
-        when Time
-          return a <=> b.as(Time)
-          # LCOV_EXCL_START - kcov wrongly missed the "when Bytes"
-        when Bytes
-          # LCOV_EXCL_STOP
-          # Crystal's Slice(UInt8) implements <=>
-          return a <=> b.as(Bytes)
-        end
+      # Tuple dispatch: compiler generates a tight type-check sequence.
+      case {a, b}
+      when {String, String} then a <=> b
+      when {Bool, Bool}     then (a ? 1 : 0) <=> (b ? 1 : 0)
+      when {Time, Time}     then a <=> b
+        # LCOV_EXCL_START
+      when {Bytes, Bytes} then a <=> b
+        # LCOV_EXCL_STOP
+      else a.to_s <=> b.to_s
       end
-
-      a.to_s <=> b.to_s
     end
 
     private def extract_value(rec : Hash(String, AnyData), field : String) : AnyData
-      # Fast path for standard top-level fields
-      return rec[field] if rec.has_key?(field)
+      # Fast path: exact key match (also handles literal-dot keys like "a.b" stored flat).
+      return rec[field]? if rec.has_key?(field)
 
-      # Fallback to dot notation for nested fields
+      # Dot-notation traversal without allocating an intermediate Array(String).
       current : AnyData = rec
-      field.split('.').each do |part|
-        if current.is_a?(Hash(String, AnyData))
-          if current.has_key?(part)
-            current = current[part]
-          else
-            return nil
-          end
-        else
-          return nil
-        end
+      start = 0
+
+      loop do
+        dot = field.index('.', start)
+        part = dot ? field[start...dot] : field[start..]
+        return nil unless current.is_a?(Hash(String, AnyData))
+        current = current[part]?
+        break unless dot
+        return nil if current.nil?
+        start = dot + 1
       end
+
       current
     end
 
+    @[AlwaysInline]
     private def match_condition?(val : AnyData, cond : Query::TypedCondition) : Bool
       if val.is_a?(Array(AnyData))
         if cond.op.ne? || cond.op.nin?
@@ -71,6 +68,7 @@ module Alumna
       end
     end
 
+    @[AlwaysInline]
     private def match_single_value?(val : AnyData, cond : Query::TypedCondition) : Bool
       case cond.op
       when .eq?
@@ -100,10 +98,10 @@ module Alumna
       filters = q.typed_filters(schema)
       return filters if filters.is_a?(ServiceError)
 
-      # 1) Lock only for shallow extraction!
+      # 1) Lock only for shallow extraction.
       records = @mutex.synchronize { @store.values }
 
-      # 2) filters (no lock needed)
+      # 2) Filter (no lock needed — working on a local copy).
       unless filters.empty?
         records = records.select do |rec|
           filters.all? do |field, conditions|
@@ -113,7 +111,7 @@ module Alumna
         end
       end
 
-      # 3) sort
+      # 3) Sort.
       if sort = q.sort
         records.sort! do |a, b|
           sort.reduce(0) do |cmp, (field, dir)|
@@ -123,13 +121,20 @@ module Alumna
         end
       end
 
-      # 4) skip + limit
-      records = records.skip(q.skip || 0)
+      # 4) Skip + limit — single Array#[] call when both are present:
+      #    one allocation, one copy_from, vs. two with skip + first.
+      skip = q.skip || 0
+
+      # Prevent IndexError if client requests a page beyond the dataset size
+      safe_skip = Math.min(skip, records.size)
+
       if limit = q.limit
-        records = records.first(limit)
+        records = records[safe_skip, limit]
+      elsif safe_skip > 0
+        records = records[safe_skip..]
       end
 
-      # 5) select
+      # 5) Select.
       if fields = q.select
         records.map do |rec|
           selected = rec.select(fields)

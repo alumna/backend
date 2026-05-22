@@ -46,13 +46,16 @@ module Alumna
           @skip = parse_positive_int(v)
         when "$sort"
           @sort = v.split(',').compact_map do |part|
-            field, dir = part.split(':', 2)
+            # Avoid split(':', 2) array allocation — use index directly.
+            colon = part.index(':')
+            field = colon ? part[0...colon] : part
             next if field.empty?
-            dir_i = dir.try(&.to_i?) || 1
+            dir_i = colon ? (part[colon + 1..].to_i? || 1) : 1
             {field, dir_i >= 0 ? 1 : -1}
           end
         when "$select"
-          @select = v.split(',').map(&.strip).reject(&.empty?)
+          # Single compact_map pass instead of map + reject (one fewer array).
+          @select = v.split(',').compact_map { |s| t = s.strip; t unless t.empty? }
         else
           next if k.starts_with?('$')
 
@@ -90,7 +93,6 @@ module Alumna
         conds.each do |c|
           cv = c.value
           if c.op.in? || c.op.nin?
-            # Safe union narrowing: if it's an Array(String), use it. If it's a String, wrap it.
             raw_vals = cv.is_a?(Array(String)) ? cv : [cv]
             arr = [] of AnyData
 
@@ -101,7 +103,6 @@ module Alumna
             end
             res[key] << TypedCondition.new(c.op, arr.as(AnyData))
           else
-            # Safe union narrowing: if it's an Array(String), take the first. If it's a String, use it.
             raw_val = cv.is_a?(Array(String)) ? cv.first : cv
             cast_val = cast_value(raw_val, type, fd)
 
@@ -128,6 +129,7 @@ module Alumna
       when .float? then val.to_f64?
       when .bool?  then val == "true" ? true : (val == "false" ? false : nil)
       when .time?
+        # Time::Format::RFC_3339 has no parse? — rescue is the only option.
         Time::Format::RFC_3339.parse(val) rescue nil
       else val
       end
@@ -137,6 +139,7 @@ module Alumna
       @filters.empty? && @limit.nil? && @skip.nil? && @sort.nil? && @select.nil?
     end
 
+    @[AlwaysInline]
     private def parse_op(s : String) : Op?
       case s
       when "$eq"  then Op::Eq
