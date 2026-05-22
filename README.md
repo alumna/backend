@@ -57,6 +57,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Headers, Params, and Views](#headers-params-and-views)
 - [4. Built-in Rules](#4-built-in-rules)
     - [Validation](#validation)
+    - [Timestamp](#timestamp)
     - [CORS](#cors)
     - [Logger](#logger)
     - [Rate Limiter](#rate-limiter)
@@ -513,6 +514,17 @@ When you need custom messages or transformations, call the schema directly insid
 ```crystal
 errors = UserSchema.validate(ctx.data, ctx.method)
 ```
+
+### Timestamp
+
+```crystal
+before Alumna.timestamp("created_at"), on: :create
+before Alumna.timestamp("updated_at"), on: :write
+```
+
+- Injects current `Time.utc` into specified field(s) of `ctx.data`.
+- Can be paired with `read_only: true` on the field during schema definition, securing it to be only manipulated by the backend, not the client.
+- Accepts multiple fields at once: `Alumna.timestamp("created_at", "updated_at")`.
 
 ### CORS
 
