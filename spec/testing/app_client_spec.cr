@@ -18,8 +18,8 @@ class EchoService < Alumna::MemoryAdapter
     {"echo" => ctx.http_method} of String => Alumna::AnyData
   end
 
-  def remove(ctx) : Bool | Alumna::ServiceError
-    true
+  def remove(ctx) : Nil | Alumna::ServiceError
+    nil
   end
 end
 
@@ -60,8 +60,8 @@ describe Alumna::Testing::AppClient do
 
   it "dispatches DELETE requests" do
     res = client.delete("/echo/1")
-    res.status.should eq(200)
-    res.json["removed"].as_bool.should be_true
+    res.status.should eq(204)
+    res.body.should be_empty
   end
 
   it "dispatches OPTIONS requests" do

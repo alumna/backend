@@ -59,8 +59,7 @@ module Alumna
       current
     end
 
-    private def match_condition?(val : AnyData, cond : Query::Condition) : Bool
-      # Distributor arrays natively. e.g. `$ne` requires ALL elements to not match.
+    private def match_condition?(val : AnyData, cond : Query::TypedCondition) : Bool
       if val.is_a?(Array(AnyData))
         if cond.op.ne? || cond.op.nin?
           val.all? { |v| match_single_value?(v, cond) }
@@ -72,58 +71,20 @@ module Alumna
       end
     end
 
-    private def match_single_value?(val : AnyData, cond : Query::Condition) : Bool
-      # Time requires a proper RFC3339 string match, not simple to_s checking
-      if val.is_a?(Time)
-        cv = cond.value
-        case cond.op
-        when .eq?
-          return false unless cv.is_a?(String)
-          return compare_query_value(val, cv) == 0
-        when .ne?
-          return false unless cv.is_a?(String)
-          return compare_query_value(val, cv) != 0
-        when .in?
-          return false unless cv.is_a?(Array)
-          return cv.any? { |v| compare_query_value(val, v) == 0 }
-        when .nin?
-          return false unless cv.is_a?(Array)
-          return cv.none? { |v| compare_query_value(val, v) == 0 }
-        else
-          return false unless cv.is_a?(String)
-          cmp = compare_query_value(val, cv)
-          return false unless cmp
-          case cond.op
-          when .gt?  then return cmp > 0
-          when .gte? then return cmp >= 0
-          when .lt?  then return cmp < 0
-          when .lte? then return cmp <= 0
-          else            return false
-          end
-        end
-      end
-
-      # For everything else, the original string-based comparison is highly optimized
-      str_val = val.try(&.to_s)
-
+    private def match_single_value?(val : AnyData, cond : Query::TypedCondition) : Bool
       case cond.op
       when .eq?
-        str_val == cond.value
+        compare_values(val, cond.value) == 0
       when .ne?
-        str_val != cond.value
+        compare_values(val, cond.value) != 0
       when .in?
         cv = cond.value
-        cv.is_a?(Array) ? cv.includes?(str_val) : false
+        cv.is_a?(Array) ? cv.any? { |v| compare_values(val, v) == 0 } : false
       when .nin?
         cv = cond.value
-        cv.is_a?(Array) ? !cv.includes?(str_val) : true
+        cv.is_a?(Array) ? cv.none? { |v| compare_values(val, v) == 0 } : true
       else
-        cv = cond.value
-        return false unless cv.is_a?(String)
-
-        cmp = compare_query_value(val, cv)
-        return false unless cmp
-
+        cmp = compare_values(val, cond.value)
         case cond.op
         when .gt?  then cmp > 0
         when .gte? then cmp >= 0
@@ -134,127 +95,88 @@ module Alumna
       end
     end
 
-    private def compare_query_value(record_val : AnyData, query_val : String) : Int32?
-      return nil if record_val.nil?
-
-      case record_val
-      when Int64
-        if q_int = query_val.to_i64?
-          record_val <=> q_int
-        else
-          nil
-        end
-      when Float64
-        if q_float = query_val.to_f64?
-          record_val <=> q_float
-        else
-          nil
-        end
-      when Bool
-        q_bool = query_val == "true" ? true : (query_val == "false" ? false : nil)
-        return nil if q_bool.nil?
-        (record_val ? 1 : 0) <=> (q_bool ? 1 : 0)
-      when String
-        record_val <=> query_val
-      when Time
-        begin
-          q_time = Time::Format::RFC_3339.parse(query_val)
-          record_val <=> q_time
-        rescue Time::Format::Error
-          nil
-        end
-      when Bytes
-        nil # Unsafe to compare arbitrary binary blobs via URL query strings
-      else
-        nil
-      end
-    end
-
     def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
-      @mutex.synchronize do
-        q = ctx.query
-        records = @store.values
+      q = ctx.query
+      filters = q.typed_filters(schema)
+      return filters if filters.is_a?(ServiceError)
 
-        # 1) filters
-        unless q.filters.empty?
-          records = records.select do |rec|
-            q.filters.all? do |field, conditions|
-              val = extract_value(rec, field)
-              conditions.all? do |cond|
-                match_condition?(val, cond)
-              end
-            end
+      # 1) Lock only for shallow extraction!
+      records = @mutex.synchronize { @store.values }
+
+      # 2) filters (no lock needed)
+      unless filters.empty?
+        records = records.select do |rec|
+          filters.all? do |field, conditions|
+            val = extract_value(rec, field)
+            conditions.all? { |cond| match_condition?(val, cond) }
           end
         end
+      end
 
-        # 2) sort
-        if sort = q.sort
-          records.sort! do |a, b|
-            sort.reduce(0) do |cmp, (field, dir)|
-              next cmp if cmp != 0
-              compare_values(extract_value(a, field), extract_value(b, field)) * dir
-            end
+      # 3) sort
+      if sort = q.sort
+        records.sort! do |a, b|
+          sort.reduce(0) do |cmp, (field, dir)|
+            next cmp if cmp != 0
+            compare_values(extract_value(a, field), extract_value(b, field)) * dir
           end
         end
+      end
 
-        # 3) skip + limit
-        records = records.skip(q.skip || 0)
-        if limit = q.limit
-          records = records.first(limit)
-        end
+      # 4) skip + limit
+      records = records.skip(q.skip || 0)
+      if limit = q.limit
+        records = records.first(limit)
+      end
 
-        # 4) select
-        if fields = q.select
-          # LCOV_EXCL_START - kcov wrongly misses.map
-          records.map do |rec|
-            # LCOV_EXCL_STOP
-            selected = rec.select(fields)
-            selected["id"] = rec["id"] if rec["id"]? && !selected.has_key?("id")
-            selected
-          end
-        else
-          records
+      # 5) select
+      if fields = q.select
+        records.map do |rec|
+          selected = rec.select(fields)
+          selected["id"] = rec["id"] if rec["id"]? && !selected.has_key?("id")
+          selected
         end
+      else
+        records
       end
     end
 
     def get(ctx : RuleContext) : Hash(String, AnyData)? | ServiceError
-      @mutex.synchronize do
-        id = ctx.id
-        return nil if id.nil?
-        @store[id]?
-      end
+      id = ctx.id
+      return nil unless id
+      @mutex.synchronize { @store[id]? }
     end
 
     def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
+      record = ctx.data.dup
       @mutex.synchronize do
         id = @next_id.to_s
         @next_id += 1
-        record = ctx.data.dup
         record["id"] = id
         @store[id] = record
-        record
       end
+      record
     end
 
     def update(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
-      @mutex.synchronize do
-        id = ctx.id
-        return ServiceError.bad_request("ID required for update") unless id
-        return ServiceError.not_found unless @store.has_key?(id)
+      id = ctx.id
+      return ServiceError.bad_request("ID required for update") unless id
 
-        record = ctx.data.dup
-        record["id"] = id
+      record = ctx.data.dup
+      record["id"] = id
+
+      @mutex.synchronize do
+        return ServiceError.not_found unless @store.has_key?(id)
         @store[id] = record
-        record
       end
+      record
     end
 
     def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
-      @mutex.synchronize do
-        id = ctx.id
-        return ServiceError.bad_request("ID required for patch") unless id
+      id = ctx.id
+      return ServiceError.bad_request("ID required for patch") unless id
 
+      @mutex.synchronize do
         existing = @store[id]?
         return ServiceError.not_found unless existing
 
@@ -265,12 +187,13 @@ module Alumna
       end
     end
 
-    def remove(ctx : RuleContext) : Bool | ServiceError
-      @mutex.synchronize do
-        id = ctx.id
-        return ServiceError.bad_request("ID required for remove") unless id
-        !@store.delete(id).nil?
-      end
+    def remove(ctx : RuleContext) : Nil | ServiceError
+      id = ctx.id
+      return ServiceError.bad_request("ID required for remove") unless id
+
+      deleted = @mutex.synchronize { @store.delete(id) }
+      return ServiceError.not_found unless deleted
+      nil
     end
   end
 end

@@ -66,7 +66,12 @@ module Alumna
             app_e = collect_rules(m, RulePhase::Error)
             service.set_error_pipeline(m, svc_e, app_e)
           end
+
+          service.freeze_rules! # Freeze the service rules
         end
+
+        self.freeze_rules! # Freeze the app rules
+
         # :release ensures all pipeline writes above are visible to any
         # thread that subsequently reads with :acquire.
         @pipelines_compiled.set(true, :release)

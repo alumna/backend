@@ -162,6 +162,29 @@ module Alumna
       field(name, :array, **opts, sub_schema: sub)
     end
 
+    def find_field(path : String) : FieldDescriptor?
+      parts = path.split('.')
+      current_schema = self
+      field = nil
+
+      parts.each_with_index do |part, i|
+        # Ignore array indices in query params (e.g. users[0].age -> users.age)
+        clean_part = part.sub(/\[\d+\]/, "")
+        field = current_schema.fields.find { |f| f.name == clean_part }
+        return nil unless field
+
+        if i < parts.size - 1
+          if sub = field.sub_schema
+            current_schema = sub
+          else
+            return nil
+          end
+        end
+      end
+
+      field
+    end
+
     def self.build(strict : Bool = true, & : self ->) : self
       schema = new(strict: strict)
       yield schema

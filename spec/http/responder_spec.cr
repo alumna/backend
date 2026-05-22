@@ -80,19 +80,21 @@ describe Alumna::Http::Responder do
       resp.status_code.should eq(202)
     end
 
-    it "defaults to 201 for create and 200 otherwise" do
+    it "defaults to 201 for create, 204 for remove, and 200 otherwise" do
       create_ctx = build_ctx(method: Alumna::ServiceMethod::Create, result: {"id" => "1"} of String => Alumna::AnyData)
+      remove_ctx = build_ctx(method: Alumna::ServiceMethod::Remove, result: nil)
       find_ctx = build_ctx(method: Alumna::ServiceMethod::Find, result: [] of Hash(String, Alumna::AnyData))
 
       create_resp = fake_response
+      remove_resp = fake_response
       find_resp = fake_response
 
       Alumna::Http::Responder.write(create_resp, create_ctx, json_serializer)
+      Alumna::Http::Responder.write(remove_resp, remove_ctx, json_serializer)
       Alumna::Http::Responder.write(find_resp, find_ctx, json_serializer)
-      create_resp.close
-      find_resp.close
 
       create_resp.status_code.should eq(201)
+      remove_resp.status_code.should eq(204)
       find_resp.status_code.should eq(200)
     end
 

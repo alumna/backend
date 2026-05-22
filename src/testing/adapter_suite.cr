@@ -148,7 +148,9 @@ module Alumna
               results.first["age"].should eq(20)
 
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "abc"})
-              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters records using $gt and $lt operators on Float64" do
@@ -163,7 +165,9 @@ module Alumna
               results.first["rating"].should eq(4.5)
 
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"rating[$gt]" => "abc"})
-              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters records using $gt and $lt operators on Bool" do
@@ -182,7 +186,9 @@ module Alumna
               results2.first["active"].should eq(false)
 
               ctx3 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$gt]" => "not-a-bool"})
-              adapter.find(ctx3).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx3)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters strings using $gt operator lexicographically" do
@@ -274,7 +280,9 @@ module Alumna
               results.first["created"].should eq(t2)
 
               ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "invalid-date"})
-              adapter.find(ctx2).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err = adapter.find(ctx2)
+              err.should be_a(Alumna::ServiceError)
+              err.as(Alumna::ServiceError).status.should eq(400)
             end
 
             it "filters records using $eq and $in operators on Time" do
@@ -318,16 +326,17 @@ module Alumna
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(Time.utc)} of String => Alumna::AnyData)
 
-              # Programmatically forge a Query to bypass string parsing and hit the type guards
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
-
-              # Hit: `return false unless cv.is_a?(String)` inside the `.ne?` block
               ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Ne, ["array", "instead", "of", "string"])
-              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              err1 = adapter.find(ctx)
+              err1.should be_a(Alumna::ServiceError)
+              err1.as(Alumna::ServiceError).status.should eq(400)
 
-              # Hit: `return false unless cv.is_a?(Array)` inside the `.nin?` block
-              ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Nin, "string instead of array")
-              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
+              ctx2 = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
+              ctx2.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Nin, "string instead of array")
+              err2 = adapter.find(ctx2)
+              err2.should be_a(Alumna::ServiceError)
+              err2.as(Alumna::ServiceError).status.should eq(400)
             end
           end
 
@@ -512,11 +521,11 @@ module Alumna
           end
 
           describe "#remove" do
-            it "deletes the record and returns true" do
+            it "deletes the record and returns nil" do
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
-              adapter.remove(ctx).as(Bool).should be_true
+              adapter.remove(ctx).should be_nil
             end
 
             it "makes the record unretrievable after deletion" do
@@ -529,15 +538,12 @@ module Alumna
               adapter.get(get_ctx).should be_nil
             end
 
-            it "returns false when the id does not exist" do
+            it "returns a 404 error when the id does not exist" do
               adapter = {{factory.body}}
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "99")
               result = adapter.remove(ctx)
-              if result.is_a?(Bool)
-                result.should be_false
-              elsif result.is_a?(Alumna::ServiceError)
-                result.status.should eq(404)
-              end
+              result.should be_a(Alumna::ServiceError)
+              result.as(Alumna::ServiceError).status.should eq(404)
             end
 
             it "returns a 400 error when ctx.id is nil" do

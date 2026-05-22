@@ -200,12 +200,11 @@ describe "Router integration" do
     end
 
     it "DELETE /items/:id maps to remove" do
-      # create a fresh record to delete so we don't depend on id "1" still existing
       created = post("/items", %|{"name":"ToDelete"}|, AUTH)
       id = JSON.parse(created.body)["id"].as_s
       response = delete("/items/#{id}", AUTH)
-      response.status_code.should eq(200)
-      JSON.parse(response.body)["removed"].as_bool.should be_true
+      response.status_code.should eq(204)
+      response.body.should be_empty
     end
   end
 

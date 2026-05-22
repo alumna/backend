@@ -43,7 +43,9 @@ module Alumna
       end
 
       private def self.default_status(method : ServiceMethod) : Int32
-        method.create? ? 201 : 200
+        return 201 if method.create?
+        return 204 if method.remove?
+        200
       end
     end
   end

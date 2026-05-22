@@ -25,7 +25,8 @@ require "./schema/formats/url"
 require "./schema/formats/uuid"
 require "./schema/validator"
 
-# Context - safe because App and Service exist as forward declarations
+# Context and Query - safe because App and Service exist as forward declarations
+require "./service/query"
 require "./service/context"
 
 # Rule - safe because RuleContext exists
