@@ -1,5 +1,25 @@
 # Alumna Backend changelog
 
+## 0.5.2 - 2026-06-22
+
+### Changed
+* **views:** `HeadersView` and `ParamsView` now strictly adhere to Crystal conventions. Using `["key"]` raises a `KeyError` if the key is missing, while `["key"]?` safely returns `nil`. 
+* **errors:** `ServiceError` now lazily allocates its `details` Hash. Standard control-flow errors (like 401, 404, 500) now execute with zero heap allocations for the details payload.
+* **ruleable:** `register_rule` now strictly enforces the `RulePhase` enum rather than using Symbols, catching phase routing errors at compile time.
+* **testing:** added explicit documentation to `AdapterSuiteHelpers.any` to clarify its role as a compiler type-casting workaround for nested literals.
+
+### Performance
+* **schema:** introduced an internal O(1) hash lookup (`@fields_by_name`) for `Schema#find_field`. Deep schema path resolution during query parsing is now significantly faster and no longer requires linear O(N) array scans.
+* **schema:** completely rewrote the internal `Validator` loop to use idiomatic `case/when` type narrowing, eliminating repetitive `.is_a?` type checks.
+* **cors:** replaced raw string comparison with zero-allocation `ctx.method.options?` enum checks.
+* **ruleable:** added a fast-path to `expand_on` to eliminate intermediate array allocations when registering single rules, and optimized `ServiceMethod` parsing to avoid string capitalizations.
+
+### Fixed
+* **logger:** encapsulated the monotonic `START` constant inside a private `LoggerState` module, preventing it from polluting the public `Alumna` namespace.
+* **views:** utilized a Crystal macro (`define_overlay_view`) to eliminate ~70 lines of duplicated code between `HeadersView` and `ParamsView`.
+* **orchestrator:** `run_bounded` now returns a self-documenting `NamedTuple` (`{ok: Bool, stopped_in_app: Bool}`), drastically improving readability in the main dispatch loop with zero runtime penalty.
+* **thread-safety:** `Ruleable#ensure_not_frozen!` now explicitly uses `:acquire` memory ordering to guarantee perfectly synchronized reads across threads.
+
 ## 0.5.1 - 2026-05-22
 
 ### Added
