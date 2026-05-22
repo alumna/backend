@@ -350,6 +350,23 @@ module Alumna
               results.map(&.["n"]).should eq(["1", "2"])
             end
 
+            it "applies $skip without $limit" do
+              adapter = {{factory.body}}
+              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"n" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "2"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.size.should eq(3)
+              results.map(&.["n"]).should eq(["2", "3", "4"])
+            end
+
+            it "safely handles $skip greater than the dataset size" do
+              adapter = {{factory.body}}
+              3.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"n" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "10"})
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+              results.should be_empty
+            end
+
             it "applies $sort correctly with numeric types (not lexicographical)" do
               adapter = {{factory.body}}
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(100)} of String => Alumna::AnyData)

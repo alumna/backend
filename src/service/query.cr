@@ -119,7 +119,9 @@ module Alumna
       if type.array? && fd
         if el_type = fd.element_type
           effective_type = el_type
+          # LCOV_EXCL_START - kcov is wringly considering this elseif as non-covered, but *it is*
         elsif fd.sub_schema
+          # LCOV_EXCL_STOP - the line below is being marked as covered, which confirms that only the `elseif` line is wrongly reported
           effective_type = FieldType::Hash
         end
       end

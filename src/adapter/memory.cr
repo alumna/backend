@@ -27,10 +27,8 @@ module Alumna
       when {String, String} then a <=> b
       when {Bool, Bool}     then (a ? 1 : 0) <=> (b ? 1 : 0)
       when {Time, Time}     then a <=> b
-        # LCOV_EXCL_START
-      when {Bytes, Bytes} then a <=> b
-        # LCOV_EXCL_STOP
-      else a.to_s <=> b.to_s
+      when {Bytes, Bytes}   then a <=> b
+      else                       a.to_s <=> b.to_s
       end
     end
 
@@ -136,7 +134,9 @@ module Alumna
 
       # 5) Select.
       if fields = q.select
+        # LCOV_EXCL_START - kcov wrongly reports on this .map, while reporting coverage inside it
         records.map do |rec|
+          # LCOV_EXCL_STOP
           selected = rec.select(fields)
           selected["id"] = rec["id"] if rec["id"]? && !selected.has_key?("id")
           selected
