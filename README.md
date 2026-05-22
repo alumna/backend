@@ -184,21 +184,27 @@ When a service is mounted, Alumna exposes it automatically following standard RE
 
 ### Querying
 
-Alumna automatically parses URL query strings into a strongly-typed `ctx.query` object. It natively supports MongoDB/FeathersJS-style comparison operators and nested dot-notation.
+Alumna automatically parses URL query strings into a `ctx.query` object. It natively supports MongoDB/FeathersJS-style comparison operators and nested dot-notation.
+
+Because URL parameters are inherently strings, Alumna provides a powerful `typed_filters(schema)` method. It reads your service's schema and automatically coerces the query values into native Crystal types (`Int64`, `Float64`, `Bool`, `Time`), returning an immediate `400 Bad Request` if the client sends a malformed type.
 
 ```crystal
 # GET /users?age[$gte]=18&status[$in]=active,pending&billing.plan=pro&$limit=10&$sort=age:-1
 
-ctx.query.filters["age"]          # => [{op: Op::Gte, value: "18"}]
-ctx.query.filters["status"]       # => [{op: Op::In, value: ["active", "pending"]}]
-ctx.query.filters["billing.plan"] # => [{op: Op::Eq, value: "pro"}]
-ctx.query.limit                   # => 10
-ctx.query.sort                    # => [{"age", -1}]
+# Raw string parsed from URL
+ctx.query.filters["age"] # => [{op: Op::Gte, value: "18"}]
+
+# Strictly typed against the UserSchema
+filters = ctx.query.typed_filters(schema)
+filters["age"]          # => [{op: Op::Gte, value: 18_i64}]
+filters["status"]       # => [{op: Op::In, value: ["active", "pending"]}]
+filters["billing.plan"] # => [{op: Op::Eq, value: "pro"}]
+
+ctx.query.limit # => 10
+ctx.query.sort  # => [{"age", -1}]
 ```
 
 **Supported operators:** `$eq` (default), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`.
-
-The built-in `MemoryAdapter` implements all of these out of the box. When building custom database adapters, you simply read `ctx.query` to compile your SQL/NoSQL statements.
 
 ### Writing a Custom Adapter
 
@@ -212,7 +218,11 @@ class PostgresUserService < Alumna::Service
   end
 
   def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
-    # query @db using ctx.query.filters, limit, skip, and sort
+    # 1. Safely coerce URL strings into native types
+    filters = ctx.query.typed_filters(schema)
+    return filters if filters.is_a?(ServiceError)
+    
+    # 2. Query @db using filters, ctx.query.limit, skip, and sort
     [] of Hash(String, AnyData)
   end
 
@@ -236,9 +246,10 @@ class PostgresUserService < Alumna::Service
     {} of String => AnyData
   end
 
-  def remove(ctx : RuleContext) : Bool | ServiceError
-    # delete record at ctx.id, return true if deleted
-    false
+  def remove(ctx : RuleContext) : Nil | ServiceError
+    # delete record at ctx.id, return ServiceError.not_found if it didn't exist.
+    # Returning `nil` here automatically triggers a 204 No Content response
+    nil
   end
 end
 ```
@@ -405,7 +416,9 @@ If *any* rule or method returns a `ServiceError`, the pipeline jumps immediately
 
 After-rules always run when there is no error, even if a before-rule short-circuited the service method. Error-rules always run when there is an error, even if it occurred in a before-rule. This makes logging, metrics, and response headers reliable for both success and failure paths.
 
-*Note: `options` HTTP calls (CORS preflights) are excluded from default `:all` scopes. To run a rule on an OPTIONS request, you must explicitly pass `on: :options`.*
+> **Note:** `options` HTTP calls (CORS preflights) are excluded from default `:all` scopes. To run a rule on an OPTIONS request, you must explicitly pass `on: :options`.
+
+> **Strict Compilation:** For maximum performance and thread-safety, Alumna compiles and strictly freezes all rule pipelines the moment you call `app.listen`. Attempting to register a rule after the server boots will intentionally raise an Exception to prevent silent failures.
 
 ### Targeting Methods with `on:`
 
