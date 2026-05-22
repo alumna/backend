@@ -255,7 +255,7 @@ UserSchema = Alumna::Schema.new
   .bool("admin", required: false) # required is true by default
 ```
 
-**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.).
+**Supported field types:** `:str`, `:int`, `:float`, `:bool`, `:time`, `:bytes`, `:nullable`, `:hash`, `:array` (or `Alumna::FieldType::Str`, etc.).
 
 You can also use the more explicit `field` helper:
 
@@ -423,7 +423,7 @@ The overlay is visible to all downstream rules and to the service, but it is not
 
 `ctx.store` is a per-request scratchpad used to pass data between rules and services (e.g., passing an authenticated `User` from an auth rule to your database adapter).
 
-It natively accepts standard JSON-like primitives (Strings, Integers, Booleans, Hashes, Arrays). To store your own custom classes or structs, you must explicitly mark them by including `Alumna::Storeable`:
+It natively accepts standard JSON-like primitives (Strings, Integers, Floats, Booleans, Times, Bytes, Hashes, Arrays). To store your own custom classes or structs, you must explicitly mark them by including `Alumna::Storeable`:
 
 ```crystal
 class User
@@ -605,6 +605,8 @@ app.listen(3000)
 
 Alumna supports JSON (default) and MessagePack out of the box. Format is negotiated dynamically per request using standard HTTP headers (`Content-Type` / `Accept`).
 
+Under the hood, Alumna uses custom-built, zero-allocation stream parsers (`JSON::PullParser` and MessagePack's unbuffered lexer). This bypasses heavy intermediate wrapper types like `JSON::Any`, streaming payloads directly into Alumna's strict `AnyData` memory layout. `Time` objects are natively encoded and decoded as ISO8601 strings in JSON, and `Bytes` flow safely through both formats.
+
 If you need a new serialization format (e.g. XML), simply implement `Alumna::Http::Serializer` and override the `encode` and `decode` methods.
 
 ---
@@ -684,7 +686,7 @@ FeathersJS resolvers automatically transform the result payload based on context
 Alumna defines its own recursive union:
 
 ```crystal
-alias AnyData = Nil | Bool | Int64 | Float64 | String | Array(AnyData) | Hash(String, AnyData)
+alias AnyData = Nil | Bool | Int64 | Float64 | String | Time | Bytes | Array(AnyData) | Hash(String, AnyData)
 alias ServiceResult = Hash(String, AnyData) | Array(Hash(String, AnyData)) | Nil
 ```
 
