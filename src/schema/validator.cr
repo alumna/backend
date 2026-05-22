@@ -19,10 +19,28 @@ module Alumna
     end
 
     protected def _validate(data : Hash(String, AnyData), method : ServiceMethod?, path : Array(String | Int32), errors : Array(FieldError)?) : Array(FieldError)?
+      # --- Strict Check ---
+      if @strict
+        data.each_key do |key|
+          unless @field_names.includes?(key)
+            path.push(key)
+            errors = push_error(errors, path, "is not allowed")
+            path.pop
+          end
+        end
+      end
+
       @fields.each do |field|
         path.push(field.name)
         has_key = data.has_key?(field.name)
         value = data[field.name]?
+
+        # --- Read-Only Check ---
+        if field.read_only && method.try(&.write?) && has_key
+          errors = push_error(errors, path, "is read-only")
+          path.pop
+          next
+        end
 
         # --- Presence check ---
         unless has_key
@@ -102,6 +120,9 @@ module Alumna
     end
 
     private def required?(field : FieldDescriptor, method : ServiceMethod?) : Bool
+      # A read-only field is never expected from the client during write operations
+      return false if field.read_only && method.try(&.write?)
+
       if req_on = field.required_on
         method.nil? || req_on.includes?(method)
       else

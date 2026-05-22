@@ -3,6 +3,7 @@ require "json"
 require "../../src/testing"
 
 TestSchema = Alumna::Schema.new
+  .str("id", read_only: true)
   .str("title", required_on: [:create, :update], min_length: 1, max_length: 100)
   .str("content", required: false)
 
@@ -86,9 +87,10 @@ describe "Alumna System Integration" do
     data["title"].as_s.should eq("Create 201")
   end
 
-  it "ignores client-supplied id on create" do
+  it "rejects client-supplied id on create because it is read-only" do
     res = authenticated_client.post("/test", body: %({"id":"999","title":"Ignore ID"}))
-    res.json["id"].as_s.should_not eq("999")
+    res.status.should eq(422)
+    res.json["details"]["id"].as_s.should eq("is read-only")
   end
 
   it "lists all records" do
@@ -130,10 +132,11 @@ describe "Alumna System Integration" do
     data["content"].as_s.should eq("Patched")
   end
 
-  it "update and patch cannot change id" do
+  it "update and patch cannot change id because it is read-only" do
     id = authenticated_client.post("/test", body: %({"title":"ID Test"})).json["id"].as_s
     res = authenticated_client.patch("/test/#{id}", body: %({"id":"hacked","title":"ID Test"}))
-    res.json["id"].as_s.should eq(id)
+    res.status.should eq(422)
+    res.json["details"]["id"].as_s.should eq("is read-only")
   end
 
   it "returns 404 for update on missing id" do

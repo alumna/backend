@@ -2,8 +2,15 @@ require "../spec_helper"
 
 describe Alumna::Schema do
   describe "initialization" do
-    it "starts empty" do
-      Alumna::Schema.new.fields.should be_empty
+    it "starts empty and strict by default" do
+      s = Alumna::Schema.new
+      s.fields.should be_empty
+      s.strict.should be_true
+    end
+
+    it "accepts strict: false" do
+      s = Alumna::Schema.new(strict: false)
+      s.strict.should be_false
     end
   end
 
@@ -27,6 +34,11 @@ describe Alumna::Schema do
       fd = Alumna::Schema.new.field("t", :str, min_length: 2, max_length: 10).fields.first
       fd.min_length.should eq(2)
       fd.max_length.should eq(10)
+    end
+
+    it "stores read_only flag" do
+      fd = Alumna::Schema.new.field("x", :str, read_only: true).fields.first
+      fd.read_only.should be_true
     end
   end
 
@@ -132,6 +144,13 @@ describe Alumna::Schema do
         sc.int("second")
       end
       s.fields.map(&.name).should eq(["first", "second"])
+    end
+
+    it "builds via block with strict flag" do
+      s = Alumna::Schema.build(strict: false) do |sc|
+        sc.str("first")
+      end
+      s.strict.should be_false
     end
   end
 
