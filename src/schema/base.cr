@@ -41,9 +41,30 @@ module Alumna
     getter strict : Bool
     getter field_names : Set(String)
 
+    protected getter fields_by_name : Hash(String, FieldDescriptor)
+
     def initialize(@strict : Bool = true)
       @fields = [] of FieldDescriptor
       @field_names = Set(String).new
+      @fields_by_name = {} of String => FieldDescriptor
+    end
+
+    private def resolve_format(format : Symbol | String | Nil) : {String?, Proc(String, Bool)?, String?}
+      return {nil, nil, nil} unless format
+
+      format_name = case format
+                    when Symbol then format.to_s.downcase
+                    when String then format.downcase
+                    else             nil
+                    end
+
+      return {nil, nil, nil} unless format_name
+
+      if entry = Formats.fetch(format_name)
+        {format_name, entry.validator, entry.message}
+      else
+        raise ArgumentError.new("Unknown format: #{format_name}")
+      end
     end
 
     def field(
@@ -60,25 +81,7 @@ module Alumna
     ) : self
       field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
 
-      format_name = nil
-      format_validator = nil
-      format_message = nil
-
-      if format
-        format_name = case format
-                      when Symbol then format.to_s.downcase
-                      when String then format.downcase
-                      end
-
-        if format_name
-          if entry = Formats.fetch(format_name)
-            format_validator = entry.validator
-            format_message = entry.message
-          else
-            raise ArgumentError.new("Unknown format: #{format_name}")
-          end
-        end
-      end
+      format_name, format_validator, format_message = resolve_format(format)
 
       norm_required_on = case required_on
                          in Nil
@@ -93,7 +96,7 @@ module Alumna
                            [ServiceMethod.parse(required_on.to_s.capitalize)]
                          end
 
-      @fields << FieldDescriptor.new(
+      fd = FieldDescriptor.new(
         name: name,
         type: field_type,
         required: required,
@@ -107,7 +110,11 @@ module Alumna
         sub_schema: sub_schema,
         element_type: element_type
       )
+
+      @fields << fd
       @field_names << name
+      @fields_by_name[name] = fd
+
       self
     end
 
@@ -170,7 +177,8 @@ module Alumna
       parts.each_with_index do |part, i|
         # Ignore array indices in query params (e.g. users[0].age -> users.age)
         clean_part = part.sub(/\[\d+\]/, "")
-        field = current_schema.fields.find { |f| f.name == clean_part }
+
+        field = current_schema.fields_by_name[clean_part]?
         return nil unless field
 
         if i < parts.size - 1

@@ -1,14 +1,22 @@
 module Alumna
   struct ServiceError
     getter status : Int32
-    getter details : Hash(String, AnyData)
     getter message : String
+    @details : Hash(String, AnyData)?
 
     def initialize(@message : String, @status : Int32 = 400, details : Hash(String, AnyData)? = nil)
-      @details = details || {} of String => AnyData
+      @details = (details && !details.empty?) ? details : nil
     end
 
-    def self.bad_request(message : String, details = {} of String => AnyData)
+    def details : Hash(String, AnyData)
+      @details ||= {} of String => AnyData
+    end
+
+    def details? : Hash(String, AnyData)?
+      @details
+    end
+
+    def self.bad_request(message : String, details : Hash(String, AnyData)? = nil)
       new(message, 400, details)
     end
 
@@ -24,7 +32,7 @@ module Alumna
       new(message, 404)
     end
 
-    def self.unprocessable(message : String, details = {} of String => AnyData)
+    def self.unprocessable(message : String, details : Hash(String, AnyData)? = nil)
       new(message, 422, details)
     end
 

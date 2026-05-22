@@ -14,18 +14,18 @@ module Alumna
       true
     end
 
-    def self.run_bounded(rules : Array(Rule), ctx : RuleContext, boundary : Int32, short_circuit = false) : {Bool, Bool}
+    def self.run_bounded(rules : Array(Rule), ctx : RuleContext, boundary : Int32, short_circuit = false) : {ok: Bool, stopped_in_app: Bool}
       i = 0
       size = rules.size
       while i < size
         if err = rules.unsafe_fetch(i).call(ctx)
           ctx.error = err
-          return {false, i < boundary}
+          return {ok: false, stopped_in_app: i < boundary}
         end
-        return {true, false} if short_circuit && ctx.result_set?
+        return {ok: true, stopped_in_app: false} if short_circuit && ctx.result_set?
         i += 1
       end
-      {true, false}
+      {ok: true, stopped_in_app: false}
     end
   end
 end

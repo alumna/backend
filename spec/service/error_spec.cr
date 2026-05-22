@@ -9,9 +9,10 @@ describe Alumna::ServiceError do
       err.details.should eq({"field" => "bad"} of String => Alumna::AnyData)
     end
 
-    it "defaults status to 400 and details to empty hash" do
+    it "defaults status to 400 and lazy-loads empty details hash" do
       err = Alumna::ServiceError.new("bad")
       err.status.should eq(400)
+      err.details?.should be_nil
       err.details.empty?.should be_true
     end
   end
@@ -21,6 +22,7 @@ describe Alumna::ServiceError do
       err = Alumna::ServiceError.bad_request("invalid")
       err.status.should eq(400)
       err.message.should eq("invalid")
+      err.details?.should be_nil
     end
 
     it "accepts details hash" do
@@ -79,9 +81,9 @@ describe Alumna::ServiceError do
       err.details.should eq(details)
     end
 
-    it "defaults details to empty hash" do
+    it "defaults details to nil but handles empty gracefully" do
       err = Alumna::ServiceError.unprocessable("Validation failed")
-      err.details.empty?.should be_true
+      err.details?.should be_nil
     end
   end
 

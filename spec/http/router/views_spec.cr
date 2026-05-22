@@ -11,14 +11,25 @@ module Alumna::Http
       view["x-test"].should eq "a"
     end
 
+    it "raises KeyError for missing key on [] but returns nil on []?" do
+      src = HTTP::Headers.new
+      view = HeadersView.new(src)
+
+      expect_raises(KeyError, /Missing hash key/) do
+        view["missing"]
+      end
+
+      view["missing"]?.should be_nil
+    end
+
     it "writes to overlay and overrides source" do
       src = HTTP::Headers{"X-Test" => "a"}
       view = HeadersView.new(src)
 
-      view["x-test"] = "b"          # line 58
-      view["x-test"].should eq "b"  # line 50
-      view["x-test"]?.should eq "b" # line 54
-      src["X-Test"].should eq "a"   # source unchanged
+      view["x-test"] = "b"
+      view["x-test"].should eq "b"
+      view["x-test"]?.should eq "b"
+      src["X-Test"].should eq "a"
     end
 
     it "iterates overlay first then source, downcasing keys" do
@@ -27,7 +38,7 @@ module Alumna::Http
       view["x-new"] = "b"
 
       result = {} of String => String
-      view.each { |k, v| result[k] = v } # line 29, line 65
+      view.each { |k, v| result[k] = v }
 
       result.should eq({
         "x-new"        => "b",
@@ -50,7 +61,7 @@ module Alumna::Http
 
     it "iterates source directly when no overlay exists, downcasing keys" do
       src = HTTP::Headers{"Content-Type" => "application/json", "X-Request-Id" => "abc"}
-      view = HeadersView.new(src) # @overlay remains nil
+      view = HeadersView.new(src)
 
       result = {} of String => String
       view.each { |k, v| result[k] = v }
@@ -77,9 +88,32 @@ module Alumna::Http
       result.should eq({"c" => "3", "a" => "1", "b" => "2"})
     end
 
+    it "raises KeyError for missing key on [] but returns nil on []?" do
+      src = HTTP::Params.new
+      view = ParamsView.new(src)
+
+      expect_raises(KeyError, /Missing hash key/) do
+        view["missing"]
+      end
+
+      view["missing"]?.should be_nil
+    end
+
+    it "does not duplicate keys when overlay shadows source" do
+      src = HTTP::Params.parse("x=1")
+      view = ParamsView.new(src)
+      view["x"] = "2"
+
+      keys = [] of String
+      view.each { |k, _| keys << k }
+
+      keys.count("x").should eq 1
+      keys.first.should eq "x"
+    end
+
     it "iterates source directly when no overlay exists" do
       src = HTTP::Params.parse("x=1&y=2")
-      view = ParamsView.new(src) # @overlay remains nil
+      view = ParamsView.new(src)
 
       result = {} of String => String
       view.each { |k, v| result[k] = v }

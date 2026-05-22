@@ -36,9 +36,13 @@ module Alumna
       def self.write_error(response : HTTP::Server::Response, err : ServiceError, serializer : Serializer) : Nil
         response.status_code = err.status
         payload = {
-          "error"   => err.message || "Error",
-          "details" => err.details,
+          "error" => err.message || "Error",
         } of String => AnyData
+
+        if details = err.details?
+          payload["details"] = details
+        end
+
         serializer.encode(payload, response)
       end
 

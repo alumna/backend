@@ -17,7 +17,7 @@ module Alumna
     end
 
     private def ensure_not_frozen!
-      if @frozen.get
+      if @frozen.get(:acquire)
         raise "Cannot register rules after pipelines are compiled (server is listening)"
       end
     end
@@ -26,7 +26,7 @@ module Alumna
 
     def before(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
-      register_rule(:before, rule, on)
+      register_rule(RulePhase::Before, rule, on)
       self
     end
 
@@ -36,7 +36,7 @@ module Alumna
 
     def after(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
-      register_rule(:after, rule, on)
+      register_rule(RulePhase::After, rule, on)
       self
     end
 
@@ -46,7 +46,7 @@ module Alumna
 
     def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
-      register_rule(:error, rule, on)
+      register_rule(RulePhase::Error, rule, on)
       self
     end
 
@@ -63,13 +63,11 @@ module Alumna
       end
     end
 
-    private def register_rule(phase : Symbol, rule : Rule, on)
+    private def register_rule(phase : RulePhase, rule : Rule, on)
       target = case phase
-               when :before then @before_rules
-               when :after  then @after_rules
-               when :error  then @error_rules
-               else
-                 raise "BUG: Ruleable.register_rule invalid phase #{phase.inspect}"
+               in RulePhase::Before then @before_rules
+               in RulePhase::After  then @after_rules
+               in RulePhase::Error  then @error_rules
                end
 
       expand_on(on).each { |m| target[m] << rule }
@@ -78,14 +76,24 @@ module Alumna
     private def expand_on(on) : Array(ServiceMethod)
       return ALL_METHODS if on.nil?
 
-      items = on.is_a?(Array) ? on : [on]
-      items.flat_map do |item|
+      unless on.is_a?(Array)
+        case on
+        when ServiceMethod then return [on]
+        when :read         then return READ_METHODS
+        when :write        then return WRITE_METHODS
+        when :all          then return ALL_METHODS
+        when Symbol        then return [ServiceMethod.parse(on.to_s)]
+        else                    return [] of ServiceMethod
+        end
+      end
+
+      on.flat_map do |item|
         case item
         when ServiceMethod then [item]
         when :read         then READ_METHODS
         when :write        then WRITE_METHODS
         when :all          then ALL_METHODS
-        when Symbol        then [ServiceMethod.parse(item.to_s.capitalize)]
+        when Symbol        then [ServiceMethod.parse(item.to_s)]
         else                    [] of ServiceMethod
         end
       end.uniq!

@@ -86,12 +86,12 @@ module Alumna
       # 1. BEFORE (app + service)
       ctx.phase = RulePhase::Before
       before_rules = service.before_pipeline(m)
-      ok, stopped_in_app = Orchestrator.run_bounded(before_rules, ctx, service.before_app_len(m), short_circuit: true)
+      res = Orchestrator.run_bounded(before_rules, ctx, service.before_app_len(m), short_circuit: true)
 
-      unless ok
+      unless res[:ok]
         ctx.phase = RulePhase::Error
         # run service error only if stop happened in service part
-        start_idx = stopped_in_app ? service.error_svc_len(m) : 0
+        start_idx = res[:stopped_in_app] ? service.error_svc_len(m) : 0
         Orchestrator.run(service.error_pipeline(m), ctx, start: start_idx)
         return ctx
       end

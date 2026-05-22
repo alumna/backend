@@ -2,78 +2,47 @@ require "set"
 
 module Alumna
   module Http
-    struct HeadersView
-      include Enumerable({String, String})
-      @overlay : Hash(String, String)?
+    macro define_overlay_view(name, source_type, downcase)
+      struct {{name}}
+        include Enumerable({String, String})
+        @overlay : Hash(String, String)?
 
-      def initialize(@src : HTTP::Headers)
-        @overlay = nil
-      end
-
-      def [](key : String) : String?
-        if ov = @overlay
-          k = key.downcase
-          return ov[k] if ov.has_key?(k)
-        end
-        @src[key]?
-      end
-
-      def []?(key : String) : String?
-        self[key]
-      end
-
-      def []=(key : String, value : String) : String
-        (@overlay ||= {} of String => String)[key.downcase] = value
-      end
-
-      def each(& : {String, String} ->)
-        ov = @overlay # local snapshot: type is Hash(String, String)?
-        if ov.nil?    # after this branch + return, ov is Hash(String, String)
-          @src.each { |k, vs| yield({k.downcase, vs.first}) }
-          return
+        def initialize(@src : {{source_type}})
+          @overlay = nil
         end
 
-        seen = Set(String).new
-        ov.each { |k, v| seen << k; yield({k, v}) }
-        @src.each do |k, vs|
-          lk = k.downcase
-          next if seen.includes?(lk)
-          yield({lk, vs.first})
+        def [](key : String) : String
+          self[key]? || raise KeyError.new("Missing hash key: #{key.inspect}")
+        end
+
+        def []?(key : String) : String?
+          if ov = @overlay
+            k = {% if downcase %} key.downcase {% else %} key {% end %}
+            return ov[k] if ov.has_key?(k)
+          end
+          @src[key]?
+        end
+
+        def []=(key : String, value : String) : String
+          (@overlay ||= {} of String => String)[{% if downcase %} key.downcase {% else %} key {% end %}] = value
+        end
+
+        def each(& : {String, String} ->)
+          ov = @overlay
+          if ov.nil?
+            {% if downcase %} @src.each { |k, vs| yield({k.downcase, vs.first}) } {% else %} @src.each { |k, v| yield({k, v}) } {% end %}
+            return
+          end
+
+          seen = Set(String).new
+          ov.each { |k, v| seen << k; yield({k, v}) }
+
+          {% if downcase %} @src.each { |k, vs| lk = k.downcase; next if seen.includes?(lk); yield({lk, vs.first}) } {% else %} @src.each { |k, v| next if seen.includes?(k); yield({k, v}) } {% end %}
         end
       end
     end
 
-    struct ParamsView
-      include Enumerable({String, String})
-      @overlay : Hash(String, String)?
-
-      def initialize(@src : HTTP::Params)
-        @overlay = nil
-      end
-
-      def [](key : String) : String?
-        @overlay.try(&.[key]?) || @src[key]?
-      end
-
-      def []?(key : String) : String?
-        self[key]
-      end
-
-      def []=(key : String, value : String) : String
-        (@overlay ||= {} of String => String)[key] = value
-      end
-
-      def each(& : {String, String} ->)
-        ov = @overlay
-        if ov.nil?
-          @src.each { |k, v| yield({k, v}) }
-          return
-        end
-
-        seen = Set(String).new
-        ov.each { |k, v| seen << k; yield({k, v}) }
-        @src.each { |k, v| next if seen.includes?(k); yield({k, v}) }
-      end
-    end
+    define_overlay_view(HeadersView, HTTP::Headers, true)
+    define_overlay_view(ParamsView, HTTP::Params, false)
   end
 end
