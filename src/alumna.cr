@@ -36,6 +36,7 @@ require "./rule/builtin/validate"
 require "./rule/builtin/cors"
 require "./rule/builtin/rate_limiter"
 require "./rule/builtin/logger"
+require "./rule/builtin/timestamp"
 
 # Full implementations - these reopen the forward-declared classes
 require "./app"

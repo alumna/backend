@@ -47,6 +47,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [2. Schemas](#2-schemas)
     - [Nested Fields](#nested-fields-objects-and-arrays)
     - [Conditional Requirements](#conditional-requirements)
+    - [Strict Validation and Read-Only Fields](#strict-validation-and-read-only-fields)
     - [Pluggable Formats](#pluggable-formats)
 - [3. Rules](#3-rules)
     - [Defining Rules](#defining-rules)
@@ -290,12 +291,47 @@ If a nested field fails validation, Alumna replies with explicit dot/bracket not
 
 ### Conditional Requirements
 
-`required_on` lets a field be required only for specific operations, perfect for `PATCH` operations:
+`required_on` lets a field be required only for specific operations, perfect for `PATCH` operations where missing fields mean "do not update":
 
 ```crystal
 PostSchema = Alumna::Schema.new
   .str("title", required_on: [:create, :update], min_length: 1)
   .str("body",  required_on: :create)
+```
+*(Note: If a field is `read_only: true`, Alumna is smart enough to never require it from the client during write operations, keeping your schema definitions clean.)*
+
+### Strict Validation and Read-Only Fields
+
+Alumna schemas are **strict by default**. If a client attempts to send extra fields that are not defined in the schema (e.g., a Mass Assignment attack), the validator will automatically reject the payload with an `"is not allowed"` error. 
+
+To opt out and allow unknown fields, initialize the schema with `Alumna::Schema.new(strict: false)`. Strictness settings automatically cascade to all nested hashes and arrays.
+
+For fields that belong to your data model but should never be manipulated directly by the client (such as `id`, `created_at`, or `account_balance`), use `read_only: true`:
+
+```crystal
+AccountSchema = Alumna::Schema.new
+  .str("id", read_only: true)
+  .str("email", format: :email)
+  .time("created_at", read_only: true)
+  .time("updated_at", read_only: true)
+```
+
+When a field is marked as `read_only`:
+1. If the client tries to send it during a write operation (`POST`, `PUT`, `PATCH`), the validator will reject it with an `"is read-only"` error.
+2. The validator automatically waives the presence check (`required`) for these fields during write operations, so clients don't have to send them.
+3. Because the block happens purely at the validation layer, your internal Rules and Database Adapters remain entirely free to safely compute and inject these values into `ctx.data` downstream!
+
+Alumna includes a built-in `timestamp` rule to make handling dates completely effortless:
+
+```crystal
+app.use "/accounts", Alumna.memory(AccountSchema) {
+  # 1. Reject any read-only fields if sent by the client
+  before validate, on: :write
+  
+  # 2. Inject computed dates automatically
+  before Alumna.timestamp("created_at"), on: :create
+  before Alumna.timestamp("updated_at"), on: :write
+}
 ```
 
 ### Pluggable Formats
