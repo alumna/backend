@@ -1,5 +1,32 @@
 # Alumna Backend changelog
 
+## 0.5.1 - 2026-05-22
+
+### Added
+* **schema:** introduced `strict: true` (default) to automatically reject undeclared fields in request payloads, preventing Mass Assignment attacks.
+* **schema:** introduced `read_only: true` constraint. Rejects client manipulation during writes (`POST/PUT/PATCH`) while safely waiving `required` checks.
+* **rules:** added built-in `Alumna.timestamp` rule for effortless, automatic UTC date injection on creation or updates.
+* **context:** `ctx.store` now accepts custom classes and structs safely alongside primitives by including the `Alumna::Storeable` module.
+* **types:** `Time` and `Bytes` are now first-class citizens in the `AnyData` union, completely eliminating unnecessary string conversions.
+* **docs:** clearly documented the framework's philosophical decision to strictly enforce flat routing for O(1) performance and predictable client-side caching.
+
+### Changed
+* **query:** query parameters are now deeply typed! `Query#typed_filters` uses the service's Schema to automatically coerce strings into `Int64`, `Float64`, `Bool`, and `Time`. This eliminates string-fallback bugs and perfectly sets up future SQL adapters.
+* **http:** `remove` (DELETE) operations now return `nil` by default, natively mapping to a semantic `204 No Content` with an empty body, saving memory and payload allocations.
+* **app:** rule pipelines are now strictly frozen upon server boot (`app.listen`). Attempting to register rules after compilation now throws an explicit exception rather than failing silently.
+* **serializers:** refactored JSON and MessagePack serializers to encode/decode `Time` (RFC 3339) and `Bytes` directly to/from native Crystal types. Optimized `MsgpackSerializer` to fully leverage the `msgpack-crystal` shard internals.
+
+### Performance
+* **memory_adapter:** drastically reduced the scope of Mutex locks. `find` now shallow-copies the dataset and releases the lock instantly, allowing multi-threaded filtering and sorting without bottlenecking concurrent writes.
+* **memory_adapter:** replaced intermediate array allocations with zero-allocation `String#index` slicing for dot-notation field extraction.
+* **memory_adapter:** implemented tuple dispatch (`case {a, b}`) for high-speed, compiler-optimized type comparisons.
+* **memory_adapter:** combined `$skip` and `$limit` into a single `Array#[]` memory copy (`copy_from`), replacing two separate array allocations while safely guarding against `IndexError`.
+* **query:** removed multiple intermediate array allocations in `$sort` and `$select` parsing by utilizing `compact_map` and `String#index`.
+* **context:** replaced repetitive `data_*?` typed accessors with a zero-runtime-cost compile-time macro loop.
+
+### Fixed
+* **tests:** expanded `AdapterSuite` to assert strict `400 Bad Request` responses on malicious type injections, and verified safe boundary limits for `$skip` pagination.
+
 ## 0.5.0 - 2026-05-18
 
 ### Added
