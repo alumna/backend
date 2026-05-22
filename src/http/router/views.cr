@@ -34,7 +34,7 @@ module Alumna
               @src.each { |k, vs| yield({k.downcase, vs.first}) }
             # LCOV_EXCL_START - kcov is wrongly reporting the else case as not covered
             {% else %}
-            # LCOV_EXCL_END
+            # LCOV_EXCL_STOP
               @src.each { |k, v| yield({k, v}) }
             {% end %}
             return
@@ -51,7 +51,7 @@ module Alumna
             end
           # LCOV_EXCL_START - kcov is wrongly reporting the else case as not covered
           {% else %}
-          # LCOV_EXCL_END
+          # LCOV_EXCL_STOP
             @src.each do |k, v|
               next if seen.includes?(k)
               yield({k, v})
