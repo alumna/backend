@@ -55,6 +55,12 @@ require "./http/router"
 require "./http/responder"
 
 module Alumna
+  # Overload without a block
+  def self.memory(schema : Schema? = nil)
+    MemoryAdapter.new(schema)
+  end
+
+  # Overload with a block
   def self.memory(schema : Schema? = nil, &)
     svc = MemoryAdapter.new(schema) # no block
     with svc yield                  # scope = svc
