@@ -1,6 +1,13 @@
 # Alumna Backend changelog
 
-## 0.5.2 - 2026-06-22
+## 0.5.3 - 2026-06-02
+
+### Changed
+* **fix:** adapter suite and memory adapter with comparison weights similar to real databases
+* **refactor:** humanize adapter suite and isolated the custom JSON encode/decode
+* **test:** coverage for json_helper convenience methods
+
+## 0.5.2 - 2026-05-22
 
 ### Changed
 * **views:** `HeadersView` and `ParamsView` now strictly adhere to Crystal conventions. Using `["key"]` raises a `KeyError` if the key is missing, while `["key"]?` safely returns `nil`. 
