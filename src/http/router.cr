@@ -260,8 +260,7 @@ module Alumna
       end
 
       private def resolve_provider(ctx : HTTP::Server::Context) : String
-        addr = ctx.request.remote_address
-        addr.is_a?(Socket::UNIXAddress) ? "local" : "rest"
+        ctx.request.remote_address.is_a?(Socket::UNIXAddress) ? "local" : "rest"
       end
     end
   end

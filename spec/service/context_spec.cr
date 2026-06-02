@@ -113,4 +113,78 @@ describe Alumna::RuleContext do
       ctx.data_bool?("age").should be_nil
     end
   end
+
+  # Add this inside the `describe Alumna::RuleContext do` block:
+
+  describe "#call (Internal Routing)" do
+    it "dispatches internally to another service using symbols" do
+      app = Alumna::App.new
+      app.use "/target", Alumna::MemoryAdapter.new(Alumna::Schema.new.str("name"))
+
+      # Start an initial context
+      ctx = Alumna::Testing.build_ctx(app: app)
+
+      # Make the internal call
+      result = ctx.call("/target", :create, {"name" => "SubResource"} of String => Alumna::AnyData)
+
+      result.should_not be_nil
+      result.as(Hash)["name"].should eq("SubResource")
+      result.as(Hash).has_key?("id").should be_true
+    end
+
+    it "inherits the ctx.store so authentication passes down" do
+      app = Alumna::App.new
+
+      # Target service expects "user" in the store
+      app.use "/secure", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          c.store["user"]? ? nil : Alumna::ServiceError.unauthorized
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      ctx.store["user"] = "Admin" # Authenticate the parent request
+
+      # Internal call should succeed because the store is copied
+      result = ctx.call("/secure", :find)
+      result.as(Array).should be_empty # Memory adapter returns [] on empty find
+    end
+
+    it "sets provider to 'internal' and http_method to 'INTERNAL'" do
+      app = Alumna::App.new
+      captured_provider = ""
+
+      app.use "/probe", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_provider = c.provider
+          c.result = {"ok" => true} of String => Alumna::AnyData
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      ctx.call("/probe", :find)
+
+      captured_provider.should eq("internal")
+    end
+
+    it "raises ArgumentError if the internal path does not exist" do
+      ctx = Alumna::Testing.build_ctx
+      expect_raises(ArgumentError, /Internal service not found/) do
+        ctx.call("/nowhere", :find)
+      end
+    end
+
+    it "raises an Exception if the internal service returns a ServiceError" do
+      app = Alumna::App.new
+      app.use "/fail", Alumna.memory(Alumna::Schema.new) {
+        before { |_c| Alumna::ServiceError.bad_request("Custom failure") }
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      expect_raises(Exception, /Internal call to \/fail failed: 400 Custom failure/) do
+        ctx.call("/fail", :find)
+      end
+    end
+  end
 end
