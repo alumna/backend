@@ -18,10 +18,10 @@ module Alumna
     getter phase : RulePhase
     getter http_method : String
     getter remote_ip : String
+    getter provider : String
+    getter id : String?
 
     property params : Http::ParamsView
-    property provider : String
-    property id : String?
     property data : Hash(String, AnyData)
     property result : ServiceResult = nil
     property error : ServiceError? = nil
