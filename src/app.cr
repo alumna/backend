@@ -120,9 +120,10 @@ module Alumna
     end
 
     def listen(
-      port : Int32 = 3000,
+      port : Int32? = 3000,
       *,
       host : String = "127.0.0.1",
+      unix_socket : String? = nil,
       trusted_proxies : TrustedProxies = nil,
       workers : Int32? = nil,
       shutdown_timeout : Time::Span? = 10.seconds,
@@ -169,13 +170,24 @@ module Alumna
       end
 
       # reuse_port is no longer needed since Crystal threads share the same socket
-      server.bind_tcp(host, port)
+      server.bind_tcp(host, port) if port
 
-      display_host = host.includes?(':') ? "[#{host}]" : host
-      puts "Listening on http://#{display_host}:#{port}#{workers_msg}"
+      if unix_path = unix_socket
+        File.delete?(unix_path) # Clean up previous socket if left behind
+        server.bind_unix(unix_path)
+      end
 
-      if host == "0.0.0.0" || host == "::"
-        STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
+      if port
+        display_host = host.includes?(':') ? "[#{host}]" : host
+        puts "Listening on http://#{display_host}:#{port}#{workers_msg}"
+
+        if host == "0.0.0.0" || host == "::"
+          STDERR.puts "Warning: binding to #{host} exposes the server on all interfaces"
+        end
+      end
+
+      if unix_socket
+        puts "Listening on unix://#{unix_socket}#{port ? "" : workers_msg}"
       end
 
       # LCOV_EXCL_START - kcov wrongly misses this block
@@ -201,6 +213,11 @@ module Alumna
           else
             puts "Graceful shutdown complete."
           end
+        end
+
+        # Cleanup unix socket to prevent dead files
+        if unix_path = unix_socket
+          File.delete?(unix_path)
         end
       end
     end

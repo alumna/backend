@@ -60,6 +60,7 @@ module Alumna
           phase: RulePhase::Before,
           http_method: request.method,
           remote_ip: remote_ip(http_ctx),
+          provider: resolve_provider(http_ctx),
           params: ParamsView.new(request.query_params),
           headers: HeadersView.new(request.headers),
           id: id,
@@ -256,6 +257,10 @@ module Alumna
       private def parse_x_real_ip(ctx) : String?
         ip = ctx.request.headers["X-Real-IP"]?.try(&.strip)
         ip if ip && Socket::IPAddress.valid?(ip)
+      end
+
+      private def resolve_provider(ctx : HTTP::Server::Context) : String
+        ctx.request.remote_address.is_a?(Socket::UNIXAddress) ? "local" : "rest"
       end
     end
   end

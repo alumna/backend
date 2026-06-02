@@ -18,10 +18,10 @@ module Alumna
     getter phase : RulePhase
     getter http_method : String
     getter remote_ip : String
+    getter provider : String
+    getter id : String?
 
     property params : Http::ParamsView
-    property provider : String
-    property id : String?
     property data : Hash(String, AnyData)
     property result : ServiceResult = nil
     property error : ServiceError? = nil
@@ -61,6 +61,51 @@ module Alumna
     def result=(value : ServiceResult)
       @result = value
       @result_set = true
+    end
+
+    # Dispatches a request to another internal service, bypassing the HTTP network stack
+    # but still running through the target service's schema validations and rules.
+    def call(
+      path : String,
+      method : ServiceMethod | Symbol,
+      data : Hash(String, AnyData) = {} of String => AnyData,
+      id : String? = nil,
+    ) : ServiceResult
+      target_service = app.services[path]?
+      raise ArgumentError.new("Internal service not found at path: #{path}") unless target_service
+
+      parsed_method = method.is_a?(ServiceMethod) ? method : ServiceMethod.parse(method.to_s.capitalize)
+
+      internal_ctx = RuleContext.new(
+        app: app,
+        service: target_service,
+        path: path,
+        method: parsed_method,
+        phase: RulePhase::Before,
+        http_method: "INTERNAL",
+        remote_ip: remote_ip,
+        provider: "internal",
+        params: params,   # Inherit params view
+        headers: headers, # Inherit headers view
+        id: id,
+        data: data
+      )
+
+      # Shallow copy the store so authenticated users/transaction IDs flow down,
+      # but downstream mutations don't pollute the parent request state.
+      if s = @store
+        s.each { |k, v| internal_ctx.store[k] = v }
+      end
+
+      app.dispatch(target_service, internal_ctx)
+
+      # If the sub-service threw an error (e.g., validation failed), re-raise it
+      # so the calling rule/service can rescue it, or let it halt the current pipeline.
+      if err = internal_ctx.error
+        raise Exception.new("Internal call to #{path} failed: #{err.status} #{err.message}")
+      end
+
+      internal_ctx.result
     end
 
     @[AlwaysInline]

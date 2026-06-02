@@ -1,5 +1,6 @@
 require "../spec_helper"
 require "http/client"
+require "socket"
 
 private def wait_for_port(host : String, port : Int32, timeout : Time::Span = 5.seconds)
   deadline = Time.instant + timeout
@@ -180,6 +181,76 @@ describe "App#close and graceful shutdown" do
       # 4. Clean up: wait for the sleeping request to finish so we don't leak
       # background fibers into other tests.
       request_finished.receive
+    end
+  end
+
+  describe "App#listen with Unix Socket" do
+    it "binds to a unix socket and sets ctx.provider to local" do
+      app = Alumna::App.new
+      app.use "/provider", Alumna.memory(Alumna::Schema.new) {
+        before do |ctx|
+          ctx.result = {"provider" => ctx.provider} of String => Alumna::AnyData
+          nil
+        end
+      }
+
+      port = 34572
+      unix_path = "/tmp/alumna_test_#{Random::Secure.hex(4)}.sock"
+
+      spawn do
+        app.listen(port, host: "127.0.0.1", unix_socket: unix_path, trap_signals: false)
+      end
+
+      wait_for_port("127.0.0.1", port)
+
+      begin
+        # 1. Test TCP -> "rest"
+        res_tcp = HTTP::Client.get("http://127.0.0.1:#{port}/provider")
+        res_tcp.status_code.should eq(200)
+        JSON.parse(res_tcp.body)["provider"].as_s.should eq("rest")
+
+        # 2. Test Unix -> "local"
+        socket = UNIXSocket.new(unix_path)
+        socket << "GET /provider HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        res_unix = HTTP::Client::Response.from_io(socket)
+        res_unix.status_code.should eq(200)
+        JSON.parse(res_unix.body)["provider"].as_s.should eq("local")
+        socket.close
+      ensure
+        app.close
+        File.delete?(unix_path)
+      end
+    end
+
+    it "binds solely to a unix socket when port is nil" do
+      app = Alumna::App.new
+      app.use "/only-unix", Alumna::MemoryAdapter.new(Alumna::Schema.new)
+
+      unix_path = "/tmp/alumna_test_only_#{Random::Secure.hex(4)}.sock"
+      listen_done = Channel(Nil).new
+
+      spawn do
+        app.listen(port: nil, unix_socket: unix_path, trap_signals: false)
+        listen_done.send(nil)
+      end
+
+      deadline = Time.instant + 5.seconds
+      while !File.exists?(unix_path)
+        raise "Socket not created" if Time.instant > deadline
+        sleep 0.05.seconds
+      end
+
+      begin
+        socket = UNIXSocket.new(unix_path)
+        socket << "GET /only-unix HTTP/1.1\r\nHost: localhost\r\n\r\n"
+        res_unix = HTTP::Client::Response.from_io(socket)
+        res_unix.status_code.should eq(200)
+        socket.close
+      ensure
+        app.close
+        listen_done.receive
+        File.delete?(unix_path)
+      end
     end
   end
 end
