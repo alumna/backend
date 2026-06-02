@@ -12,23 +12,38 @@ module Alumna
     end
 
     @[AlwaysInline]
-    private def compare_values(a : AnyData, b : AnyData) : Int32
-      return 0 if a.nil? && b.nil?
-      return -1 if a.nil?
-      return 1 if b.nil?
+    private def type_weight(v : AnyData) : Int32
+      case v
+      when Nil                       then 0
+      when Int64, Float64, Bool      then 1 # Databases treat Bools as numeric (0/1)
+      when String, Time, Array, Hash then 2 # Complex types serialize to JSON text
+      when Bytes                     then 3
+      else                                4
+      end
+    end
 
-      # Union type narrowing: handles Int64 vs Float64 cross-comparison.
+    @[AlwaysInline]
+    private def compare_values(a : AnyData, b : AnyData) : Int32
+      weight_a = type_weight(a)
+      weight_b = type_weight(b)
+
+      # If they are different storage classes, sort by standard DB rules
+      return weight_a <=> weight_b if weight_a != weight_b
+
+      # If they are numbers, compare natively
       if a.is_a?(Int64 | Float64) && b.is_a?(Int64 | Float64)
         return (a <=> b) || 0
       end
 
-      # Tuple dispatch: compiler generates a tight type-check sequence.
+      # Identical types within the same storage class
       case {a, b}
       when {String, String} then a <=> b
       when {Bool, Bool}     then (a ? 1 : 0) <=> (b ? 1 : 0)
       when {Time, Time}     then a <=> b
       when {Bytes, Bytes}   then a <=> b
-      else                       a.to_s <=> b.to_s
+      else
+        # Fallback for Arrays/Hashes/Bytes
+        a.to_s <=> b.to_s
       end
     end
 
