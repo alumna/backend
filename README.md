@@ -43,7 +43,9 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [1. Services](#1-services)
     - [HTTP Routing Mapping](#http-routing-mapping)
     - [Querying](#querying)
+    - [Database Adapters](#database-adapters)
     - [Writing a Custom Adapter](#writing-a-custom-adapter)
+    - [Inter-Service Communication](#inter-service-communication)
 - [2. Schemas](#2-schemas)
     - [Nested Fields](#nested-fields-objects-and-arrays)
     - [Conditional Requirements](#conditional-requirements)
@@ -63,6 +65,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Rate Limiter](#rate-limiter)
 - [5. Server Configuration & Multi-threading](#5-server-configuration--multi-threading)
     - [Multi-threading and Workers](#multi-threading-and-workers)
+    - [Unix Sockets & Local Providers](#unix-sockets--local-providers)
     - [Graceful Shutdown](#graceful-shutdown)
     - [Trusted Proxies](#trusted-proxies)
 - [Full Example](#full-example)
@@ -94,6 +97,7 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Deep schema validation with path-tracing for nested arrays/objects
 - ✅ Zero-allocation validation formats resolved at definition time
 - ✅ In-memory adapter implementing the full service interface
+- ✅ Official SQLite adapter with native JSON dot-notation querying
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with safe, zero-allocation views for headers and params
 - ✅ Advanced query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.)
@@ -101,7 +105,8 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Cross-platform CI with full test coverage
 - ✅ Path normalization and duplicate-route protection
 - ✅ Strict request-body limits enforced on all IO entry points
-- ✅ `provider` field on context distinguishing `"rest"` from future `"websocket"`
+- ✅ Seamless, zero-serialization inter-service communication via `ctx.call`.
+- ✅ `provider` field on context dynamically resolving `"rest"` (TCP), `"local"` (Unix sockets), and `"internal"` (Service-to-Service).
 
 See the [Roadmap](#roadmap) for what is coming next.
 
@@ -123,7 +128,7 @@ Then run `shards install`. Require it in your project:
 require "alumna"
 ```
 
-*Crystal 1.19.1 or later is required.*
+*Crystal 1.20.2 or later is required.*
 
 ---
 
@@ -206,9 +211,17 @@ ctx.query.sort  # => [{"age", -1}]
 
 **Supported operators:** `$eq` (default), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`.
 
+### Database Adapters
+
+Alumna ships with a built-in `MemoryAdapter` out of the box, perfect for prototyping and rapid testing. 
+
+For real persistence, use one of our official database adapters. They seamlessly translate Alumna Schemas and queries into optimized database operations.
+
+- **SQLite:** [`alumna/sqlite`](https://github.com/alumna/sqlite) – The official SQLite adapter. Features zero-allocation JSON streaming for nested fields, native dot-notation querying for JSON columns, and built-in security against SQL injection.
+
 ### Writing a Custom Adapter
 
-To connect a real database, inherit from `Alumna::Service` and implement its six abstract methods. Each method receives the full `RuleContext` and returns a typed value.
+To connect a real database manually, inherit from `Alumna::Service` and implement its six abstract methods. Each method receives the full `RuleContext` and returns a typed value.
 
 ```crystal
 class PostgresUserService < Alumna::Service
@@ -253,6 +266,28 @@ class PostgresUserService < Alumna::Service
   end
 end
 ```
+
+### Inter-Service Communication
+
+Services often need to interact with each other (e.g., a `Post` creation triggering an `AuditLog` creation). Instead of making expensive HTTP calls to yourself or duplicating business logic, Alumna provides `ctx.call`.
+
+`ctx.call` dispatches a request to another mounted service completely in-memory. It bypasses the network and serialization stack, but **still fully executes the target service's schema validations and rules**.
+
+```crystal
+CreateAuditLog = Alumna::Rule.new do |ctx|
+  # Safely trigger another service entirely in-memory!
+  ctx.call("/audit", :create, {
+    "action" => "User updated",
+    "user_id" => ctx.id
+  } of String => Alumna::AnyData)
+  
+  nil
+end
+```
+
+When you invoke `ctx.call`:
+1. `ctx.provider` is set to `"internal"`.
+2. The `ctx.store` from the parent request is **shallow-copied** to the new context. This means if a global rule authenticated a user and stored them in `ctx.store["current_user"]`, the internal service will automatically inherit that authenticated user, bypassing the need to re-validate tokens or hit the database twice!
 
 ---
 
@@ -447,13 +482,16 @@ before Alumna.cors(origins: ["*"]), on: :options
 | `ctx.method` | The current enum method (`Find`, `Create`, etc.) |
 | `ctx.http_method` | The raw HTTP verb (`GET`, `POST`, etc.) |
 | `ctx.remote_ip` | Client IP (supports trusted proxy chains) |
-| `ctx.provider` | Request source – `"rest"` today, `"websocket"` in future |
+| `ctx.provider` | **Read-Only** The request source: `"rest"` (TCP/HTTP), `"local"` (Unix socket), or `"internal"` (via `ctx.call`). |
+| `ctx.id` | **Read-Only** URL ID of the targeted resource. |
 | `ctx.params` / `ctx.headers`| Zero-allocation views of the request |
-| `ctx.id` / `ctx.data` | URL ID and parsed request body |
+| `ctx.data` | The parsed request body |
 | `ctx.result` | Response payload (set this to skip the service method) |
 | `ctx.error` | Captured `ServiceError`, available in the error phase |
 | `ctx.store` | A `Hash` scratch space to share data between rules |
 | `ctx.http` | Object (`HttpOverrides`) to set `status`, `headers`, or `location` redirects |
+
+> **Security Lock:** Foundational structural fields like `ctx.provider` and `ctx.id` are compiler-enforced read-only getters. They cannot be spoofed or accidentally mutated mid-flight by downstream rules.
 
 ### Headers, Params, and Views
 
@@ -588,8 +626,9 @@ You boot your application by calling `app.listen`. By default, it binds to `127.
 
 ```crystal
 app.listen(
-  3000, 
+  port: 3000, 
   host: "0.0.0.0",
+  unix_socket: nil,
   trusted_proxies: ["10.0.0.0/8"],
   workers: 4,
   shutdown_timeout: 10.seconds
@@ -605,6 +644,29 @@ crystal build src/main.cr --release -Dpreview_mt -Dexecution_context
 ```
 
 When compiled with these flags, Alumna will automatically configure the Fiber execution pool. You can explicitly set the number of threads via the `workers: N` argument in `app.listen`. If omitted, it gracefully defaults to your machine's logical CPU core count. 
+
+### Unix Sockets & Local Providers
+
+Alumna can serve HTTP traffic over standard TCP ports and local Unix sockets—either simultaneously or exclusively.
+
+```crystal
+# Listen on both TCP and a Unix socket
+app.listen(3000, unix_socket: "/tmp/airsailer.sock")
+
+# Listen exclusively on a Unix socket
+app.listen(port: nil, unix_socket: "/tmp/airsailer.sock")
+```
+
+When a request arrives via the Unix socket, Alumna automatically detects it and sets `ctx.provider` to `"local"`. This makes it trivial to safely bypass strict authentication rules for background jobs or local CLI tools running as root on the same machine:
+
+```crystal
+Authenticate = Alumna::Rule.new do |ctx|
+  # Bypass JWT checks for internal calls and local system CLI tools
+  next nil if ctx.provider == "local" || ctx.provider == "internal"
+  
+  # ... normal JWT authentication logic ...
+end
+```
 
 ### Graceful Shutdown
 
@@ -721,7 +783,6 @@ Writing a custom database adapter? Use `Alumna::Testing::AdapterSuite.run("MyAda
 - JWT and session authentication helper rules.
 
 ### v0.7 - v0.8 Real Database Adapters
-- **SQLite** adapter (using `crystal-sqlite3`).
 - **MySQL** and **PostgreSQL** adapters (using `crystal-db`).
 - Adapters will read the service schema to introspect column names and types automatically.
 

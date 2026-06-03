@@ -1,5 +1,15 @@
 # Alumna Backend changelog
 
+## 0.5.4 - 2026-06-05
+
+### Added
+* **app:** Unix socket binding support! You can now serve Alumna via a local socket using `app.listen(unix_socket: "/tmp/app.sock")`. It can be run simultaneously with a TCP port or completely standalone.
+* **context:** Inter-service communication via `RuleContext#call`. You can now elegantly call other mounted services completely in-memory (bypassing TCP/HTTP serialization) while still perfectly executing all target schemas and rules. `ctx.call("/users", :create, data)`
+* **router:** Dynamic `provider` resolution. `ctx.provider` is now automatically set to `"local"` when requests arrive over a Unix socket, and `"rest"` over TCP, making it effortless to securely bypass authentication for local system requests.
+
+### Changed
+* **context:** Structural request properties (`provider`, `id`) are now securely locked down as read-only (`getter` instead of `property`) to prevent accidental or malicious mutation by downstream rules mid-flight.
+
 ## 0.5.3 - 2026-06-02
 
 ### Changed
