@@ -115,7 +115,7 @@ module Alumna
         val = extract_value(record, fd.name)
         next if val.nil?
 
-        conflict = @store.values.any? do |existing|
+        conflict = @store.each_value.any? do |existing|
           existing["id"] != skip_id && extract_value(existing, fd.name) == val
         end
 
