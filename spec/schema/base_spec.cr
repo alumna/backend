@@ -6,6 +6,7 @@ describe Alumna::Schema do
       s = Alumna::Schema.new
       s.fields.should be_empty
       s.strict.should be_true
+      s.schema_indexes.should be_empty
     end
 
     it "accepts strict: false" do
@@ -36,9 +37,54 @@ describe Alumna::Schema do
       fd.max_length.should eq(10)
     end
 
-    it "stores read_only flag" do
-      fd = Alumna::Schema.new.field("x", :str, read_only: true).fields.first
+    it "stores traits (read_only, nullable, unique, indexed)" do
+      fd = Alumna::Schema.new.field("x", :str, read_only: true, nullable: true, unique: true, indexed: true).fields.first
       fd.read_only.should be_true
+      fd.nullable.should be_true
+      fd.unique.should be_true
+      fd.indexed.should be_true
+    end
+  end
+
+  describe "default values" do
+    it "identifies when a default is not provided" do
+      fd = Alumna::Schema.new.field("x", :str).fields.first
+      fd.has_default.should be_false
+      fd.default_value.should be_nil
+    end
+
+    it "identifies when a default is explicitly provided as nil" do
+      fd = Alumna::Schema.new.field("x", :str, default: nil).fields.first
+      fd.has_default.should be_true
+      fd.default_value.should be_nil
+    end
+
+    it "stores and returns static default values" do
+      fd = Alumna::Schema.new.field("x", :int, default: 42_i64).fields.first
+      fd.has_default.should be_true
+      fd.default_value.should eq(42_i64)
+    end
+
+    it "stores and evaluates dynamic default Procs at runtime" do
+      fd = Alumna::Schema.new.field("x", :str, default: -> { "dynamic".as(Alumna::AnyData) }).fields.first
+      fd.has_default.should be_true
+      fd.default_value.should eq("dynamic")
+    end
+  end
+
+  describe "schema-level indexes" do
+    it "stores single field indexes" do
+      s = Alumna::Schema.new.index("email", unique: true)
+      idx = s.schema_indexes.first
+      idx.fields.should eq(["email"])
+      idx.unique.should be_true
+    end
+
+    it "stores compound field indexes" do
+      s = Alumna::Schema.new.index(["user_id", "status"])
+      idx = s.schema_indexes.first
+      idx.fields.should eq(["user_id", "status"])
+      idx.unique.should be_false
     end
   end
 
@@ -114,7 +160,7 @@ describe Alumna::Schema do
         .int("b", required: false)
         .float("c")
         .bool("d")
-        .nullable("e", required_on: [:patch])
+        .any("e", nullable: true)
         .time("f")
         .bytes("g")
 
@@ -123,12 +169,12 @@ describe Alumna::Schema do
         Alumna::FieldType::Int,
         Alumna::FieldType::Float,
         Alumna::FieldType::Bool,
-        Alumna::FieldType::Nullable,
+        Alumna::FieldType::Any,
         Alumna::FieldType::Time,
         Alumna::FieldType::Bytes,
       ])
       s.fields[1].required.should be_false
-      s.fields[4].required_on.should eq([Alumna::ServiceMethod::Patch])
+      s.fields[4].nullable.should be_true
     end
   end
 
@@ -162,7 +208,7 @@ describe Alumna::Schema do
     end
   end
 
-  describe "validator integration (kept from your original)" do
+  describe "validator integration" do
     it "validates format when given as symbol" do
       schema = Alumna::Schema.new.str("email", format: :email)
       errors = schema.validate({"email" => "not-an-email"} of String => Alumna::AnyData)

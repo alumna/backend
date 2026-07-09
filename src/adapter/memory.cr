@@ -106,6 +106,26 @@ module Alumna
       end
     end
 
+    # Check for unique constraint violations (called inside the mutex lock)
+    private def check_unique(record : Hash(String, AnyData), skip_id : String? = nil) : ServiceError?
+      return nil unless sch = @schema
+
+      sch.fields.each do |fd|
+        next unless fd.unique
+        val = extract_value(record, fd.name)
+        next if val.nil?
+
+        conflict = @store.each_value.any? do |existing|
+          existing["id"] != skip_id && extract_value(existing, fd.name) == val
+        end
+
+        if conflict
+          return ServiceError.unprocessable("Unique constraint violation", {fd.name => "already exists"} of String => AnyData)
+        end
+      end
+      nil
+    end
+
     def find(ctx : RuleContext) : Array(Hash(String, AnyData)) | ServiceError
       q = ctx.query
       filters = q.typed_filters(schema)
@@ -170,6 +190,10 @@ module Alumna
     def create(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
       record = ctx.data.dup
       @mutex.synchronize do
+        if err = check_unique(record)
+          return err
+        end
+
         id = @next_id.to_s
         @next_id += 1
         record["id"] = id
@@ -187,6 +211,11 @@ module Alumna
 
       @mutex.synchronize do
         return ServiceError.not_found unless @store.has_key?(id)
+
+        if err = check_unique(record, skip_id: id)
+          return err
+        end
+
         @store[id] = record
       end
       record
@@ -202,6 +231,11 @@ module Alumna
 
         record = existing.merge(ctx.data)
         record["id"] = id
+
+        if err = check_unique(record, skip_id: id)
+          return err
+        end
+
         @store[id] = record
         record
       end
