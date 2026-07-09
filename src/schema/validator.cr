@@ -33,7 +33,6 @@ module Alumna
         has_key = data.has_key?(field.name)
 
         # --- Inject Defaults ---
-        # Only inject on writes where the client omitted the field
         if !has_key && field.has_default && method.try(&.create?)
           injected_val = field.default_value
           data[field.name] = injected_val
