@@ -158,9 +158,8 @@ module Alumna
 
     @[AlwaysInline]
     private def parse_positive_int(str : String) : Int32?
-      return nil if str.empty?
-      str.each_byte { |b| return nil unless 48 <= b <= 57 }
-      str.to_i?
+      n = str.to_i?(whitespace: false)
+      n && n >= 0 ? n : nil
     end
   end
 end

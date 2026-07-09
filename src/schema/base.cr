@@ -218,23 +218,28 @@ module Alumna
     end
 
     def find_field(path : String) : FieldDescriptor?
-      parts = path.split('.')
       current_schema = self
-      field = nil
+      field : FieldDescriptor? = nil
+      start = 0
 
-      parts.each_with_index do |part, i|
-        # Ignore array indices in query params (e.g. users[0].age -> users.age)
-        clean_part = part.sub(/\[\d+\]/, "")
+      loop do
+        dot = path.index('.', start)
+        raw_part = dot ? path[start...dot] : path[start..]
+
+        # Strip array index suffix like [0] without regex
+        bracket = raw_part.index('[')
+        clean_part = bracket ? raw_part[0...bracket] : raw_part
 
         field = current_schema.fields_by_name[clean_part]?
         return nil unless field
 
-        if i < parts.size - 1
-          if sub = field.sub_schema
-            current_schema = sub
-          else
-            return nil
-          end
+        break unless dot
+        start = dot + 1
+
+        if sub = field.sub_schema
+          current_schema = sub
+        else
+          return nil
         end
       end
       field
