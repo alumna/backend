@@ -1,10 +1,8 @@
-require "set"
-
 module Alumna
   # Sentinel struct to distinguish omitted arguments from explicit nils
   struct Unprovided; end
 
-  struct FieldDescriptor
+  class FieldDescriptor
     getter name : String
     getter type : FieldType
     getter required : Bool
@@ -62,20 +60,34 @@ module Alumna
   class Schema
     getter fields : Array(FieldDescriptor)
     getter strict : Bool
-    getter field_names : Set(String)
     getter schema_indexes : Array(IndexDef)
 
     protected getter fields_by_name : Hash(String, FieldDescriptor)
 
     def initialize(@strict : Bool = true)
       @fields = [] of FieldDescriptor
-      @field_names = Set(String).new
       @fields_by_name = {} of String => FieldDescriptor
       @schema_indexes = [] of IndexDef
     end
 
-    private def resolve_format(format : Symbol | String | Nil) : {String?, Proc(String, Bool)?, String?}
-      return {nil, nil, nil} unless format
+    private def resolve_field_type(type : FieldType | Symbol) : FieldType
+      return type if type.is_a?(FieldType)
+      case type
+      when :str   then FieldType::Str
+      when :int   then FieldType::Int
+      when :float then FieldType::Float
+      when :bool  then FieldType::Bool
+      when :time  then FieldType::Time
+      when :bytes then FieldType::Bytes
+      when :any   then FieldType::Any
+      when :hash  then FieldType::Hash
+      when :array then FieldType::Array
+      else             raise ArgumentError.new("Unknown enum Alumna::FieldType: #{type}")
+      end
+    end
+
+    private def resolve_format(format : Symbol | String | Nil) : {name: String?, validator: Proc(String, Bool)?, message: String?}
+      return {name: nil, validator: nil, message: nil} unless format
 
       format_name = case format
                     when Symbol then format.to_s.downcase
@@ -83,10 +95,10 @@ module Alumna
                     else             nil
                     end
 
-      return {nil, nil, nil} unless format_name
+      return {name: nil, validator: nil, message: nil} unless format_name
 
       if entry = Formats.fetch(format_name)
-        {format_name, entry.validator, entry.message}
+        {name: format_name, validator: entry.validator, message: entry.message}
       else
         raise ArgumentError.new("Unknown format: #{format_name}")
       end
@@ -114,12 +126,14 @@ module Alumna
       element_type : FieldType? = nil,
       default : AnyData | Proc(AnyData) | Unprovided | Nil = Unprovided.new,
     ) : self
-      field_type = type.is_a?(Symbol) ? FieldType.parse(type.to_s.capitalize) : type
-      format_name, format_validator, format_message = resolve_format(format)
+      field_type = resolve_field_type(type)
+      fmt = resolve_format(format)
 
       norm_required_on = case required_on
                          in Nil
                            nil
+                         in Array(ServiceMethod)
+                           required_on
                          in Array
                            required_on.map { |m| m.is_a?(ServiceMethod) ? m : ServiceMethod.parse(m.to_s.capitalize) }
                          in ServiceMethod
@@ -138,9 +152,9 @@ module Alumna
         read_only: read_only,
         min_length: min_length,
         max_length: max_length,
-        format_name: format_name,
-        format_validator: format_validator,
-        format_message: format_message,
+        format_name: fmt[:name],
+        format_validator: fmt[:validator],
+        format_message: fmt[:message],
         required_on: norm_required_on,
         sub_schema: sub_schema,
         element_type: element_type,
@@ -148,7 +162,6 @@ module Alumna
       )
 
       @fields << fd
-      @field_names << name
       @fields_by_name[name] = fd
       self
     end
@@ -193,8 +206,8 @@ module Alumna
 
     # For arrays of primitives
     def array(name : String, of : FieldType | Symbol, **opts)
-      el_type = of.is_a?(Symbol) ? FieldType.parse(of.to_s.capitalize) : of
-      field(name, :array, **opts, element_type: el_type.as(FieldType))
+      el_type = resolve_field_type(of)
+      field(name, :array, **opts, element_type: el_type)
     end
 
     # For arrays of objects

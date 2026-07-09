@@ -20,7 +20,7 @@ module Alumna
     protected def _validate(data : Hash(String, AnyData), method : ServiceMethod?, path : Array(String | Int32), errors : Array(FieldError)?) : Array(FieldError)?
       if @strict
         data.each_key do |key|
-          unless @field_names.includes?(key)
+          unless @fields_by_name.has_key?(key)
             path.push(key)
             errors = push_error(errors, path, "is not allowed")
             path.pop
