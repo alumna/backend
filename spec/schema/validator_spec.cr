@@ -129,66 +129,109 @@ describe Alumna::Schema do
     end
   end
 
-  # ── Type checking ─────────────────────────────────────────────────────────────
+  describe "Nullability" do
+    schema = Alumna::Schema.new
+      .str("non_null", nullable: false)
+      .str("is_null", nullable: true)
+      .any("untyped", nullable: true)
 
-  describe "Str type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Str)
-
-    it "accepts a string" { errors_for(schema, {"v" => any("hello")}).should be_empty }
-    it "rejects an integer" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be a string") }
-    it "rejects a bool" { error_on(schema, {"v" => any(true)}, "v").should eq("must be a string") }
-  end
-
-  describe "Int type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Int)
-
-    it "accepts an integer" { errors_for(schema, {"v" => any(42_i64)}).should be_empty }
-    it "rejects a string" { error_on(schema, {"v" => any("42")}, "v").should eq("must be an integer") }
-    it "rejects a bool" { error_on(schema, {"v" => any(false)}, "v").should eq("must be an integer") }
-  end
-
-  describe "Float type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Float)
-
-    it "accepts a float" { errors_for(schema, {"v" => any(3.14)}).should be_empty }
-    it "accepts an integer (coercible)" { errors_for(schema, {"v" => any(3_i64)}).should be_empty }
-    it "rejects a string" { error_on(schema, {"v" => any("3.14")}, "v").should eq("must be a number") }
-  end
-
-  describe "Bool type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bool)
-
-    it "accepts true" { errors_for(schema, {"v" => any(true)}).should be_empty }
-    it "accepts false" { errors_for(schema, {"v" => any(false)}).should be_empty }
-    it "rejects a string" { error_on(schema, {"v" => any("true")}, "v").should eq("must be true or false") }
-    it "rejects an int" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be true or false") }
-  end
-
-  describe "Time type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Time)
-
-    it "accepts a time" { errors_for(schema, {"v" => any(Time.utc)}).should be_empty }
-    it "rejects a string" { error_on(schema, {"v" => any("2024-01-01")}, "v").should eq("must be a time") }
-  end
-
-  describe "Bytes type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bytes)
-
-    it "accepts bytes" { errors_for(schema, {"v" => any(Bytes[1, 2])}).should be_empty }
-    it "rejects an array" { error_on(schema, {"v" => any([any(1_i64)])}, "v").should eq("must be bytes") }
-  end
-
-  describe "Nullable type" do
-    schema = Alumna::Schema.new.field("v", Alumna::FieldType::Nullable, required: false)
-
-    it "accepts any value when present" do
-      errors_for(schema, {"v" => any("anything")}).should be_empty
-      errors_for(schema, {"v" => any(1_i64)}).should be_empty
-      errors_for(schema, {"v" => any(true)}).should be_empty
+    it "rejects explicit null for non-nullable fields" do
+      error_on(schema, {"non_null" => any_nil, "is_null" => any("ok")}, "non_null").should eq("cannot be null")
     end
 
-    it "does not require the field" do
-      errors_for(schema, empty_data).should be_empty
+    it "accepts explicit null for nullable fields" do
+      errors_for(schema, {"non_null" => any("ok"), "is_null" => any_nil, "untyped" => any_nil}).should be_empty
+    end
+
+    it "allows Any field to accept various types" do
+      errors_for(schema, {"non_null" => any("ok"), "untyped" => any(123_i64)}).should be_empty
+      errors_for(schema, {"non_null" => any("ok"), "untyped" => any(true)}).should be_empty
+    end
+  end
+
+  describe "Default Value Injection" do
+    schema = Alumna::Schema.new
+      .int("score", default: 100_i64)
+      .str("status", default: "active")
+      .time("created_at", default: -> { Time.utc.as(Alumna::AnyData) })
+      .str("note", required: false)
+
+    it "injects defaults during create if field is omitted, waiving required check" do
+      data = empty_data
+      errs = errors_for(schema, data, Alumna::ServiceMethod::Create)
+
+      errs.should be_empty
+      data["score"].should eq(100_i64)
+      data["status"].should eq("active")
+      data["created_at"].as(Time).should be_close(Time.utc, 1.second)
+    end
+
+    it "does NOT inject defaults if client explicitly provides a value" do
+      data = {"score" => any(50_i64), "status" => any("pending")}
+      errors_for(schema, data, Alumna::ServiceMethod::Create).should be_empty
+
+      data["score"].should eq(50_i64)
+      data["status"].should eq("pending")
+    end
+
+    it "does NOT inject defaults during patch operations" do
+      data = {"note" => any("updating note only")}
+      errs = errors_for(schema, data, Alumna::ServiceMethod::Patch)
+
+      errs.should be_empty
+      data.has_key?("score").should be_false
+      data.has_key?("status").should be_false
+    end
+  end
+
+  # ── Type checking ─────────────────────────────────────────────────────────────
+
+  describe "Type checking" do
+    it "Str type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Str)
+
+      it "accepts a string" { errors_for(schema, {"v" => any("hello")}).should be_empty }
+      it "rejects an integer" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be a string") }
+      it "rejects a bool" { error_on(schema, {"v" => any(true)}, "v").should eq("must be a string") }
+    end
+
+    it "Int type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Int)
+
+      it "accepts an integer" { errors_for(schema, {"v" => any(42_i64)}).should be_empty }
+      it "rejects a string" { error_on(schema, {"v" => any("42")}, "v").should eq("must be an integer") }
+      it "rejects a bool" { error_on(schema, {"v" => any(false)}, "v").should eq("must be an integer") }
+    end
+
+    it "Float type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Float)
+
+      it "accepts a float" { errors_for(schema, {"v" => any(3.14)}).should be_empty }
+      it "accepts an integer (coercible)" { errors_for(schema, {"v" => any(3_i64)}).should be_empty }
+      it "rejects a string" { error_on(schema, {"v" => any("3.14")}, "v").should eq("must be a number") }
+    end
+
+    it "Bool type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bool)
+
+      it "accepts true" { errors_for(schema, {"v" => any(true)}).should be_empty }
+      it "accepts false" { errors_for(schema, {"v" => any(false)}).should be_empty }
+      it "rejects a string" { error_on(schema, {"v" => any("true")}, "v").should eq("must be true or false") }
+      it "rejects an int" { error_on(schema, {"v" => any(1_i64)}, "v").should eq("must be true or false") }
+    end
+
+    it "Time type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Time)
+
+      it "accepts a time" { errors_for(schema, {"v" => any(Time.utc)}).should be_empty }
+      it "rejects a string" { error_on(schema, {"v" => any("2024-01-01")}, "v").should eq("must be a time") }
+    end
+
+    it "Bytes type" do
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Bytes)
+
+      it "accepts bytes" { errors_for(schema, {"v" => any(Bytes[1, 2])}).should be_empty }
+      it "rejects an array" { error_on(schema, {"v" => any([any(1_i64)])}, "v").should eq("must be bytes") }
     end
   end
 
@@ -259,7 +302,7 @@ describe Alumna::Schema do
 
   describe "edge cases" do
     it "requires a Nullable field when missing, but accepts null" do
-      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Nullable, required: true)
+      schema = Alumna::Schema.new.field("v", Alumna::FieldType::Any, nullable: true, required: true)
       error_fields(schema, empty_data).should contain("v")
       errors_for(schema, {"v" => any_nil}).should be_empty
     end

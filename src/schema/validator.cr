@@ -12,14 +12,12 @@ module Alumna
 
     def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
       errors = nil
-      # A single tracker instantiated once per validation to trace paths without allocations
       path = [] of String | Int32
       errors = _validate(data, method, path, errors)
       errors || EMPTY_ERRORS
     end
 
     protected def _validate(data : Hash(String, AnyData), method : ServiceMethod?, path : Array(String | Int32), errors : Array(FieldError)?) : Array(FieldError)?
-      # --- Strict Check ---
       if @strict
         data.each_key do |key|
           unless @field_names.includes?(key)
@@ -33,6 +31,15 @@ module Alumna
       @fields.each do |field|
         path.push(field.name)
         has_key = data.has_key?(field.name)
+
+        # --- Inject Defaults ---
+        # Only inject on writes where the client omitted the field
+        if !has_key && field.has_default && method.try(&.create?)
+          injected_val = field.default_value
+          data[field.name] = injected_val
+          has_key = true
+        end
+
         value = data[field.name]?
 
         # --- Read-Only Check ---
@@ -49,10 +56,10 @@ module Alumna
           next
         end
 
-        # --- Explicit null ---
+        # --- Explicit null check ---
         if value.nil?
-          unless field.type.nullable?
-            errors = push_error(errors, path, "is required") if required?(field, method)
+          unless field.nullable
+            errors = push_error(errors, path, "cannot be null")
           end
           path.pop
           next
@@ -65,7 +72,7 @@ module Alumna
           next
         end
 
-        # --- Type-specific checks (type already verified above) ---
+        # --- Type-specific checks ---
         case value
         when String
           if field.type.str?
@@ -118,7 +125,6 @@ module Alumna
     end
 
     private def required?(field : FieldDescriptor, method : ServiceMethod?) : Bool
-      # A read-only field is never expected from the client during write operations
       return false if field.read_only && method.try(&.write?)
 
       if req_on = field.required_on
@@ -132,7 +138,6 @@ module Alumna
     private def push_error(errors : Array(FieldError)?, path : Array(String | Int32), message : String) : Array(FieldError)
       arr = errors || [] of FieldError
 
-      # Generates a string like "user.address.coordinates[0]" natively
       field_path = String.build do |io|
         path.each_with_index do |part, i|
           if part.is_a?(Int32)
@@ -158,6 +163,7 @@ module Alumna
       when .bytes? then value.is_a?(Bytes) ? nil : "must be bytes"
       when .hash?  then value.is_a?(Hash(String, AnyData)) ? nil : "must be an object"
       when .array? then value.is_a?(Array(AnyData)) ? nil : "must be an array"
+      when .any?   then nil
       else              nil
       end
     end

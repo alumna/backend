@@ -98,7 +98,7 @@ module Alumna
 
             raw_vals.each do |v|
               cast_val = cast_value(v, type, fd)
-              return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil? && !type.nullable?
+              return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil?
               arr << cast_val
             end
             res[key] << TypedCondition.new(c.op, arr.as(AnyData))
@@ -106,7 +106,7 @@ module Alumna
             raw_val = cv.is_a?(Array(String)) ? cv.first : cv
             cast_val = cast_value(raw_val, type, fd)
 
-            return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil? && !type.nullable?
+            return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil?
             res[key] << TypedCondition.new(c.op, cast_val)
           end
         end
