@@ -34,7 +34,9 @@ module Alumna
       @fields.each do |field|
         path.push(field.name)
 
+        # LCOV_EXCL_START - kcov wrongly reports on this "begin", while reporting coverage inside it
         begin
+          # LCOV_EXCL_STOP
           has_key = data.has_key?(field.name)
 
           # --- Inject Defaults & Avoid Double Lookup ---
@@ -97,7 +99,9 @@ module Alumna
               end
               value.each_with_index do |item, idx|
                 path.push(idx)
+                # LCOV_EXCL_START - kcov wrongly reports on this "begin", while reporting coverage inside it
                 begin
+                  # LCOV_EXCL_STOP
                   if sub = field.sub_schema
                     if item.is_a?(Hash(String, AnyData))
                       errors = sub._validate(item, method, path, errors)
