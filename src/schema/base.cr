@@ -183,17 +183,21 @@ module Alumna
     end
 
     # --- Nested helpers ---
+
+    # For objects/hashes
     def hash(name : String, **opts, &block : Schema ->)
       sub = Schema.new(strict: @strict)
       yield sub
       field(name, :hash, **opts, sub_schema: sub)
     end
 
+    # For arrays of primitives
     def array(name : String, of : FieldType | Symbol, **opts)
       el_type = of.is_a?(Symbol) ? FieldType.parse(of.to_s.capitalize) : of
       field(name, :array, **opts, element_type: el_type.as(FieldType))
     end
 
+    # For arrays of objects
     def array(name : String, **opts, &block : Schema ->)
       sub = Schema.new(strict: @strict)
       yield sub
@@ -206,7 +210,9 @@ module Alumna
       field = nil
 
       parts.each_with_index do |part, i|
+        # Ignore array indices in query params (e.g. users[0].age -> users.age)
         clean_part = part.sub(/\[\d+\]/, "")
+
         field = current_schema.fields_by_name[clean_part]?
         return nil unless field
 

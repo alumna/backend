@@ -97,6 +97,21 @@ describe Alumna::Schema do
       fd.format_message.should eq("must be a valid email address")
     end
 
+    it "normalizes strings and capitalized symbols" do
+      s1 = Alumna::Schema.new.field("x", :str, format: :url)
+      s1.fields.first.format_name.should eq("url")
+
+      s2 = Alumna::Schema.new.str("y", format: "Uuid")
+      s2.fields.first.format_name.should eq("uuid")
+    end
+
+    it "allows nil" do
+      fd = Alumna::Schema.new.str("n").fields.first
+      fd.format_name.should be_nil
+      fd.format_validator.should be_nil
+      fd.format_message.should be_nil
+    end
+
     it "raises for unknown format" do
       expect_raises(ArgumentError, /Unknown format/) do
         Alumna::Schema.new.str("x", format: :not_a_format)
@@ -108,6 +123,33 @@ describe Alumna::Schema do
     it "normalizes array of symbols" do
       fd = Alumna::Schema.new.str("t", required_on: [:create, :update]).fields.first
       fd.required_on.should eq([Alumna::ServiceMethod::Create, Alumna::ServiceMethod::Update])
+    end
+
+    it "normalizes single symbol" do
+      fd = Alumna::Schema.new.str("t", required_on: :patch).fields.first
+      fd.required_on.should eq([Alumna::ServiceMethod::Patch])
+    end
+
+    it "normalizes single enum" do
+      fd = Alumna::Schema.new.str("t", required_on: Alumna::ServiceMethod::Create).fields.first
+      fd.required_on.should eq([Alumna::ServiceMethod::Create])
+    end
+
+    it "normalizes mixed symbols and enums" do
+      fd = Alumna::Schema.new.str("t",
+        required_on: [Alumna::ServiceMethod::Patch, :remove]
+      ).fields.first
+      fd.required_on.should eq([Alumna::ServiceMethod::Patch, Alumna::ServiceMethod::Remove])
+    end
+
+    it "accepts nil" do
+      Alumna::Schema.new.str("t").fields.first.required_on.should be_nil
+    end
+
+    it "raises for unknown method" do
+      expect_raises(ArgumentError, /Unknown enum Alumna::ServiceMethod/) do
+        Alumna::Schema.new.str("x", required_on: [:bogus])
+      end
     end
   end
 
@@ -133,6 +175,44 @@ describe Alumna::Schema do
       ])
       s.fields[1].required.should be_false
       s.fields[4].nullable.should be_true
+    end
+  end
+
+  describe "chaining and builder" do
+    it "returns self" do
+      s = Alumna::Schema.new
+      s.str("a").int("b").should be(s)
+    end
+
+    it "builds via block and preserves order" do
+      s = Alumna::Schema.build do |sc|
+        sc.str("first")
+        sc.int("second")
+      end
+      s.fields.map(&.name).should eq(["first", "second"])
+    end
+
+    it "builds via block with strict flag" do
+      s = Alumna::Schema.build(strict: false) do |sc|
+        sc.str("first")
+      end
+      s.strict.should be_false
+    end
+  end
+
+  describe "error paths for type" do
+    it "raises for unknown type" do
+      expect_raises(ArgumentError, /Unknown enum Alumna::FieldType/) do
+        Alumna::Schema.new.field("x", :nope)
+      end
+    end
+  end
+
+  describe "validator integration" do
+    it "validates format when given as symbol" do
+      schema = Alumna::Schema.new.str("email", format: :email)
+      errors = schema.validate({"email" => "not-an-email"} of String => Alumna::AnyData)
+      errors.first.message.should eq("must be a valid email address")
     end
   end
 end
