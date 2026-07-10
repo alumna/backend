@@ -2,6 +2,13 @@
 
 ## 0.5.5 - 2026-07-09
 
+### Added
+* **schema:** Added support for `default` values. Defaults can be static primitives or dynamic blocks (Procs). The validation engine automatically injects them into missing fields during `CREATE` operations.
+* **schema:** Introduced the `nullable: true` trait. This allows clients to explicitly send `null` values, which is distinctly handled from `required: false` (which allows omitting the key entirely).
+* **schema:** Added `unique: true` and `indexed: true` field constraints to serve as structural hints for database adapters.
+* **schema:** Added schema-level compound indexes via `Schema#index(["field1", "field2"], unique: true)`.
+* **adapter:** The `MemoryAdapter` now strictly enforces `unique` constraints during `create`, `update`, and `patch` operations, safely returning a `422 Unprocessable Entity` on conflicts.
+
 ### Changed
 * **schema:** `FieldDescriptor` is now a `class` instead of a `struct`. Because structs are passed by value in Crystal, the previous implementation was copying the entire descriptor (containing ~17 fields) onto the stack for every field, on every request. This change trades a one-time boot heap allocation for zero-copy reference passing during the validation hot-path.
 * **schema:** Removed the redundant `@field_names` `Set`. Field existence checks now use the existing `@fields_by_name` hash directly, saving memory and eliminating a duplicated data structure.
