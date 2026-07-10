@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## 0.5.6 - 2026-07-10
+
+### Changed
+* **query**: `TypedCondition` was expanded with an optional `FieldDescriptor` to provide more valuable data to adapters, and to allow them with better optimizations
+
 ## 0.5.5 - 2026-07-09
 
 ### Added
