@@ -48,6 +48,8 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Inter-Service Communication](#inter-service-communication)
 - [2. Schemas](#2-schemas)
     - [Nested Fields](#nested-fields-objects-and-arrays)
+    - [Default Values and Nullability](#default-values-and-nullability)
+    - [Indexes and Unique Constraints](#indexes-and-unique-constraints)
     - [Conditional Requirements](#conditional-requirements)
     - [Strict Validation and Read-Only Fields](#strict-validation-and-read-only-fields)
     - [Pluggable Formats](#pluggable-formats)
@@ -84,7 +86,7 @@ Most backend frameworks ask you to learn their full architecture before you can 
 
 The entire model fits in your head at once. There is no magic, no dependency injection container, no decorator metadata, and no complex resolver chain. Every moving piece is visible and explicit. A developer new to the codebase can read a service definition and understand the full execution path in minutes.
 
-Alumna inherits Crystal's performance characteristics: ahead-of-time compilation, a single self-contained binary, no runtime dependencies, and throughput that benchmarks consistently alongside Go and Rust—all with a syntax beautifully close to Ruby.
+Alumna inherits Crystal's performance characteristics: ahead-of-time compilation, a single self-contained binary, no runtime dependencies, and throughput that benchmarks consistently alongside Go and Rust, all with a syntax beautifully close to Ruby.
 
 ---
 
@@ -335,6 +337,54 @@ OrganizationSchema = Alumna::Schema.new
 ```
 
 If a nested field fails validation, Alumna replies with explicit dot/bracket notation errors (e.g., `{"billing.plan": "is required"}`, or `{"members[0].email": "must be a valid email address"}`).
+
+### Default Values and Nullability
+
+Fields can define `default` values that the validation engine will automatically inject into `ctx.data` during `CREATE` operations if the client omits them. Defaults can be static values or dynamic blocks (Procs) evaluated at runtime.
+
+```crystal
+UserSchema = Alumna::Schema.new
+  .str("email", format: :email)
+  .str("status", default: "active")
+  .time("created_at", default: -> { Time.utc.as(Alumna::AnyData) })
+```
+
+*Note: Because Crystal requires strict typing in Procs, dynamic defaults must explicitly cast their return value using `.as(Alumna::AnyData)`.*
+
+By default, Alumna schemas do not allow explicit `null` values. If a field is optional (`required: false`), the client can omit the key entirely, but sending `"key": null` will result in a validation error. 
+
+To explicitly allow `null` values in the payload, use the `nullable: true` trait:
+
+```crystal
+ProfileSchema = Alumna::Schema.new
+  .str("username")
+  .str("bio", required: false, nullable: true)
+```
+
+### Indexes and Unique Constraints
+
+Because Alumna schemas act as the blueprint for Database Adapters, they support explicit index and uniqueness definitions. This allows adapters (like SQLite or Postgres) to automatically generate database schemas or enforce data integrity at the application level.
+
+You can apply `unique: true` or `indexed: true` directly to individual fields:
+
+```crystal
+AccountSchema = Alumna::Schema.new
+  .str("email", unique: true)
+  .str("tenant_id", indexed: true)
+```
+
+For compound indexes spanning multiple fields, use the schema-level `.index` method:
+
+```crystal
+MembershipSchema = Alumna::Schema.new
+  .str("user_id")
+  .str("organization_id")
+  .str("role")
+  .index(["user_id", "organization_id"], unique: true)
+  .index("role") # Shorthand for a single-field index
+```
+
+Adapters, including the built-in `MemoryAdapter`, read these traits to proactively reject conflicting payloads with a `422 Unprocessable Entity` ("already exists") before the conflict can corrupt your application state or trigger an unhandled SQL constraint exception.
 
 ### Conditional Requirements
 
@@ -647,7 +697,7 @@ When compiled with these flags, Alumna will automatically configure the Fiber ex
 
 ### Unix Sockets & Local Providers
 
-Alumna can serve HTTP traffic over standard TCP ports and local Unix sockets—either simultaneously or exclusively.
+Alumna can serve HTTP traffic over standard TCP ports and local Unix sockets, either simultaneously or exclusively.
 
 ```crystal
 # Listen on both TCP and a Unix socket
@@ -816,6 +866,8 @@ This lets every layer – context, services, rules, and serializers – work wit
 
 **Why is `ServiceError` a struct instead of an Exception?** 
 In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type, Alumna achieves zero-allocation error paths. Expected API control flow never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
+
+`FieldDescriptor` on the other hand is a class because it contains nearly 20 fields. As a struct it would copy all fields onto the stack for every field validation. As a class, it pays just a one-time heap allocation at boot and uses lightweight 8-byte references to maximize CPU cache.
 
 **Flat routing API decision**
 Alumna enforces flat routing by design to maintain O(1) routing performance and a more efficient caching on both server-side and client-side. Nested relationships should be handled via query parameters (e.g., /posts?userId=123).

@@ -1,5 +1,19 @@
 # Alumna Backend changelog
 
+## 0.5.5 - 2026-07-09
+
+### Changed
+* **schema:** `FieldDescriptor` is now a `class` instead of a `struct`. Because structs are passed by value in Crystal, the previous implementation was copying the entire descriptor (containing ~17 fields) onto the stack for every field, on every request. This change trades a one-time boot heap allocation for zero-copy reference passing during the validation hot-path.
+* **schema:** Removed the redundant `@field_names` `Set`. Field existence checks now use the existing `@fields_by_name` hash directly, saving memory and eliminating a duplicated data structure.
+* **schema:** `resolve_format` now utilizes a strictly typed `NamedTuple`, improving internal code clarity and preventing positional tuple errors.
+
+### Performance
+* **schema:** Completely rewrote nested path resolution (`Schema#find_field`). It now walks dot-notation and bracket-notation strings using zero-allocation `String#index` traversal, completely eliminating expensive `String#split` and Regex allocations during deep query filtering.
+* **schema:** Optimized the core `_validate` loop. Loop-invariant HTTP method checks are now hoisted, default value injections avoid double hash lookups, and the path tracer uses an `ensure` block for faster, safer unwinding.
+* **schema:** Added `@[AlwaysInline]` to validation helper methods (`check_type`, `required?`) to guarantee the compiler avoids method-call overhead inside the validation loop.
+* **adapter:** `MemoryAdapter#check_unique` now uses `@store.each_value.any?`. This prevents the adapter from needlessly allocating a complete `Array` of the entire dataset on every `create`, `update`, or `patch` operation.
+* **query:** `Query#parse_positive_int` now natively leverages `String#to_i?(whitespace: false)`, completing the parse and validation in a single, highly optimized pass.
+
 ## 0.5.4 - 2026-06-05
 
 ### Added
