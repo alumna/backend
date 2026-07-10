@@ -23,7 +23,7 @@ module Alumna
     end
 
     # 2. Coerced condition holding native Crystal types
-    record TypedCondition, op : Op, value : AnyData
+    record TypedCondition, op : Op, value : AnyData, fd : FieldDescriptor?
 
     getter filters : Hash(String, Array(Condition))
     getter limit : Int32?
@@ -101,13 +101,13 @@ module Alumna
               return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil?
               arr << cast_val
             end
-            res[key] << TypedCondition.new(c.op, arr.as(AnyData))
+            res[key] << TypedCondition.new(c.op, arr.as(AnyData), fd)
           else
             raw_val = cv.is_a?(Array(String)) ? cv.first : cv
             cast_val = cast_value(raw_val, type, fd)
 
             return ServiceError.bad_request("Invalid type for query parameter #{key}") if cast_val.nil?
-            res[key] << TypedCondition.new(c.op, cast_val)
+            res[key] << TypedCondition.new(c.op, cast_val, fd)
           end
         end
       end
