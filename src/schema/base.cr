@@ -64,10 +64,50 @@ module Alumna
 
     protected getter fields_by_name : Hash(String, FieldDescriptor)
 
+    @unique_fields_cache : Array({String, FieldDescriptor})?
+    @indexed_fields_cache : Array({String, FieldDescriptor})?
+
     def initialize(@strict : Bool = true)
       @fields = [] of FieldDescriptor
       @fields_by_name = {} of String => FieldDescriptor
       @schema_indexes = [] of IndexDef
+    end
+
+    # Returns a flat list of all unique fields (including nested hashes) and their dot-notation paths
+    def unique_fields : Array({String, FieldDescriptor})
+      @unique_fields_cache ||= begin
+        results = [] of {String, FieldDescriptor}
+        collect_fields(@fields, "", results, &.unique)
+
+        results
+      end
+    end
+
+    # Returns a flat list of all indexed fields (including nested hashes) and their dot-notation paths
+    def indexed_fields : Array({String, FieldDescriptor})
+      @indexed_fields_cache ||= begin
+        results = [] of {String, FieldDescriptor}
+        collect_fields(@fields, "", results) { |fd| fd.unique || fd.indexed }
+        results
+      end
+    end
+
+    private def collect_fields(
+      fields : Array(FieldDescriptor),
+      prefix : String,
+      results : Array({String, FieldDescriptor}),
+      &predicate : FieldDescriptor -> Bool
+    )
+      fields.each do |fd|
+        path = prefix.empty? ? fd.name : "#{prefix}.#{fd.name}"
+
+        results << {path, fd} if predicate.call(fd)
+
+        # Only descend into nested objects. Arrays do not yield valid dot-notation paths.
+        if fd.type.hash? && (sub = fd.sub_schema)
+          collect_fields(sub.fields, path, results, &predicate)
+        end
+      end
     end
 
     private def resolve_field_type(type : FieldType | Symbol) : FieldType
