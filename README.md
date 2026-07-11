@@ -365,12 +365,15 @@ ProfileSchema = Alumna::Schema.new
 
 Because Alumna schemas act as the blueprint for Database Adapters, they support explicit index and uniqueness definitions. This allows adapters (like SQLite or Postgres) to automatically generate database schemas or enforce data integrity at the application level.
 
-You can apply `unique: true` or `indexed: true` directly to individual fields:
+You can apply `unique: true` or `indexed: true` directly to individual fields, including deeply nested hashes:
 
 ```crystal
 AccountSchema = Alumna::Schema.new
   .str("email", unique: true)
   .str("tenant_id", indexed: true)
+  .hash("profile") do |sub|
+    sub.str("handle", unique: true) # Safely translates to a dot-notation index (profile.handle)
+  end
 ```
 
 For compound indexes spanning multiple fields, use the schema-level `.index` method:

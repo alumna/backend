@@ -1,5 +1,16 @@
 # Alumna Backend changelog
 
+## 0.5.7 - 2026-07-11
+
+### Added
+* **schema:** Introduced `Schema#unique_fields` and `Schema#indexed_fields`. These methods recursively walk the schema at boot time, safely resolving nested hashes to generate a flat array of valid dot-notation paths (e.g., `profile.handle`). 
+
+### Changed
+* **adapter:** The `MemoryAdapter` now correctly enforces `unique: true` constraints on deeply nested fields. 
+
+### Performance
+* **adapter:** `MemoryAdapter` now eagerly resolves and caches unique field paths during initialization. This eliminates structural tree-walking, lazy-evaluation overhead, and schema nil-checks from the hot path, turning uniqueness enforcement into an direct non-recursive iteration on fields during `create`, `update`, and `patch`.
+
 ## 0.5.6 - 2026-07-10
 
 ### Changed
