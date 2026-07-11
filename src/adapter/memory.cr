@@ -3,12 +3,16 @@ module Alumna
     @store : Hash(String, Hash(String, AnyData))
     @next_id : Int64
     @mutex : Sync::Mutex
+    @unique_fields : Array({String, FieldDescriptor}) # <--- Added
 
     def initialize(schema : Schema? = nil)
       super(schema)
       @store = {} of String => Hash(String, AnyData)
       @next_id = 1_i64
       @mutex = Sync::Mutex.new
+
+      # Eagerly evaluate and cache unique fields at boot time
+      @unique_fields = schema ? schema.unique_fields : [] of {String, FieldDescriptor}
     end
 
     @[AlwaysInline]
@@ -108,19 +112,16 @@ module Alumna
 
     # Check for unique constraint violations (called inside the mutex lock)
     private def check_unique(record : Hash(String, AnyData), skip_id : String? = nil) : ServiceError?
-      return nil unless sch = @schema
-
-      sch.fields.each do |fd|
-        next unless fd.unique
-        val = extract_value(record, fd.name)
+      @unique_fields.each do |(path, fd)|
+        val = extract_value(record, path)
         next if val.nil?
 
         conflict = @store.each_value.any? do |existing|
-          existing["id"] != skip_id && extract_value(existing, fd.name) == val
+          existing["id"] != skip_id && extract_value(existing, path) == val
         end
 
         if conflict
-          return ServiceError.unprocessable("Unique constraint violation", {fd.name => "already exists"} of String => AnyData)
+          return ServiceError.unprocessable("Unique constraint violation", {path => "already exists"} of String => AnyData)
         end
       end
       nil

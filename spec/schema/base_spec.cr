@@ -215,4 +215,44 @@ describe Alumna::Schema do
       errors.first.message.should eq("must be a valid email address")
     end
   end
+
+  describe "recursive field collection (unique and indexed)" do
+    it "collects unique and indexed fields recursively with correct dot-notation paths" do
+      schema = Alumna::Schema.new
+        .str("id", unique: true)
+        .str("tenant_id", indexed: true)
+        .str("name") # neither
+        .hash("profile") do |p|
+          p.str("handle", unique: true)
+          p.str("category", indexed: true)
+          p.hash("preferences") do |prefs|
+            prefs.bool("marketing", indexed: true)
+          end
+        end
+        .array("users") do |u|
+          # These are inside an array, so the recursive walker MUST stop
+          # and ignore them to prevent generating invalid dot-notation paths.
+          u.str("email", unique: true)
+          u.str("role", indexed: true)
+        end
+
+      # Check unique_fields
+      uniq = schema.unique_fields
+      uniq.size.should eq(2)
+      uniq.map(&.first).should eq(["id", "profile.handle"])
+
+      # Check indexed_fields (should include unique ones too!)
+      idx = schema.indexed_fields
+      idx.size.should eq(5)
+
+      expected_indexed_paths = [
+        "id",
+        "tenant_id",
+        "profile.handle",
+        "profile.category",
+        "profile.preferences.marketing",
+      ]
+      idx.map(&.first).should eq(expected_indexed_paths)
+    end
+  end
 end
