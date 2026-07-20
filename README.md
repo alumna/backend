@@ -832,20 +832,14 @@ Writing a custom database adapter? Use `Alumna::Testing::AdapterSuite.run("MyAda
 
 ## Roadmap
 
-### v0.6 - Security and authentication
-- JWT and session authentication helper rules.
+Alumna is prioritized to support high-availability and real-time distributed platforms (specifically targeting MongoDB, Redis, and NATS.io).
 
-### v0.7 - v0.8 Real Database Adapters
-- **MySQL** and **PostgreSQL** adapters (using `crystal-db`).
-- Adapters will read the service schema to introspect column names and types automatically.
-
-### v0.9 - Real-time events via WebSocket
-- Emit service events automatically after successful mutations (`created`, `updated`, `patched`, `removed`).
-- Allow clients to subscribe to specific service paths over a WebSocket connection.
-
-### v0.10 - v0.11 Horizontal Scaling & Cache
-- **Redis adapter** for caching.
-- **NATS integration** for horizontal scaling. Stateless service instances will publish events to NATS subjects, enabling real-time WebSocket fan-out across multiple Alumna instances behind a load balancer.
+- **v0.6 - Core Resilience & MongoDB:** Refactoring the `AdapterSuite` to be completely ID-agnostic (supporting `ObjectId`). Releasing the official **MongoDB** adapter targeting v8.x, featuring native BSON translation, deep dot-notation querying, and strict type-casting at the framework boundary.
+- **v0.7 - Security & Auth:** Built-in, zero-allocation rules for JWT verification and secure session handling. Improved internal routing with robust `ServiceError` propagation across `ctx.call` boundaries.
+- **v0.8 - Horizontal Caching:** Extracting internal rate-limiting storage interfaces to support an official **Redis** adapter. This will enable distributed rate-limiting and transparent query caching with auto-invalidation.
+- **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
+- **v0.10 - Event Bus & NATS:** Introducing bulletproof `after_commit` hooks and official **NATS.io** integration. This allows horizontally scaled Alumna instances to publish data mutations statelessly and fan-out real-time events to connected WebSocket clients.
+- **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---
 
