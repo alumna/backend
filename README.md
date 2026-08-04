@@ -70,6 +70,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Unix Sockets & Local Providers](#unix-sockets--local-providers)
     - [Graceful Shutdown](#graceful-shutdown)
     - [Trusted Proxies](#trusted-proxies)
+- [Developer Experience](#developer-experience)
 - [Full Example](#full-example)
 - [Serialization](#serialization)
 - [Testing](#testing)
@@ -278,11 +279,15 @@ Services often need to interact with each other (e.g., a `Post` creation trigger
 ```crystal
 CreateAuditLog = Alumna::Rule.new do |ctx|
   # Safely trigger another service entirely in-memory!
-  ctx.call("/audit", :create, {
-    "action" => "User updated",
-    "user_id" => ctx.id
-  } of String => Alumna::AnyData)
-  
+  result, error = ctx.call("/audit", :create, Alumna.hash(
+    action: "User updated",
+    user_id: ctx.id
+  ))
+
+  if error
+    return Alumna::ServiceError.internal("Audit failed")
+  end
+
   nil
 end
 ```
@@ -737,6 +742,35 @@ When Alumna runs behind Nginx, HAProxy, Cloudflare, or a Load Balancer, `ctx.rem
 
 ---
 
+## Developer Experience
+
+Alumna provides helpers to make writing rules and tests easier. We also recommend aliasing `Alumna::AnyData` at the top of your app:
+
+```crystal
+alias AnyData = Alumna::AnyData
+```
+
+### The `Alumna.hash` and `.to_any` helpers
+When passing data to `ctx.call` or tests, use `Alumna.hash` and `.to_any` to avoid compiler generics friction:
+
+```crystal
+# Instead of: {"role" => "admin".as(AnyData)} of String => AnyData
+ctx.call("/users", :patch, id: "123", data: Alumna.hash(role: "admin"))
+
+# Instead of: ["a", "b"].map(&.as(AnyData))
+ctx.data["tags"] = ["a", "b"].to_any
+```
+
+### Safe Deep Fetching
+When reading from `ctx.data` (which is a `Hash(String, AnyData)`), Alumna provides `dig_any?` and typed variants (`dig_str?`, `dig_int?`, `dig_bool?`, etc.) that gracefully handle nested structures using dot-notation:
+
+```crystal
+# Safely extracts the string, returning nil if any part of the path is missing or isn't a string.
+user_status = ctx.data.dig_str?("user.status") || "pending"
+```
+
+---
+
 ## Full Example
 
 ```crystal
@@ -821,7 +855,7 @@ describe "User API" do
   it "creates a user" do
     res = client.post("/users", body: %({"name": "Alice"}))
     res.status.should eq(201)
-    res.json["name"].as_s.should eq("Alice")
+    res.json_hash["name"].as(String).should eq("Alice")
   end
 end
 ```

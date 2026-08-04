@@ -36,26 +36,26 @@ describe Alumna::Testing::AppClient do
   it "dispatches GET requests" do
     res = client.get("/echo")
     res.status.should eq(200)
-    res.json[0]["echo"].as_s.should eq("GET")
+    res.json_array[0].as(Hash)["echo"].should eq("GET")
   end
 
   it "dispatches POST requests with a body" do
     res = client.post("/echo", %({"msg":"hello"}))
     res.status.should eq(201)
-    res.json["echo"].as_s.should eq("POST")
-    res.json["body"].as_s.should eq("hello")
+    res.json_hash["echo"].should eq("POST")
+    res.json_hash["body"].should eq("hello")
   end
 
   it "dispatches PUT requests" do
     res = client.put("/echo/1", %({}))
     res.status.should eq(200)
-    res.json["echo"].as_s.should eq("PUT")
+    res.json_hash["echo"].should eq("PUT")
   end
 
   it "dispatches PATCH requests" do
     res = client.patch("/echo/1", %({}))
     res.status.should eq(200)
-    res.json["echo"].as_s.should eq("PATCH")
+    res.json_hash["echo"].should eq("PATCH")
   end
 
   it "dispatches DELETE requests" do

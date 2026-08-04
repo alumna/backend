@@ -1,46 +1,5 @@
 require "../spec_helper"
 
-# Helpers to build AnyData values without boilerplate
-private def any(v : String) : Alumna::AnyData
-  v
-end
-
-private def any(v : Int) : Alumna::AnyData
-  v.to_i64
-end
-
-private def any(v : Float) : Alumna::AnyData
-  v.to_f64
-end
-
-private def any(v : Bool) : Alumna::AnyData
-  v
-end
-
-private def any(v : Time) : Alumna::AnyData
-  v
-end
-
-private def any(v : Bytes) : Alumna::AnyData
-  v
-end
-
-private def any(v : Array) : Alumna::AnyData
-  arr = [] of Alumna::AnyData; v.each { |x| arr << any(x) }; arr.as(Alumna::AnyData)
-end
-
-private def any(v : Hash) : Alumna::AnyData
-  h = {} of String => Alumna::AnyData; v.each { |k, val| h[k.to_s] = any(val) }; h.as(Alumna::AnyData)
-end
-
-private def any(v : Alumna::AnyData) : Alumna::AnyData
-  v
-end
-
-private def any_nil : Alumna::AnyData
-  nil
-end
-
 private def empty_data
   Hash(String, Alumna::AnyData).new
 end
@@ -68,23 +27,23 @@ describe Alumna::Schema do
       .field("note", Alumna::FieldType::Str, required: false)
 
     it "passes when the required field is present" do
-      errors_for(schema, {"name" => any("Alice")} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(name: "Alice")).should be_empty
     end
 
     it "fails when a required field is absent" do
-      error_fields(schema, {"note" => any("hi")} of String => Alumna::AnyData).should contain("name")
+      error_fields(schema, Alumna.hash(note: "hi")).should contain("name")
     end
 
     it "fails when a required field is explicitly null" do
-      error_fields(schema, {"name" => any_nil} of String => Alumna::AnyData).should contain("name")
+      error_fields(schema, Alumna.hash(name: nil)).should contain("name")
     end
 
     it "does not report an error for a missing optional field" do
-      error_fields(schema, {"name" => any("Alice")} of String => Alumna::AnyData).should_not contain("note")
+      error_fields(schema, Alumna.hash(name: "Alice")).should_not contain("note")
     end
 
     it "reports the canonical 'is required' message" do
-      error_on(schema, ({"note" => any("hi")} of String => Alumna::AnyData), "name").should eq("is required")
+      error_on(schema, Alumna.hash(note: "hi"), "name").should eq("is required")
     end
   end
 
@@ -116,7 +75,7 @@ describe Alumna::Schema do
     end
 
     it "validates constraints only when field is present on patch" do
-      errors_for(schema, ({"title" => any("")} of String => Alumna::AnyData), Alumna::ServiceMethod::Patch).first.message.should eq("must be at least 1 character")
+      errors_for(schema, Alumna.hash(title: ""), Alumna::ServiceMethod::Patch).first.message.should eq("must be at least 1 character")
     end
   end
 
@@ -127,16 +86,16 @@ describe Alumna::Schema do
       .any("untyped", nullable: true)
 
     it "rejects explicit null for non-nullable fields" do
-      error_on(schema, ({"non_null" => any_nil, "is_null" => any("ok")} of String => Alumna::AnyData), "non_null").should eq("cannot be null")
+      error_on(schema, Alumna.hash(non_null: nil, is_null: "ok"), "non_null").should eq("cannot be null")
     end
 
     it "accepts explicit null for nullable fields" do
-      errors_for(schema, {"non_null" => any("ok"), "is_null" => any_nil, "untyped" => any_nil} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(non_null: "ok", is_null: nil, untyped: nil)).should be_empty
     end
 
     it "allows Any field to accept various types" do
-      errors_for(schema, {"non_null" => any("ok"), "is_null" => any_nil, "untyped" => any(123_i64)} of String => Alumna::AnyData).should be_empty
-      errors_for(schema, {"non_null" => any("ok"), "is_null" => any_nil, "untyped" => any(true)} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(non_null: "ok", is_null: nil, untyped: 123_i64)).should be_empty
+      errors_for(schema, Alumna.hash(non_null: "ok", is_null: nil, untyped: true)).should be_empty
     end
   end
 
@@ -158,7 +117,7 @@ describe Alumna::Schema do
     end
 
     it "does NOT inject defaults if client explicitly provides a value" do
-      data = {"score" => any(50_i64), "status" => any("pending")} of String => Alumna::AnyData
+      data = Alumna.hash(score: 50_i64, status: "pending")
       errors_for(schema, data, Alumna::ServiceMethod::Create).should be_empty
 
       data["score"].should eq(50_i64)
@@ -166,7 +125,7 @@ describe Alumna::Schema do
     end
 
     it "does NOT inject defaults during patch operations" do
-      data = {"note" => any("updating note only")} of String => Alumna::AnyData
+      data = Alumna.hash(note: "updating note only")
       errs = errors_for(schema, data, Alumna::ServiceMethod::Patch)
 
       errs.should be_empty
@@ -180,43 +139,43 @@ describe Alumna::Schema do
   describe "Type checking" do
     it "Str type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Str)
-      errors_for(s, {"v" => any("hello")} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any(1_i64)} of String => Alumna::AnyData), "v").should eq("must be a string")
-      error_on(s, ({"v" => any(true)} of String => Alumna::AnyData), "v").should eq("must be a string")
+      errors_for(s, Alumna.hash(v: "hello")).should be_empty
+      error_on(s, Alumna.hash(v: 1_i64), "v").should eq("must be a string")
+      error_on(s, Alumna.hash(v: true), "v").should eq("must be a string")
     end
 
     it "Int type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Int)
-      errors_for(s, {"v" => any(42_i64)} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any("42")} of String => Alumna::AnyData), "v").should eq("must be an integer")
-      error_on(s, ({"v" => any(false)} of String => Alumna::AnyData), "v").should eq("must be an integer")
+      errors_for(s, Alumna.hash(v: 42_i64)).should be_empty
+      error_on(s, Alumna.hash(v: "42"), "v").should eq("must be an integer")
+      error_on(s, Alumna.hash(v: false), "v").should eq("must be an integer")
     end
 
     it "Float type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Float)
-      errors_for(s, {"v" => any(3.14)} of String => Alumna::AnyData).should be_empty
-      errors_for(s, {"v" => any(3_i64)} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any("3.14")} of String => Alumna::AnyData), "v").should eq("must be a number")
+      errors_for(s, Alumna.hash(v: 3.14)).should be_empty
+      errors_for(s, Alumna.hash(v: 3_i64)).should be_empty
+      error_on(s, Alumna.hash(v: "3.14"), "v").should eq("must be a number")
     end
 
     it "Bool type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Bool)
-      errors_for(s, {"v" => any(true)} of String => Alumna::AnyData).should be_empty
-      errors_for(s, {"v" => any(false)} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any("true")} of String => Alumna::AnyData), "v").should eq("must be true or false")
-      error_on(s, ({"v" => any(1_i64)} of String => Alumna::AnyData), "v").should eq("must be true or false")
+      errors_for(s, Alumna.hash(v: true)).should be_empty
+      errors_for(s, Alumna.hash(v: false)).should be_empty
+      error_on(s, Alumna.hash(v: "true"), "v").should eq("must be true or false")
+      error_on(s, Alumna.hash(v: 1_i64), "v").should eq("must be true or false")
     end
 
     it "Time type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Time)
-      errors_for(s, {"v" => any(Time.utc)} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any("2024-01-01")} of String => Alumna::AnyData), "v").should eq("must be a time")
+      errors_for(s, Alumna.hash(v: Time.utc)).should be_empty
+      error_on(s, Alumna.hash(v: "2024-01-01"), "v").should eq("must be a time")
     end
 
     it "Bytes type" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Bytes)
-      errors_for(s, {"v" => any(Bytes[1, 2])} of String => Alumna::AnyData).should be_empty
-      error_on(s, ({"v" => any([any(1_i64)])} of String => Alumna::AnyData), "v").should eq("must be bytes")
+      errors_for(s, Alumna.hash(v: Bytes[1, 2])).should be_empty
+      error_on(s, Alumna.hash(v: [1_i64].to_any), "v").should eq("must be bytes")
     end
   end
 
@@ -225,24 +184,24 @@ describe Alumna::Schema do
   describe "min_length" do
     schema = Alumna::Schema.new.field("v", Alumna::FieldType::Str, min_length: 3)
 
-    it "passes when length == min" { errors_for(schema, {"v" => any("abc")} of String => Alumna::AnyData).should be_empty }
-    it "passes when length > min" { errors_for(schema, {"v" => any("abcd")} of String => Alumna::AnyData).should be_empty }
-    it "fails when length < min" { error_on(schema, ({"v" => any("ab")} of String => Alumna::AnyData), "v").should eq("must be at least 3 characters") }
+    it "passes when length == min" { errors_for(schema, Alumna.hash(v: "abc")).should be_empty }
+    it "passes when length > min" { errors_for(schema, Alumna.hash(v: "abcd")).should be_empty }
+    it "fails when length < min" { error_on(schema, Alumna.hash(v: "ab"), "v").should eq("must be at least 3 characters") }
     it "uses singular 'character' for 1" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Str, min_length: 1)
-      error_on(s, ({"v" => any("")} of String => Alumna::AnyData), "v").should eq("must be at least 1 character")
+      error_on(s, Alumna.hash(v: ""), "v").should eq("must be at least 1 character")
     end
   end
 
   describe "max_length" do
     schema = Alumna::Schema.new.field("v", Alumna::FieldType::Str, max_length: 5)
 
-    it "passes when length == max" { errors_for(schema, {"v" => any("abcde")} of String => Alumna::AnyData).should be_empty }
-    it "passes when length < max" { errors_for(schema, {"v" => any("ab")} of String => Alumna::AnyData).should be_empty }
-    it "fails when length > max" { error_on(schema, ({"v" => any("abcdef")} of String => Alumna::AnyData), "v").should eq("must be at most 5 characters") }
+    it "passes when length == max" { errors_for(schema, Alumna.hash(v: "abcde")).should be_empty }
+    it "passes when length < max" { errors_for(schema, Alumna.hash(v: "ab")).should be_empty }
+    it "fails when length > max" { error_on(schema, Alumna.hash(v: "abcdef"), "v").should eq("must be at most 5 characters") }
     it "uses singular 'character' for 1" do
       s = Alumna::Schema.new.field("v", Alumna::FieldType::Str, max_length: 1)
-      error_on(s, ({"v" => any("ab")} of String => Alumna::AnyData), "v").should eq("must be at most 1 character")
+      error_on(s, Alumna.hash(v: "ab"), "v").should eq("must be at most 1 character")
     end
   end
 
@@ -251,23 +210,23 @@ describe Alumna::Schema do
   describe "Email format" do
     schema = Alumna::Schema.new.field("email", Alumna::FieldType::Str, format: :email)
 
-    it "accepts a valid email" { errors_for(schema, {"email" => any("alice@example.com")} of String => Alumna::AnyData).should be_empty }
-    it "rejects missing @" { error_on(schema, ({"email" => any("notanemail")} of String => Alumna::AnyData), "email").should eq("must be a valid email address") }
+    it "accepts a valid email" { errors_for(schema, Alumna.hash(email: "alice@example.com")).should be_empty }
+    it "rejects missing @" { error_on(schema, Alumna.hash(email: "notanemail"), "email").should eq("must be a valid email address") }
   end
 
   describe "Url format" do
     schema = Alumna::Schema.new.field("url", Alumna::FieldType::Str, format: :url)
 
-    it "accepts https URL" { errors_for(schema, {"url" => any("https://example.com/path?q=1")} of String => Alumna::AnyData).should be_empty }
-    it "rejects plain domain" { error_on(schema, ({"url" => any("example.com")} of String => Alumna::AnyData), "url").should eq("must be a valid URL (http or https)") }
+    it "accepts https URL" { errors_for(schema, Alumna.hash(url: "https://example.com/path?q=1")).should be_empty }
+    it "rejects plain domain" { error_on(schema, Alumna.hash(url: "example.com"), "url").should eq("must be a valid URL (http or https)") }
   end
 
   describe "Uuid format" do
     schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: :uuid)
 
-    it "accepts a lowercase UUID" { errors_for(schema, {"id" => any("550e8400-e29b-41d4-a716-446655440000")} of String => Alumna::AnyData).should be_empty }
-    it "accepts UUID without hyphens" { errors_for(schema, {"id" => any("550e8400e29b41d4a716446655440000")} of String => Alumna::AnyData).should be_empty }
-    it "rejects invalid UUID" { error_on(schema, ({"id" => any("550e8400e29b41d4a71644665544")} of String => Alumna::AnyData), "id").should eq("must be a valid UUID") }
+    it "accepts a lowercase UUID" { errors_for(schema, Alumna.hash(id: "550e8400-e29b-41d4-a716-446655440000")).should be_empty }
+    it "accepts UUID without hyphens" { errors_for(schema, Alumna.hash(id: "550e8400e29b41d4a716446655440000")).should be_empty }
+    it "rejects invalid UUID" { error_on(schema, Alumna.hash(id: "550e8400e29b41d4a71644665544"), "id").should eq("must be a valid UUID") }
   end
 
   # ── Constraint skipping on type error ────────────────────────────────────────
@@ -279,7 +238,7 @@ describe Alumna::Schema do
     )
 
     it "reports only the type error" do
-      errs = errors_for(schema, {"email" => any(123_i64)} of String => Alumna::AnyData)
+      errs = errors_for(schema, Alumna.hash(email: 123_i64))
       errs.size.should eq(1)
       errs.first.message.should eq("must be a string")
     end
@@ -289,17 +248,17 @@ describe Alumna::Schema do
     it "requires an Any field when missing, but accepts null if nullable" do
       schema = Alumna::Schema.new.field("v", Alumna::FieldType::Any, nullable: true, required: true)
       error_fields(schema, empty_data).should contain("v")
-      errors_for(schema, {"v" => any_nil} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(v: nil)).should be_empty
     end
 
     it "Int rejects float values" do
       schema = Alumna::Schema.new.field("v", Alumna::FieldType::Int)
-      error_on(schema, ({"v" => any(2.5)} of String => Alumna::AnyData), "v").should eq("must be an integer")
+      error_on(schema, Alumna.hash(v: 2.5), "v").should eq("must be an integer")
     end
 
     it "Float rejects bool" do
       schema = Alumna::Schema.new.field("v", Alumna::FieldType::Float)
-      error_on(schema, ({"v" => any(true)} of String => Alumna::AnyData), "v").should eq("must be a number")
+      error_on(schema, Alumna.hash(v: true), "v").should eq("must be a number")
     end
 
     it "returns multiple errors for one field" do
@@ -308,7 +267,7 @@ describe Alumna::Schema do
         format: :email
       )
       # "a@b" is too short AND fails the email regex (no TLD)
-      errs = errors_for(schema, {"email" => any("a@b")} of String => Alumna::AnyData)
+      errs = errors_for(schema, Alumna.hash(email: "a@b"))
       errs.map(&.message).should contain("must be at least 10 characters")
       errs.map(&.message).should contain("must be a valid email address")
       errs.size.should eq(2)
@@ -316,22 +275,22 @@ describe Alumna::Schema do
 
     it "ignores fields not defined in schema when strict is false" do
       schema = Alumna::Schema.new(strict: false).field("name", Alumna::FieldType::Str)
-      errors_for(schema, {"name" => any("ok"), "extra" => any("ignored")} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(name: "ok", extra: "ignored")).should be_empty
     end
 
     it "accepts uppercase UUID" do
       schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: :uuid)
-      errors_for(schema, {"id" => any("550E8400-E29B-41D4-A716-446655440000")} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(id: "550E8400-E29B-41D4-A716-446655440000")).should be_empty
     end
 
     it "accepts URL with surrounding whitespace" do
       schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: :url)
-      errors_for(schema, {"u" => any("  https://example.com  ")} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(u: "  https://example.com  ")).should be_empty
     end
 
     it "rejects URL with internal space" do
       schema = Alumna::Schema.new.field("u", Alumna::FieldType::Str, format: :url)
-      error_on(schema, ({"u" => any("https://exa mple.com")} of String => Alumna::AnyData), "u").should eq("must be a valid URL (http or https)")
+      error_on(schema, Alumna.hash(u: "https://exa mple.com"), "u").should eq("must be a valid URL (http or https)")
     end
 
     it "required_on implies presence even when required: false" do
@@ -349,15 +308,11 @@ describe Alumna::Schema do
       end
 
       # Valid
-      valid_data = {
-        "profile" => ({"username" => any("Alice"), "age" => any(30)} of String => Alumna::AnyData),
-      } of String => Alumna::AnyData
+      valid_data = Alumna.hash(profile: Alumna.hash(username: "Alice", age: 30))
       errors_for(schema, valid_data).should be_empty
 
       # Invalid nested fields
-      invalid_data = {
-        "profile" => ({"username" => any("Al"), "age" => any("old")} of String => Alumna::AnyData),
-      } of String => Alumna::AnyData
+      invalid_data = Alumna.hash(profile: Alumna.hash(username: "Al", age: "old"))
       errs = errors_for(schema, invalid_data)
 
       errs.find { |e| e.field == "profile.username" }.try(&.message).should eq("must be at least 3 characters")
@@ -368,15 +323,15 @@ describe Alumna::Schema do
       schema = Alumna::Schema.new.array("tags", of: :str, min_length: 1, max_length: 3)
 
       # Valid array size & type
-      errors_for(schema, {"tags" => [any("crystal"), any("alumna")] of Alumna::AnyData} of String => Alumna::AnyData).should be_empty
+      errors_for(schema, Alumna.hash(tags: ["crystal", "alumna"].to_any)).should be_empty
 
       # Invalid element type
-      errs = errors_for(schema, {"tags" => [any("crystal"), any(123)] of Alumna::AnyData} of String => Alumna::AnyData)
+      errs = errors_for(schema, Alumna.hash(tags: ["crystal", 123_i64].to_any))
       errs.first.field.should eq("tags[1]")
       errs.first.message.should eq("must be a string")
 
       # Invalid array constraints (min_length applied to array size!)
-      errs_len = errors_for(schema, {"tags" => [] of Alumna::AnyData} of String => Alumna::AnyData)
+      errs_len = errors_for(schema, Alumna.hash(tags: [] of Alumna::AnyData))
       errs_len.first.field.should eq("tags")
       errs_len.first.message.should eq("must contain at least 1 item")
     end
@@ -387,21 +342,21 @@ describe Alumna::Schema do
         s.bool("admin")
       end
 
-      valid_data = {
-        "users" => [
-          ({"id" => any("u1"), "admin" => any(true)} of String => Alumna::AnyData),
-          ({"id" => any("u2"), "admin" => any(false)} of String => Alumna::AnyData),
-        ] of Alumna::AnyData,
-      } of String => Alumna::AnyData
+      valid_data = Alumna.hash(
+        users: [
+          Alumna.hash(id: "u1", admin: true),
+          Alumna.hash(id: "u2", admin: false),
+        ].to_any
+      )
 
       errors_for(schema, valid_data).should be_empty
 
-      invalid_data = {
-        "users" => [
-          ({"id" => any("u1"), "admin" => any("yes")} of String => Alumna::AnyData),
-          any("not-an-object"),
-        ] of Alumna::AnyData,
-      } of String => Alumna::AnyData
+      invalid_data = Alumna.hash(
+        users: [
+          Alumna.hash(id: "u1", admin: "yes"),
+          "not-an-object".as(Alumna::AnyData),
+        ].to_any
+      )
 
       errs = errors_for(schema, invalid_data)
       errs.find { |e| e.field == "users[0].admin" }.try(&.message).should eq("must be true or false")
@@ -412,7 +367,7 @@ describe Alumna::Schema do
   describe "Strict Validation" do
     it "rejects unknown fields by default" do
       schema = Alumna::Schema.new.str("name")
-      errs = errors_for(schema, {"name" => any("Alice"), "age" => any(30)} of String => Alumna::AnyData)
+      errs = errors_for(schema, Alumna.hash(name: "Alice", age: 30))
       errs.size.should eq(1)
       errs.first.field.should eq("age")
       errs.first.message.should eq("is not allowed")
@@ -422,9 +377,7 @@ describe Alumna::Schema do
       schema = Alumna::Schema.new.hash("profile") do |s|
         s.str("username")
       end
-      errs = errors_for(schema, {
-        "profile" => ({"username" => any("bob"), "extra" => any(1)} of String => Alumna::AnyData),
-      } of String => Alumna::AnyData)
+      errs = errors_for(schema, Alumna.hash(profile: Alumna.hash(username: "bob", extra: 1_i64)))
       errs.size.should eq(1)
       errs.first.field.should eq("profile.extra")
       errs.first.message.should eq("is not allowed")
@@ -437,28 +390,28 @@ describe Alumna::Schema do
       .str("name")
 
     it "allows read-only fields on read operations" do
-      errors_for(schema, ({"id" => any("123"), "name" => any("Alice")} of String => Alumna::AnyData), Alumna::ServiceMethod::Find).should be_empty
+      errors_for(schema, Alumna.hash(id: "123", name: "Alice"), Alumna::ServiceMethod::Find).should be_empty
     end
 
     it "rejects read-only fields on create" do
-      errs = errors_for(schema, ({"id" => any("123"), "name" => any("Alice")} of String => Alumna::AnyData), Alumna::ServiceMethod::Create)
+      errs = errors_for(schema, Alumna.hash(id: "123", name: "Alice"), Alumna::ServiceMethod::Create)
       errs.size.should eq(1)
       errs.first.field.should eq("id")
       errs.first.message.should eq("is read-only")
     end
 
     it "rejects read-only fields on update" do
-      errs = errors_for(schema, ({"id" => any("123"), "name" => any("Alice")} of String => Alumna::AnyData), Alumna::ServiceMethod::Update)
+      errs = errors_for(schema, Alumna.hash(id: "123", name: "Alice"), Alumna::ServiceMethod::Update)
       errs.first.message.should eq("is read-only")
     end
 
     it "rejects read-only fields on patch" do
-      errs = errors_for(schema, ({"id" => any("123"), "name" => any("Alice")} of String => Alumna::AnyData), Alumna::ServiceMethod::Patch)
+      errs = errors_for(schema, Alumna.hash(id: "123", name: "Alice"), Alumna::ServiceMethod::Patch)
       errs.first.message.should eq("is read-only")
     end
 
     it "allows missing read-only fields on write" do
-      errors_for(schema, ({"name" => any("Alice")} of String => Alumna::AnyData), Alumna::ServiceMethod::Create).should be_empty
+      errors_for(schema, Alumna.hash(name: "Alice"), Alumna::ServiceMethod::Create).should be_empty
     end
   end
 end

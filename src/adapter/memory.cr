@@ -3,7 +3,7 @@ module Alumna
     @store : Hash(String, Hash(String, AnyData))
     @next_id : Int64
     @mutex : Sync::Mutex
-    @unique_fields : Array({String, FieldDescriptor}) # <--- Added
+    @unique_fields : Array({String, FieldDescriptor})
 
     def initialize(schema : Schema? = nil)
       super(schema)
@@ -51,27 +51,6 @@ module Alumna
       end
     end
 
-    private def extract_value(rec : Hash(String, AnyData), field : String) : AnyData
-      # Fast path: exact key match (also handles literal-dot keys like "a.b" stored flat).
-      return rec[field]? if rec.has_key?(field)
-
-      # Dot-notation traversal without allocating an intermediate Array(String).
-      current : AnyData = rec
-      start = 0
-
-      loop do
-        dot = field.index('.', start)
-        part = dot ? field[start...dot] : field[start..]
-        return nil unless current.is_a?(Hash(String, AnyData))
-        current = current[part]?
-        break unless dot
-        return nil if current.nil?
-        start = dot + 1
-      end
-
-      current
-    end
-
     @[AlwaysInline]
     private def match_condition?(val : AnyData, cond : Query::TypedCondition) : Bool
       if val.is_a?(Array(AnyData))
@@ -113,15 +92,16 @@ module Alumna
     # Check for unique constraint violations (called inside the mutex lock)
     private def check_unique(record : Hash(String, AnyData), skip_id : String? = nil) : ServiceError?
       @unique_fields.each do |(path, fd)|
-        val = extract_value(record, path)
+        val = record.dig_any?(path)
         next if val.nil?
 
         conflict = @store.each_value.any? do |existing|
-          existing["id"] != skip_id && extract_value(existing, path) == val
+          existing["id"] != skip_id && existing.dig_any?(path) == val
         end
 
         if conflict
-          return ServiceError.unprocessable("Unique constraint violation", {path => "already exists"} of String => AnyData)
+          # Use standard hash syntax here because `path` is a dynamic variable, not a static key
+          return ServiceError.unprocessable("Unique constraint violation", {path => "already exists".as(AnyData)})
         end
       end
       nil
@@ -139,7 +119,7 @@ module Alumna
       unless filters.empty?
         records = records.select do |rec|
           filters.all? do |field, conditions|
-            val = extract_value(rec, field)
+            val = rec.dig_any?(field)
             conditions.all? { |cond| match_condition?(val, cond) }
           end
         end
@@ -150,7 +130,7 @@ module Alumna
         records.sort! do |a, b|
           sort.reduce(0) do |cmp, (field, dir)|
             next cmp if cmp != 0
-            compare_values(extract_value(a, field), extract_value(b, field)) * dir
+            compare_values(a.dig_any?(field).as(AnyData), b.dig_any?(field).as(AnyData)) * dir
           end
         end
       end

@@ -31,22 +31,19 @@ end
 ValidateAuthorExists = Alumna::Rule.new do |ctx|
   author_id = ctx.data_str?("author_id")
 
-  begin
-    # INTERNAL CALL 1: Fetch from the users service
-    ctx.call("/users", :get, id: author_id)
-    nil
-  rescue ex
-    # If the call fails (e.g., 404), bubble it up as a validation error
-    Alumna::ServiceError.unprocessable("Validation failed", {"author_id" => "Author does not exist"} of String => Alumna::AnyData)
+  res, err = ctx.call("/users", :get, id: author_id)
+  if err
+    next Alumna::ServiceError.unprocessable("Validation failed", Alumna.hash(author_id: "Author does not exist"))
   end
+  nil
 end
 
 CreateAuditLog = Alumna::Rule.new do |ctx|
   # INTERNAL CALL 2: Fire-and-forget audit log creation
-  ctx.call("/audit", :create, {
-    "action"      => "Created Post",
-    "resource_id" => ctx.result.as(Hash(String, Alumna::AnyData))["id"],
-  } of String => Alumna::AnyData)
+  ctx.call("/audit", :create, Alumna.hash(
+    action: "Created Post",
+    resource_id: ctx.result.as(Hash)["id"]
+  ))
 
   nil
 end
@@ -74,32 +71,29 @@ describe "Inter-Service Communication (ctx.call)" do
   it "successfully executes an internal call that passes and triggers side-effects" do
     # 1. Create a user via standard HTTP
     res_user = client.post("/users", %({"name":"Alice"}))
-    user_id = res_user.json["id"].as_s
+    user_id = res_user.json_hash["id"].as(String)
 
     # 2. Create a post.
     # This will trigger `ValidateAuthorExists` (calls /users)
     # and `CreateAuditLog` (calls /audit).
     res_post = client.post("/posts", %({"author_id":"#{user_id}", "content":"Hello World"}))
     res_post.status.should eq(201)
-    post_id = res_post.json["id"].as_s
+    post_id = res_post.json_hash["id"].as(String)
 
     # 3. Verify the Audit service was successfully called internally
     res_audit = client.get("/audit")
-    logs = res_audit.json.as_a
+    logs = res_audit.json_array
 
     logs.size.should eq(1)
-    logs.first["action"].as_s.should eq("Created Post")
-    logs.first["resource_id"].as_s.should eq(post_id)
+    logs.first.as(Hash)["action"].should eq("Created Post")
+    logs.first.as(Hash)["resource_id"].should eq(post_id)
   end
 
   it "fails cleanly when an internal call raises an exception" do
-    # Try to create a post for a user that does not exist.
-    # The internal `ctx.call("/users", :get, id: "999")` will 404, throwing an Exception,
-    # which the rule rescues and converts into a 422.
     res = client.post("/posts", %({"author_id":"999", "content":"Ghost Post"}))
 
     res.status.should eq(422)
-    res.json["details"]["author_id"].as_s.should eq("Author does not exist")
+    res.json_hash.dig_str("details.author_id").should eq("Author does not exist")
   end
 
   it "propagates the context store to internal calls" do
