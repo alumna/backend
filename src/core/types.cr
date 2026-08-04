@@ -70,11 +70,7 @@ class Hash(K, V)
       end
 
       val.as?(V)
-      # LCOV_EXCL_START - kcov misses methods that compile to a pure nil return
-    {% else %}
-      nil
-    {% end %}
-    # LCOV_EXCL_STOP
+    {% else %} nil {% end %}
   end
 
   # Strict deep fetching that raises KeyError if the path is missing.
