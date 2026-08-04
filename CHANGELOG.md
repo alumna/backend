@@ -1,5 +1,16 @@
 # Alumna Backend changelog
 
+## 0.5.8 - 2026-08-04
+
+### Developer Experience
+* **types:** Introduced `Alumna.hash(**named_args)` macro and `Array(T)#to_any` extension to construct `AnyData` structures without compiler generics friction.
+* **types:** Added safe deep fetching directly to `Hash(K, V)` for `AnyData` payloads. You can now use `ctx.data.dig_any?("profile.settings")` and its typed variants (`dig_str?`, `dig_bool?`, etc.) for zero-allocation, crash-free nested field extraction.
+* **testing:** `AppClientResponse#json` now uses Alumna's internal zero-allocation parser and returns `AnyData`. Added `.json_hash` and `.json_array` helpers to eliminate `JSON::Any` casting boilerplate in tests.
+* **context:** `RuleContext#call` now returns a `{ServiceResult, ServiceError?}` tuple, matching internal service methods. It no longer raises an Exception on failure, allowing rules to easily inspect, rescue, or bubble up internal validation errors.
+
+### Performance
+* **adapter:** `MemoryAdapter` now uses the new `dig_any?` for deep path extraction, allowing us to completely delete the custom `extract_value` string-traversal method.
+
 ## 0.5.7 - 2026-07-11
 
 ### Added

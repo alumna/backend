@@ -1,5 +1,5 @@
 module Alumna
-  VERSION = "0.5.7"
+  VERSION = "0.5.8"
 end
 
 # Core enums and primitives - no dependencies
