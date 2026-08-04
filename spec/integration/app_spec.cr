@@ -76,21 +76,21 @@ describe "Alumna System Integration" do
   it "initially returns empty array" do
     res = authenticated_client.get("/test")
     res.status.should eq(200)
-    res.json.as_a.should be_empty
+    res.json_array.should be_empty
   end
 
   it "creates with 201 and auto-generated id" do
     res = authenticated_client.post("/test", body: %({"title":"Create 201"}))
     res.status.should eq(201)
-    data = res.json
-    data["id"].as_s.should match(/^\d+$/)
-    data["title"].as_s.should eq("Create 201")
+    data = res.json_hash
+    data["id"].as(String).should match(/^\d+$/)
+    data["title"].should eq("Create 201")
   end
 
   it "rejects client-supplied id on create because it is read-only" do
     res = authenticated_client.post("/test", body: %({"id":"999","title":"Ignore ID"}))
     res.status.should eq(422)
-    res.json["details"]["id"].as_s.should eq("is read-only")
+    res.json_hash.dig_str("details.id").should eq("is read-only")
   end
 
   it "lists all records" do
@@ -102,16 +102,16 @@ describe "Alumna System Integration" do
     authenticated_client.post("/test", body: %({"title":"Filter A","content":"x"}))
     authenticated_client.post("/test", body: %({"title":"Filter B","content":"y"}))
     res = authenticated_client.get("/test?title=Filter%20A")
-    arr = res.json.as_a
+    arr = res.json_array
     arr.size.should eq(1)
-    arr[0]["title"].as_s.should eq("Filter A")
+    arr[0].as(Hash)["title"].should eq("Filter A")
   end
 
   it "gets a specific record" do
-    id = authenticated_client.post("/test", body: %({"title":"Get Test"})).json["id"].as_s
+    id = authenticated_client.post("/test", body: %({"title":"Get Test"})).json_hash["id"].as(String)
     res = authenticated_client.get("/test/#{id}")
     res.status.should eq(200)
-    res.json["title"].as_s.should eq("Get Test")
+    res.json_hash["title"].should eq("Get Test")
   end
 
   it "returns 404 for unknown get" do
@@ -119,24 +119,24 @@ describe "Alumna System Integration" do
   end
 
   it "update replaces entire record" do
-    id = authenticated_client.post("/test", body: %({"title":"Orig","content":"keep"})).json["id"].as_s
-    data = authenticated_client.put("/test/#{id}", body: %({"title":"Replaced"})).json
-    data["title"].as_s.should eq("Replaced")
+    id = authenticated_client.post("/test", body: %({"title":"Orig","content":"keep"})).json_hash["id"].as(String)
+    data = authenticated_client.put("/test/#{id}", body: %({"title":"Replaced"})).json_hash
+    data["title"].should eq("Replaced")
     data["content"]?.should be_nil
   end
 
   it "patch merges fields without sending required title" do
-    id = authenticated_client.post("/test", body: %({"title":"Patch","content":"Orig"})).json["id"].as_s
-    data = authenticated_client.patch("/test/#{id}", body: %({"content":"Patched"})).json
-    data["title"].as_s.should eq("Patch")
-    data["content"].as_s.should eq("Patched")
+    id = authenticated_client.post("/test", body: %({"title":"Patch","content":"Orig"})).json_hash["id"].as(String)
+    data = authenticated_client.patch("/test/#{id}", body: %({"content":"Patched"})).json_hash
+    data["title"].should eq("Patch")
+    data["content"].should eq("Patched")
   end
 
   it "update and patch cannot change id because it is read-only" do
-    id = authenticated_client.post("/test", body: %({"title":"ID Test"})).json["id"].as_s
+    id = authenticated_client.post("/test", body: %({"title":"ID Test"})).json_hash["id"].as(String)
     res = authenticated_client.patch("/test/#{id}", body: %({"id":"hacked","title":"ID Test"}))
     res.status.should eq(422)
-    res.json["details"]["id"].as_s.should eq("is read-only")
+    res.json_hash.dig_str("details.id").should eq("is read-only")
   end
 
   it "returns 404 for update on missing id" do
@@ -144,7 +144,7 @@ describe "Alumna System Integration" do
   end
 
   it "deletes and returns 204 No Content" do
-    id = authenticated_client.post("/test", body: %({"title":"Del"})).json["id"].as_s
+    id = authenticated_client.post("/test", body: %({"title":"Del"})).json_hash["id"].as(String)
     res = authenticated_client.delete("/test/#{id}")
     res.status.should eq(204)
     res.body.should be_empty
@@ -174,20 +174,20 @@ describe "Alumna System Integration" do
   it "requires title" do
     res = authenticated_client.post("/test", body: %({"content":"x"}))
     res.status.should eq(422)
-    res.json["details"]["title"].as_s.should contain("required")
+    res.json_hash.dig_str("details.title").should contain("required")
   end
 
   it "validates min_length" do
-    authenticated_client.post("/test", body: %({"title":""})).json["details"]["title"].as_s.should contain("at least 1")
+    authenticated_client.post("/test", body: %({"title":""})).json_hash.dig_str("details.title").should contain("at least 1")
   end
 
   it "validates max_length" do
     long = "a" * 101
-    authenticated_client.post("/test", body: %({"title":"#{long}"})).json["details"]["title"].as_s.should contain("at most 100")
+    authenticated_client.post("/test", body: %({"title":"#{long}"})).json_hash.dig_str("details.title").should contain("at most 100")
   end
 
   it "validates type" do
-    authenticated_client.post("/test", body: %({"title":123})).json["details"]["title"].as_s.should contain("string")
+    authenticated_client.post("/test", body: %({"title":123})).json_hash.dig_str("details.title").should contain("string")
   end
 
   it "allows optional content to be omitted" do
@@ -195,15 +195,15 @@ describe "Alumna System Integration" do
   end
 
   it "validation runs on update but not on get" do
-    id = authenticated_client.post("/test", body: %({"title":"V"})).json["id"].as_s
+    id = authenticated_client.post("/test", body: %({"title":"V"})).json_hash["id"].as(String)
     authenticated_client.get("/test/#{id}").status.should eq(200)
     authenticated_client.put("/test/#{id}", body: %({"content":"x"})).status.should eq(422)
   end
 
   it "returns validation details structure" do
-    body = authenticated_client.post("/test", body: %({})).json
-    body["error"].as_s.should eq("Validation failed")
-    body["details"].as_h.has_key?("title").should be_true
+    body = authenticated_client.post("/test", body: %({})).json_hash
+    body["error"].should eq("Validation failed")
+    body["details"].as(Hash).has_key?("title").should be_true
   end
 
   it "after-rule adds X-Request-ID header" do
@@ -229,7 +229,7 @@ describe "Alumna System Integration" do
     res.headers["X-Error-ID"]?.should eq("err-123")      # app-level
     res.headers["X-Service-Error"]?.should eq("svc-456") # service-level
     res.headers["X-Request-ID"]?.should_not be_nil       # AfterLogger ran before the stop
-    res.json["error"].as_s.should eq("after failed")
+    res.json_hash["error"].should eq("after failed")
   end
 
   it "CORS preflight returns 204 with empty body" do

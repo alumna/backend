@@ -70,9 +70,9 @@ module Alumna
       method : ServiceMethod | Symbol,
       data : Hash(String, AnyData) = {} of String => AnyData,
       id : String? = nil,
-    ) : ServiceResult
+    ) : {ServiceResult, ServiceError?}
       target_service = app.services[path]?
-      raise ArgumentError.new("Internal service not found at path: #{path}") unless target_service
+      return {nil, ServiceError.internal("Internal service not found at path: #{path}")} unless target_service
 
       parsed_method = method.is_a?(ServiceMethod) ? method : ServiceMethod.parse(method.to_s.capitalize)
 
@@ -99,13 +99,7 @@ module Alumna
 
       app.dispatch(target_service, internal_ctx)
 
-      # If the sub-service threw an error (e.g., validation failed), re-raise it
-      # so the calling rule/service can rescue it, or let it halt the current pipeline.
-      if err = internal_ctx.error
-        raise Exception.new("Internal call to #{path} failed: #{err.status} #{err.message}")
-      end
-
-      internal_ctx.result
+      {internal_ctx.result, internal_ctx.error}
     end
 
     @[AlwaysInline]

@@ -18,35 +18,6 @@ require "spec"
 module Alumna
   module Testing
     module AdapterSuiteHelpers
-      # Crystal's compiler sometimes struggles to auto-cast literals (like `10` or `"Alice"`)
-      # deep inside nested Hash literals into union types like `AnyData`.
-      # These `.any` overloads exist solely as a workaround to force the correct cast,
-      # avoiding confusing type-mismatch compilation errors when users write adapter compliance tests.
-
-      def self.any(v : String) : AnyData
-        v
-      end
-
-      def self.any(v : Bool) : AnyData
-        v
-      end
-
-      def self.any(v : Int) : AnyData
-        v.to_i64
-      end
-
-      def self.any(v : Float) : AnyData
-        v.to_f64
-      end
-
-      def self.any(v : Time) : AnyData
-        v
-      end
-
-      def self.any(v : Bytes) : AnyData
-        v
-      end
-
       def self.insert(adapter : Service, data : Hash(String, AnyData))
         ctx = Alumna::Testing.build_ctx(
           service: adapter,
@@ -65,7 +36,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: Alumna.hash(name: "Alice"))
               record = adapter.create(ctx).as(Hash(String, Alumna::AnyData))
               record["id"].should eq("1")
               record["name"].should eq("Alice")
@@ -75,8 +46,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              r1 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"title" => Alumna::Testing::AdapterSuiteHelpers.any("a")} of String => Alumna::AnyData)
-              r2 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"title" => Alumna::Testing::AdapterSuiteHelpers.any("b")} of String => Alumna::AnyData)
+              r1 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(title: "a"))
+              r2 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(title: "b"))
               r1["id"].should eq("1")
               r2["id"].should eq("2")
             end
@@ -85,7 +56,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: {"id" => Alumna::Testing::AdapterSuiteHelpers.any("999"), "name" => Alumna::Testing::AdapterSuiteHelpers.any("Bob")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: Alumna.hash(id: "999", name: "Bob"))
               record = adapter.create(ctx).as(Hash(String, Alumna::AnyData))
               record["id"].should eq("1")
             end
@@ -94,7 +65,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
               get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
               record = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
@@ -105,7 +76,7 @@ module Alumna
                 {{factory.body}}
               end
               b = Bytes[10, 20]
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"blob" => Alumna::Testing::AdapterSuiteHelpers.any(b)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(blob: b))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
               rec = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
               rec["blob"].should eq(b)
@@ -125,8 +96,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Bob")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Bob"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).size.should eq(2)
             end
@@ -135,8 +106,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "admin"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "user"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"role" => "admin"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -147,9 +118,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin"), "active" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin"), "active" => Alumna::Testing::AdapterSuiteHelpers.any(false)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("user"), "active" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "admin", active: true))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "admin", active: false))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "user", active: true))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"role" => "admin", "active" => "true"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -161,7 +132,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "user"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"role" => "admin"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).should be_empty
             end
@@ -170,8 +141,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "admin"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(role: "user"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"role[$ne]" => "admin"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -182,9 +153,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(20)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 10_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 20_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 30_i64))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gt]" => "15", "age[$lt]" => "25"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
@@ -201,9 +172,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(3.5)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(4.5)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"rating" => Alumna::Testing::AdapterSuiteHelpers.any(5.0)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(rating: 3.5_f64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(rating: 4.5_f64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(rating: 5.0_f64))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"rating[$gt]" => "4.0", "rating[$lt]" => "4.9"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
@@ -220,8 +191,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"active" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"active" => Alumna::Testing::AdapterSuiteHelpers.any(false)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(active: true))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(active: false))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"active[$gt]" => "false"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
@@ -243,9 +214,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"grade" => Alumna::Testing::AdapterSuiteHelpers.any("a")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"grade" => Alumna::Testing::AdapterSuiteHelpers.any("b")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"grade" => Alumna::Testing::AdapterSuiteHelpers.any("c")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(grade: "a"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(grade: "b"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(grade: "c"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"grade[$gt]" => "a", "grade[$lt]" => "c"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -256,9 +227,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(20)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 10_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 20_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(age: 30_i64))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"age[$gte]" => "20", "age[$lte]" => "30"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(2)
@@ -269,9 +240,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("pending")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("active")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("archived")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "pending"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "active"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "archived"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"status[$in]" => "pending,active"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(2)
@@ -282,9 +253,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("pending")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("active")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"status" => Alumna::Testing::AdapterSuiteHelpers.any("archived")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "pending"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "active"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(status: "archived"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"status[$nin]" => "pending,active"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -295,8 +266,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Bob"), "age" => Alumna::Testing::AdapterSuiteHelpers.any(40)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(user: Alumna.hash(name: "Alice", age: 30_i64)))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(user: Alumna.hash(name: "Bob", age: 40_i64)))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"user.name" => "Bob"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -307,8 +278,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("tech"), Alumna::Testing::AdapterSuiteHelpers.any("science")] of Alumna::AnyData} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("art")] of Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(tags: ["tech", "science"].to_any))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(tags: ["art"].to_any))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"tags" => "tech"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -319,8 +290,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("tech"), Alumna::Testing::AdapterSuiteHelpers.any("science")] of Alumna::AnyData} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"tags" => [Alumna::Testing::AdapterSuiteHelpers.any("art")] of Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(tags: ["tech", "science"].to_any))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(tags: ["art"].to_any))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"tags[$ne]" => "tech"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(1)
@@ -334,9 +305,9 @@ module Alumna
               t1 = Time.utc(2024, 1, 1)
               t2 = Time.utc(2024, 2, 1)
               t3 = Time.utc(2024, 3, 1)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t3)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t1))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t2))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t3))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$gt]" => "2024-01-15T00:00:00Z", "created[$lt]" => "2024-02-15T00:00:00Z"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
@@ -355,8 +326,8 @@ module Alumna
               end
               t1 = Time.utc(2024, 1, 1, 12, 0, 0)
               t2 = Time.utc(2024, 1, 2, 12, 0, 0)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t1))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t2))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created" => "2024-01-01T12:00:00Z"})
               res1 = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
@@ -374,8 +345,8 @@ module Alumna
               end
               t1 = Time.utc(2024, 1, 1, 12, 0, 0)
               t2 = Time.utc(2024, 1, 2, 12, 0, 0)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t1))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t2))
 
               # Cover the $ne branch
               ctx_ne = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"created[$ne]" => "2024-01-01T12:00:00Z"})
@@ -394,7 +365,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(Time.utc)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: Time.utc))
 
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find)
               ctx.query.filters["created"] << Alumna::Query::Condition.new(Alumna::Query::Op::Ne, ["array", "instead", "of", "string"])
@@ -415,7 +386,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"sequence" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(sequence: i.to_s)) }
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "1", "$limit" => "2"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(2)
@@ -426,7 +397,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"sequence" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              5.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(sequence: i.to_s)) }
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "2"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(3)
@@ -437,7 +408,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              3.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"sequence" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_s)} of String => Alumna::AnyData) }
+              3.times { |i| Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(sequence: i.to_s)) }
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$skip" => "10"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.should be_empty
@@ -447,9 +418,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(100)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(9)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"score" => Alumna::Testing::AdapterSuiteHelpers.any(25)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(score: 100_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(score: 9_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(score: 25_i64))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "score:1"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.map(&.["score"]).should eq([9_i64, 25_i64, 100_i64])
@@ -459,8 +430,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"price" => Alumna::Testing::AdapterSuiteHelpers.any(10)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"price" => Alumna::Testing::AdapterSuiteHelpers.any(9.5)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(price: 10_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(price: 9.5_f64))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "price:1"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["price"]).should eq([9.5_f64, 10_i64])
             end
@@ -469,8 +440,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("A"), "order_index" => Alumna::Testing::AdapterSuiteHelpers.any(2)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("B")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "A", order_index: 2_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "B"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "order_index:1"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.map(&.["name"]).should eq(["B", "A"])
@@ -480,8 +451,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"category" => Alumna::Testing::AdapterSuiteHelpers.any("banana")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"category" => Alumna::Testing::AdapterSuiteHelpers.any("apple")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(category: "banana"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(category: "apple"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "category:1"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["category"]).should eq(["apple", "banana"])
             end
@@ -490,8 +461,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"is_published" => Alumna::Testing::AdapterSuiteHelpers.any(true)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"is_published" => Alumna::Testing::AdapterSuiteHelpers.any(false)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(is_published: true))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(is_published: false))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "is_published:1"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["is_published"]).should eq([false, true])
             end
@@ -500,9 +471,9 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"metadata" => Alumna::Testing::AdapterSuiteHelpers.any("10")} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"metadata" => Alumna::Testing::AdapterSuiteHelpers.any(2)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"metadata" => [Alumna::Testing::AdapterSuiteHelpers.any(1)] of Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(metadata: "10"))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(metadata: 2_i64))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(metadata: [1_i64].to_any))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "metadata:1"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["metadata"]).should eq([2_i64, "10", [1_i64] of Alumna::AnyData])
             end
@@ -511,8 +482,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"age" => Alumna::Testing::AdapterSuiteHelpers.any(40)} of String => Alumna::AnyData} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"user" => {"age" => Alumna::Testing::AdapterSuiteHelpers.any(30)} of String => Alumna::AnyData} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(user: Alumna.hash(age: 40_i64)))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(user: Alumna.hash(age: 30_i64)))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "user.age:1"})
               results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
               results.size.should eq(2)
@@ -523,7 +494,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"first_name" => Alumna::Testing::AdapterSuiteHelpers.any("1"), "last_name" => Alumna::Testing::AdapterSuiteHelpers.any("2")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(first_name: "1", last_name: "2"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$select" => "first_name"})
               rec = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).first
               rec.has_key?("first_name").should be_true
@@ -535,7 +506,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"first_name" => Alumna::Testing::AdapterSuiteHelpers.any("1"), "last_name" => Alumna::Testing::AdapterSuiteHelpers.any("2")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(first_name: "1", last_name: "2"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$select" => "first_name,id"})
               rec = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).first
               rec.keys.sort!.should eq(["first_name", "id"])
@@ -555,8 +526,8 @@ module Alumna
               end
               t1 = Time.utc(2024, 1, 1)
               t2 = Time.utc(2024, 2, 1)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t2)} of String => Alumna::AnyData)
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"created" => Alumna::Testing::AdapterSuiteHelpers.any(t1)} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t2))
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(created: t1))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "created:1"})
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["created"]).should eq([t1, t2])
             end
@@ -567,7 +538,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
               record = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
@@ -595,8 +566,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Update, id: "1", data: {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Update, id: "1", data: Alumna.hash(name: "Alice", role: "admin"))
               record = adapter.update(ctx).as(Hash(String, Alumna::AnyData))
               record["id"].should eq("1")
               record["role"].should eq("admin")
@@ -608,8 +579,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: Alumna.hash(role: "admin"))
               record = adapter.patch(ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
               record["role"].should eq("admin")
@@ -620,8 +591,8 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice"), "role" => Alumna::Testing::AdapterSuiteHelpers.any("user")} of String => Alumna::AnyData)
-              patch_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: {"role" => Alumna::Testing::AdapterSuiteHelpers.any("admin")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              patch_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: Alumna.hash(role: "admin"))
               adapter.patch(patch_ctx)
 
               get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
@@ -634,7 +605,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "99", data: {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Ghost")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "99", data: Alumna.hash(name: "Ghost"))
               result = adapter.patch(ctx)
               result.should be_a(Alumna::ServiceError)
               result.as(Alumna::ServiceError).status.should eq(404)
@@ -644,7 +615,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: nil, data: {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Ghost")} of String => Alumna::AnyData)
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: nil, data: Alumna.hash(name: "Ghost"))
               result = adapter.patch(ctx)
               result.should be_a(Alumna::ServiceError)
               result.as(Alumna::ServiceError).status.should eq(400)
@@ -656,7 +627,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
               adapter.remove(ctx).should be_nil
             end
@@ -665,7 +636,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"name" => Alumna::Testing::AdapterSuiteHelpers.any("Alice")} of String => Alumna::AnyData)
+              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
               remove_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
               adapter.remove(remove_ctx)
 
@@ -704,7 +675,7 @@ module Alumna
 
               count.times do
                 spawn do
-                  ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: {"title" => Alumna::Testing::AdapterSuiteHelpers.any("v")} of String => Alumna::AnyData)
+                  ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: Alumna.hash(title: "v"))
                   adapter.create(ctx)
                   done.send(nil)
                 end
@@ -724,7 +695,7 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              base = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"view_count" => Alumna::Testing::AdapterSuiteHelpers.any(0_i64)} of String => Alumna::AnyData)
+              base = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(view_count: 0_i64))
               id = base["id"].as(String)
 
               writers = 50
@@ -739,7 +710,7 @@ module Alumna
                       service: adapter,
                       method: Alumna::ServiceMethod::Patch,
                       id: id,
-                      data: {"view_count" => Alumna::Testing::AdapterSuiteHelpers.any(val + 1)} of String => Alumna::AnyData
+                      data: Alumna.hash(view_count: val + 1)
                     )
                     adapter.patch(patch_ctx)
                   end
@@ -767,7 +738,7 @@ module Alumna
 
               spawn do
                 50.times do |i|
-                  Alumna::Testing::AdapterSuiteHelpers.insert(adapter, {"sequence" => Alumna::Testing::AdapterSuiteHelpers.any(i.to_i64)} of String => Alumna::AnyData)
+                  Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(sequence: i.to_i64))
                   Fiber.yield
                 end
                 done.send(nil)

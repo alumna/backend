@@ -49,12 +49,12 @@ describe "Alumna Integration: Nested Fields" do
     res.status.should eq(201)
 
     # Ensure data was persisted correctly
-    data = res.json
-    data["id"].as_s.should match(/^\d+$/)
-    data["name"].as_s.should eq("Acme Corp")
-    data["billing"]["plan"].as_s.should eq("enterprise")
-    data["tags"][1].as_s.should eq("saas")
-    data["members"][0]["email"].as_s.should eq("alice@acme.com")
+    data = res.json_hash
+    data["id"].as(String).should match(/^\d+$/)
+    data["name"].should eq("Acme Corp")
+    data.dig_str("billing.plan").should eq("enterprise")
+    data.dig_any("tags").as(Array)[1].should eq("saas")
+    data.dig_any("members").as(Array)[0].as(Hash)["email"].should eq("alice@acme.com")
   end
 
   it "returns dot-notation errors for invalid nested hashes" do
@@ -71,10 +71,10 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    details = res.json["details"]
+    details = res.json_hash["details"].as(Hash)
 
-    details["billing.plan"].as_s.should eq("is required")
-    details["billing.card_last_four"].as_s.should eq("must be an integer")
+    details["billing.plan"].should eq("is required")
+    details["billing.card_last_four"].should eq("must be an integer")
   end
 
   it "returns bracket-notation errors for invalid array items (primitives)" do
@@ -88,10 +88,10 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    details = res.json["details"]
+    details = res.json_hash["details"].as(Hash)
 
-    details["tags[1]"].as_s.should eq("must be a string")
-    details["tags[2]"].as_s.should eq("must be a string")
+    details["tags[1]"].should eq("must be a string")
+    details["tags[2]"].should eq("must be a string")
   end
 
   it "validates constraints applied directly to the array (min_length/max_length)" do
@@ -105,10 +105,10 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    details = res.json["details"]
+    details = res.json_hash["details"].as(Hash)
 
     # Error should be on the array itself, not an index
-    details["tags"].as_s.should eq("must contain at least 1 item")
+    details["tags"].should eq("must contain at least 1 item")
   end
 
   it "returns dot-and-bracket notation errors for invalid array of objects" do
@@ -126,10 +126,10 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    details = res.json["details"]
+    details = res.json_hash["details"].as(Hash)
 
-    details["members[1].email"].as_s.should eq("must be a valid email address")
-    details["members[2].email"].as_s.should eq("is required")
+    details["members[1].email"].should eq("must be a valid email address")
+    details["members[2].email"].should eq("is required")
   end
 
   it "catches when an array of objects receives primitive elements instead" do
@@ -145,7 +145,7 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    res.json["details"]["members[0]"].as_s.should eq("must be an object")
+    res.json_hash.dig_str("details.members[0]").should eq("must be an object")
   end
 
   it "catches when a hash field receives a non-object" do
@@ -159,6 +159,6 @@ describe "Alumna Integration: Nested Fields" do
     res = nested_client.post("/orgs", body: invalid_payload.to_json)
 
     res.status.should eq(422)
-    res.json["details"]["billing"].as_s.should eq("must be an object")
+    res.json_hash.dig_str("details.billing").should eq("must be an object")
   end
 end
