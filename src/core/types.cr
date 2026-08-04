@@ -70,7 +70,9 @@ class Hash(K, V)
       end
 
       val.as?(V)
+      # LCOV_EXCL_START - kcov misses methods that compile to a pure nil return
     {% else %}
+      # LCOV_EXCL_STOP
       nil
     {% end %}
   end
