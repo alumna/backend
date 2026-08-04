@@ -47,33 +47,44 @@ class Hash(K, V)
   # Safe deep fetching for nested structures (e.g. AnyData).
   def dig_any?(path : String) : V?
     {% if K == String %}
-      return self[path]? if self.has_key?(path)
+      dig_any_impl(path)
+    {% else %}
+      dig_any_fallback
+    {% end %}
+  end
 
-      current = self
-      start = 0
-      val = nil
+  private def dig_any_impl(path : String) : V?
+    return self[path]? if self.has_key?(path)
 
-      loop do
-        dot = path.index('.', start)
-        part = dot ? path[start...dot] : path[start..]
+    current = self
+    start = 0
+    val = nil
 
-        if current.is_a?(Hash(String, V))
-          val = current.as(Hash(String, V))[part]?
-        else
-          return nil
-        end
+    loop do
+      dot = path.index('.', start)
+      part = dot ? path[start...dot] : path[start..]
 
-        break unless dot
-        return nil if val.nil?
-        start = dot + 1
-        current = val
+      if current.is_a?(Hash(String, V))
+        val = current.as(Hash(String, V))[part]?
+      else
+        return nil
       end
 
-      val.as?(V)
-      # LCOV_EXCL_START - kcov misses methods that compile to a pure nil return
-    {% else %} nil {% end %}
-    # LCOV_EXCL_STOP
+      break unless dot
+      return nil if val.nil?
+      start = dot + 1
+      current = val
+    end
+
+    val.as?(V)
   end
+
+  # LCOV_EXCL_START - kcov misses methods that compile to a pure nil return
+  private def dig_any_fallback : V?
+    nil
+  end
+
+  # LCOV_EXCL_STOP
 
   # Strict deep fetching that raises KeyError if the path is missing.
   def dig_any(path : String) : V
