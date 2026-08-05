@@ -19,7 +19,7 @@ module Alumna
               # Zero-allocation case-insensitive scan over the overlay
               ov.each { |k, v| return v if key.compare(k, case_insensitive: true) == 0 }
             # LCOV_EXCL_START - kcov fails to map macro-expanded else branches
-            {% else %}
+            {% else %} # LCOV_EXCL_LINE
               return ov[key] if ov.has_key?(key)
             {% end %}
             # LCOV_EXCL_STOP
@@ -41,7 +41,7 @@ module Alumna
                 vs.each { |v| yield({lk, v}) }
               end
             # LCOV_EXCL_START
-            {% else %}
+            {% else %} # LCOV_EXCL_LINE
               @src.each { |k, v| yield({k, v}) }
             {% end %}
             # LCOV_EXCL_STOP
@@ -59,7 +59,7 @@ module Alumna
               vs.each { |v| yield({lk, v}) }
             end
           # LCOV_EXCL_START
-          {% else %}
+          {% else %} # LCOV_EXCL_LINE
             @src.each do |k, v|
               next if ov.has_key?(k)
               yield({k, v})
