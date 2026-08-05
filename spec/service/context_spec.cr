@@ -238,12 +238,17 @@ describe Alumna::RuleContext do
           captured_methods << c.method
           nil
         end
+        # Explicitly capture OPTIONS since the default `before` excludes it
+        before(on: :options) do |c|
+          captured_methods << c.method
+          nil
+        end
       }
 
       ctx = Alumna::Testing.build_ctx(app: app)
 
       # Test the specific fast-path branches
-      [:update, :patch, :remove].each do |sym|
+      [:update, :patch, :remove, :options].each do |sym|
         ctx.call("/methods", sym, id: "1")
       end
 
@@ -254,6 +259,7 @@ describe Alumna::RuleContext do
         Alumna::ServiceMethod::Update,
         Alumna::ServiceMethod::Patch,
         Alumna::ServiceMethod::Remove,
+        Alumna::ServiceMethod::Options,
         Alumna::ServiceMethod::Create,
       ])
     end
