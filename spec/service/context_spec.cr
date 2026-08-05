@@ -228,5 +228,34 @@ describe Alumna::RuleContext do
       ctx.call("/search", :find, params: {"category" => "trucks"})
       captured_query_value.should eq("trucks")
     end
+
+    it "resolves all ServiceMethod symbols and fallbacks efficiently" do
+      app = Alumna::App.new
+      captured_methods = [] of Alumna::ServiceMethod
+
+      app.use "/methods", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_methods << c.method
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+
+      # Test the specific fast-path branches
+      [:update, :patch, :remove].each do |sym|
+        ctx.call("/methods", sym, id: "1")
+      end
+
+      # Test the `else` fallback by passing a non-standard cased Symbol
+      ctx.call("/methods", :CREATE)
+
+      captured_methods.should eq([
+        Alumna::ServiceMethod::Update,
+        Alumna::ServiceMethod::Patch,
+        Alumna::ServiceMethod::Remove,
+        Alumna::ServiceMethod::Create,
+      ])
+    end
   end
 end

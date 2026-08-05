@@ -79,13 +79,29 @@ module Alumna::Http
       view = ParamsView.new(src)
 
       view["a"].should eq "1"
+
+      # Set an overlay value
       view["c"] = "3"
+
+      # Hits the `[]?` overlay {% else %} branch
       view["c"]?.should eq "3"
 
+      # Hits the `each` overlay {% else %} branches
       result = {} of String => String
       view.each { |k, v| result[k] = v }
 
       result.should eq({"c" => "3", "a" => "1", "b" => "2"})
+    end
+
+    it "iterates source directly when no overlay exists" do
+      src = HTTP::Params.parse("x=1&y=2")
+      view = ParamsView.new(src)
+
+      # Hits the `each` no-overlay {% else %} branch
+      result = {} of String => String
+      view.each { |k, v| result[k] = v }
+
+      result.should eq({"x" => "1", "y" => "2"})
     end
 
     it "raises KeyError for missing key on [] but returns nil on []?" do
@@ -104,21 +120,12 @@ module Alumna::Http
       view = ParamsView.new(src)
       view["x"] = "2"
 
+      # Hits the `each` overlay shadowing {% else %} branch
       keys = [] of String
       view.each { |k, _| keys << k }
 
       keys.count("x").should eq 1
       keys.first.should eq "x"
-    end
-
-    it "iterates source directly when no overlay exists" do
-      src = HTTP::Params.parse("x=1&y=2")
-      view = ParamsView.new(src)
-
-      result = {} of String => String
-      view.each { |k, v| result[k] = v }
-
-      result.should eq({"x" => "1", "y" => "2"})
     end
   end
 end
