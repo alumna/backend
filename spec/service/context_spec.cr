@@ -189,5 +189,44 @@ describe Alumna::RuleContext do
       err.as(Alumna::ServiceError).status.should eq(400)
       err.as(Alumna::ServiceError).message.should eq("Custom failure")
     end
+
+    it "dispatches internally using dynamic path resolution" do
+      app = Alumna::App.new
+      app.use "/users", Alumna::MemoryAdapter.new(Alumna::Schema.new.str("name"))
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+
+      res_create, _ = ctx.call("/users", :create, Alumna.hash(name: "Alice"))
+      id = res_create.as(Hash)["id"].as(String)
+
+      # Fetch using dynamic path resolution: /users/1
+      res_get, err = ctx.call("/users/#{id}", :get)
+
+      err.should be_nil
+      res_get.as(Hash)["name"].should eq("Alice")
+    end
+
+    it "isolates query params by default, but allows explicit overrides" do
+      app = Alumna::App.new
+      captured_query_value = nil
+
+      app.use "/search", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_query_value = c.query.filters["category"]?.try(&.first.value)
+          nil
+        end
+      }
+
+      # Parent request has ?category=cars
+      ctx = Alumna::Testing.build_ctx(app: app, params: {"category" => "cars"})
+
+      # 1. By default, it does NOT inherit "category=cars"
+      ctx.call("/search", :find)
+      captured_query_value.should be_nil
+
+      # 2. It accepts explicit params when requested
+      ctx.call("/search", :find, params: {"category" => "trucks"})
+      captured_query_value.should eq("trucks")
+    end
   end
 end

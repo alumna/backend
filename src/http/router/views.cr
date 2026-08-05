@@ -1,5 +1,3 @@
-require "set"
-
 module Alumna
   module Http
     macro define_overlay_view(name, source_type, downcase)
@@ -17,8 +15,12 @@ module Alumna
 
         def []?(key : String) : String?
           if ov = @overlay
-            k = {% if downcase %} key.downcase {% else %} key {% end %}
-            return ov[k] if ov.has_key?(k)
+            {% if downcase %}
+              # Zero-allocation case-insensitive scan over the overlay
+              ov.each { |k, v| return v if key.compare(k, case_insensitive: true) == 0 }
+            {% else %}
+              return ov[key] if ov.has_key?(key)
+            {% end %}
           end
           @src[key]?
         end
@@ -30,14 +32,34 @@ module Alumna
         def each(& : {String, String} ->)
           ov = @overlay
           if ov.nil?
-            {% if downcase %} @src.each { |k, vs| yield({k.downcase, vs.first}) } {% else %} @src.each { |k, v| yield({k, v}) } {% end %}
+            {% if downcase %}
+              @src.each do |k, vs|
+                lk = k.downcase
+                # Correctly yield all values for multi-value headers
+                vs.each { |v| yield({lk, v}) }
+              end
+            {% else %}
+              @src.each { |k, v| yield({k, v}) }
+            {% end %}
             return
           end
 
-          seen = Set(String).new
-          ov.each { |k, v| seen << k; yield({k, v}) }
+          # Yield all overridden values first
+          ov.each { |k, v| yield({k, v}) }
 
-          {% if downcase %} @src.each { |k, vs| lk = k.downcase; next if seen.includes?(lk); yield({lk, vs.first}) } {% else %} @src.each { |k, v| next if seen.includes?(k); yield({k, v}) } {% end %}
+          {% if downcase %}
+            @src.each do |k, vs|
+              # Skip if this key was already overridden in the overlay
+              next if ov.any? { |ok, _| k.compare(ok, case_insensitive: true) == 0 }
+              lk = k.downcase
+              vs.each { |v| yield({lk, v}) }
+            end
+          {% else %}
+            @src.each do |k, v|
+              next if ov.has_key?(k)
+              yield({k, v})
+            end
+          {% end %}
         end
       end
     end
