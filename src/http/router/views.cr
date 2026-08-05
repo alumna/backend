@@ -18,11 +18,11 @@ module Alumna
             {% if downcase %}
               # Zero-allocation case-insensitive scan over the overlay
               ov.each { |k, v| return v if key.compare(k, case_insensitive: true) == 0 }
+            # LCOV_EXCL_START - kcov fails to map macro-expanded else branches
             {% else %}
-              # LCOV_EXCL_START - kcov fails to map macro-expanded else branches
               return ov[key] if ov.has_key?(key)
-              # LCOV_EXCL_STOP
             {% end %}
+            # LCOV_EXCL_STOP
           end
           @src[key]?
         end
@@ -40,11 +40,11 @@ module Alumna
                 # Correctly yield all values for multi-value headers
                 vs.each { |v| yield({lk, v}) }
               end
+            # LCOV_EXCL_START
             {% else %}
-              # LCOV_EXCL_START
               @src.each { |k, v| yield({k, v}) }
-              # LCOV_EXCL_STOP
             {% end %}
+            # LCOV_EXCL_STOP
             return
           end
 
@@ -58,14 +58,14 @@ module Alumna
               lk = k.downcase
               vs.each { |v| yield({lk, v}) }
             end
+          # LCOV_EXCL_START
           {% else %}
-            # LCOV_EXCL_START
             @src.each do |k, v|
               next if ov.has_key?(k)
               yield({k, v})
             end
-            # LCOV_EXCL_STOP
           {% end %}
+          # LCOV_EXCL_STOP
         end
       end
     end
