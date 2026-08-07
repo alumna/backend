@@ -189,5 +189,79 @@ describe Alumna::RuleContext do
       err.as(Alumna::ServiceError).status.should eq(400)
       err.as(Alumna::ServiceError).message.should eq("Custom failure")
     end
+
+    it "dispatches internally using dynamic path resolution" do
+      app = Alumna::App.new
+      app.use "/users", Alumna::MemoryAdapter.new(Alumna::Schema.new.str("name"))
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+
+      res_create, _ = ctx.call("/users", :create, Alumna.hash(name: "Alice"))
+      id = res_create.as(Hash)["id"].as(String)
+
+      # Fetch using dynamic path resolution: /users/1
+      res_get, err = ctx.call("/users/#{id}", :get)
+
+      err.should be_nil
+      res_get.as(Hash)["name"].should eq("Alice")
+    end
+
+    it "isolates query params by default, but allows explicit overrides" do
+      app = Alumna::App.new
+      captured_query_value = nil
+
+      app.use "/search", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_query_value = c.query.filters["category"]?.try(&.first.value)
+          nil
+        end
+      }
+
+      # Parent request has ?category=cars
+      ctx = Alumna::Testing.build_ctx(app: app, params: {"category" => "cars"})
+
+      # 1. By default, it does NOT inherit "category=cars"
+      ctx.call("/search", :find)
+      captured_query_value.should be_nil
+
+      # 2. It accepts explicit params when requested
+      ctx.call("/search", :find, params: {"category" => "trucks"})
+      captured_query_value.should eq("trucks")
+    end
+
+    it "resolves all ServiceMethod symbols and fallbacks efficiently" do
+      app = Alumna::App.new
+      captured_methods = [] of Alumna::ServiceMethod
+
+      app.use "/methods", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_methods << c.method
+          nil
+        end
+        # Explicitly capture OPTIONS since the default `before` excludes it
+        before(on: :options) do |c|
+          captured_methods << c.method
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+
+      # Test the specific fast-path branches
+      [:update, :patch, :remove, :options].each do |sym|
+        ctx.call("/methods", sym, id: "1")
+      end
+
+      # Test the `else` fallback by passing a non-standard cased Symbol
+      ctx.call("/methods", :CREATE)
+
+      captured_methods.should eq([
+        Alumna::ServiceMethod::Update,
+        Alumna::ServiceMethod::Patch,
+        Alumna::ServiceMethod::Remove,
+        Alumna::ServiceMethod::Options,
+        Alumna::ServiceMethod::Create,
+      ])
+    end
   end
 end

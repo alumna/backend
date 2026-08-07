@@ -54,7 +54,11 @@ class Hash(K, V)
   end
 
   private def dig_any_impl(path : String) : V?
-    return self[path]? if self.has_key?(path)
+    # Fast path: Single probe using internal find_entry.
+    # Completely avoids double lookups (has_key? + []) and block closure overhead.
+    if entry = find_entry(path)
+      return entry.value
+    end
 
     current = self
     start = 0
@@ -65,7 +69,11 @@ class Hash(K, V)
       part = dot ? path[start...dot] : path[start..]
 
       if current.is_a?(Hash(String, V))
-        val = current.as(Hash(String, V))[part]?
+        if sub_entry = current.as(Hash(String, V)).find_entry(part)
+          val = sub_entry.value
+        else
+          return nil
+        end
       else
         return nil
       end

@@ -29,6 +29,12 @@ describe Alumna::ServiceError do
       err = Alumna::ServiceError.bad_request("invalid", {"id" => "required"} of String => Alumna::AnyData)
       err.details["id"].should eq("required")
     end
+
+    it "accepts details via kwargs (auto-casting)" do
+      err = Alumna::ServiceError.bad_request("invalid", id: "required", count: 5)
+      err.details["id"].should eq("required")
+      err.details["count"].should eq(5_i64)
+    end
   end
 
   describe ".unauthorized" do
@@ -84,6 +90,13 @@ describe Alumna::ServiceError do
     it "defaults details to nil but handles empty gracefully" do
       err = Alumna::ServiceError.unprocessable("Validation failed")
       err.details?.should be_nil
+    end
+
+    it "accepts details via kwargs (auto-casting)" do
+      err = Alumna::ServiceError.unprocessable("Validation failed", title: "is required", age: 18)
+      err.status.should eq(422)
+      err.details["title"].should eq("is required")
+      err.details["age"].should eq(18_i64)
     end
   end
 
