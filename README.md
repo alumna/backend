@@ -292,9 +292,31 @@ CreateAuditLog = Alumna::Rule.new do |ctx|
 end
 ```
 
+**Automatc dynamic paths**
+`ctx.call` resolves dynamic paths automatically and it is not necessary to split the path and the ID. You can use in the same way you would do an API call:
+
+```crystal
+ctx.call("/users/123", :patch)
+````
+
+And it has an optional `params:` argument that you can use to send filters.
+
+**Per-call store extras**
+`ctx.call` also accepts an optional `store:` hash. Those keys are written onto the child's store for that call only. The caller's `ctx.store` is never updated.
+
+```crystal
+extras = {} of String => Alumna::StoreType
+extras["actor"] = "system"
+ctx.call("/audit", :create, Alumna.hash(action: "created"), store: extras)
+```
+
+If the caller already has a store (for example after authentication), the extras are merged on top of a shallow copy. If the caller has no store, the given hash is used directly — child writes then alias that hash.
+
+**How it is handled internally**
 When you invoke `ctx.call`:
 1. `ctx.provider` is set to `"internal"`.
-2. The `ctx.store` from the parent request is **shallow-copied** to the new context. This means if a global rule authenticated a user and stored them in `ctx.store["current_user"]`, the internal service will automatically inherit that authenticated user, bypassing the need to re-validate tokens or hit the database twice!
+2. The `ctx.store` from the parent request is **shallow-copied** to the new context. This means if a global rule authenticated a user and stored them in `ctx.store["current_user"]`, the internal service will automatically inherit that authenticated user, bypassing the need to re-validate tokens or hit the database twice.
+3. If you pass `store:`, those keys overlay the copy (or become the child's store when the parent has none). Parent keys stay on the parent.
 
 ---
 
@@ -750,12 +772,21 @@ Alumna provides helpers to make writing rules and tests easier. We also recommen
 alias AnyData = Alumna::AnyData
 ```
 
+### Fluid Service Errors
+When raising validation or bad request errors, you can pass details directly as keyword arguments. Alumna automatically casts them:
+
+```crystal
+# Instead of: Alumna::ServiceError.unprocessable("Invalid", {"age" => 18.as(AnyData)})
+Alumna::ServiceError.unprocessable("Invalid", age: 18, email: "required")
+```
+
 ### The `Alumna.hash` and `.to_any` helpers
-When passing data to `ctx.call` or tests, use `Alumna.hash` and `.to_any` to avoid compiler generics friction:
+When passing data to `ctx.call` or mutating arrays, use `Alumna.hash` and `.to_any` to avoid compiler generics friction:
 
 ```crystal
 # Instead of: {"role" => "admin".as(AnyData)} of String => AnyData
-ctx.call("/users", :patch, id: "123", data: Alumna.hash(role: "admin"))
+# Also `ctx.call` resolves dynamic paths automatically. It is not necessary to split the path and the ID.
+ctx.call("/users/123", :patch, data: Alumna.hash(role: "admin"))
 
 # Instead of: ["a", "b"].map(&.as(AnyData))
 ctx.data["tags"] = ["a", "b"].to_any
