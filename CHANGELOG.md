@@ -1,5 +1,28 @@
 # Alumna Backend changelog
 
+## 0.5.10 - 2026-08-13
+
+### Developer Experience
+* **context:** `ctx.call` now accepts an optional `store:` argument. Extra keys are overlaid onto a shallow copy of the caller store for that call only. The caller store is never mutated. If the caller has no store, the given hash is used directly (zero extra allocation).
+
+## 0.5.9 - 2026-08-05
+
+### Developer Experience
+* **context:** `ctx.call` now resolves dynamic paths automatically. For example, `ctx.call("/users/123", :patch)` works. It is not necessary to split the path and the ID.
+* **context:** `ctx.call` now isolates query parameters by default. This prevents parameters from the parent request to go into the child request. `ctx.call` now has an optional `params:` argument. Use this argument to send filters.
+* **errors:** Added overloads with `**kwargs` auto-casting for `ServiceError.bad_request` and `ServiceError.unprocessable`. It is now possible to use `ServiceError.unprocessable("Failed", email: "Invalid", age: 18)`. It is not necessary to wrap the details in a `Hash`.
+* **testing:** Improved format of E2E assertions. `E2E.assert_status` now uses `JsonHelper` from Alumna. It can now print API error payloads with complex types. For example, `Bytes` or `Time`.
+
+### Performance & Memory
+* **core:** Improved `Hash#dig_any?`. It now uses the internal method `Hash#find_entry`. This removes the double lookup. It also removes closure allocations during nested field resolution.
+* **errors:** `ServiceError` is now an immutable struct. Removed lazy mutation of `@details`. This removes unwanted struct copying and keeps zero allocation on success.
+* **views:** Removed `Set` allocations in iteration (`#each`) for `HeadersView` and `ParamsView`.
+* **views:** Removed string allocations with `.downcase` in `HeadersView#[]?`. It now uses `String#compare(case_insensitive: true)`. This comparison uses zero allocation.
+* **context:** Changed internal routing for `ctx.call`. It now uses `Hash#dup` for store propagation. It also uses a `case` statement with zero allocation for `ServiceMethod` parsing. This makes internal service-to-service communication faster.
+
+### Fixed
+* **views:** Corrected `HeadersView#each` for multi-valued headers. For example, multiple `Set-Cookie` headers. It now returns all values. Before, it only returned the first value.
+
 ## 0.5.8 - 2026-08-04
 
 ### Developer Experience

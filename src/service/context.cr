@@ -72,6 +72,7 @@ module Alumna
       data : Hash(String, AnyData) = {} of String => AnyData,
       params : Hash(String, String)? = nil,
       id : String? = nil,
+      store : Hash(String, StoreType)? = nil,
     ) : {ServiceResult, ServiceError?}
       target_service = app.services[path]?
       resolved_path = path
@@ -113,6 +114,20 @@ module Alumna
       params.try &.each { |k, v| http_params.add(k, v) }
       internal_params = Http::ParamsView.new(http_params)
 
+      # Overlay `store:` onto a shallow copy of the parent store.
+      # Parent is never mutated. If the parent has no store, the given hash is
+      # used directly (zero extra allocation; child writes alias that hash).
+      internal_store =
+        if store
+          if parent = @store
+            parent.dup.merge!(store)
+          else
+            store
+          end
+        else
+          @store.try(&.dup)
+        end
+
       internal_ctx = RuleContext.new(
         app: app,
         service: target_service,
@@ -126,7 +141,7 @@ module Alumna
         headers: headers, # Inherit headers view (safe for cross-cutting tracing/auth)
         id: resolved_id,
         data: data,
-        store: @store.try(&.dup) # Fast shallow copy via Hash#dup
+        store: internal_store
       )
 
       app.dispatch(target_service, internal_ctx)

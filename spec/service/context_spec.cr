@@ -152,6 +152,81 @@ describe Alumna::RuleContext do
       result.as(Array).should be_empty # Memory adapter returns [] on empty find
     end
 
+    it "overlays store: extras onto the parent copy without mutating the caller" do
+      app = Alumna::App.new
+      captured = {} of String => Alumna::StoreType
+
+      app.use "/probe", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured["user"] = c.store["user"]?
+          captured["role"] = c.store["role"]?
+          c.store["t0"] = 1_i64
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      ctx.store["user"] = "Admin"
+
+      extras = {} of String => Alumna::StoreType
+      extras["role"] = "auditor"
+
+      result, err = ctx.call("/probe", :find, store: extras)
+      err.should be_nil
+      result.as(Array).should be_empty
+
+      captured["user"].should eq("Admin")
+      captured["role"].should eq("auditor")
+      ctx.store.has_key?("role").should be_false
+      ctx.store.has_key?("t0").should be_false
+      extras.has_key?("t0").should be_false
+    end
+
+    it "lets store: extras override a parent key in the child only" do
+      app = Alumna::App.new
+      captured_role = nil.as(Alumna::StoreType?)
+
+      app.use "/probe", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured_role = c.store["role"]?
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      ctx.store["role"] = "user"
+
+      extras = {} of String => Alumna::StoreType
+      extras["role"] = "admin"
+
+      ctx.call("/probe", :find, store: extras)
+
+      captured_role.should eq("admin")
+      ctx.store["role"].should eq("user")
+    end
+
+    it "uses the given store directly when the caller has no store" do
+      app = Alumna::App.new
+      captured = nil.as(Alumna::StoreType?)
+
+      app.use "/probe", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          captured = c.store["actor"]?
+          c.store["t0"] = 1_i64
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      extras = {} of String => Alumna::StoreType
+      extras["actor"] = "system"
+
+      ctx.call("/probe", :find, store: extras)
+
+      captured.should eq("system")
+      extras["t0"].should eq(1_i64)
+    end
+
     it "sets provider to 'internal' and http_method to 'INTERNAL'" do
       app = Alumna::App.new
       captured_provider = ""
