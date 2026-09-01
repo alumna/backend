@@ -21,6 +21,75 @@ Alumna::Testing::AdapterSuite.run("Alumna::MemoryAdapter (opaque ids)", expect_i
   Alumna::MemoryAdapter.new(memory_adapter_suite_schema)
 end
 
+# Spec-only store. Production MemoryAdapter stays SQLite-like (D32).
+# This compiles and runs AdapterSuite mixed_sort: :bson in backend coverage.
+private class BsonMixedSortMemoryAdapter < Alumna::MemoryAdapter
+  def find(ctx : Alumna::RuleContext) : Array(Hash(String, Alumna::AnyData)) | Alumna::ServiceError
+    result = super
+    return result if result.is_a?(Alumna::ServiceError)
+
+    sort = ctx.query.sort
+    return result unless sort
+
+    has_metadata = false
+    sort.each { |field, _dir| has_metadata = true if field == "metadata" }
+    return result unless has_metadata
+
+    result.sort! do |a, b|
+      acc = 0
+      sort.each do |field, dir|
+        next unless acc == 0
+        acc = compare_bson_mixed(a.dig_any?(field), b.dig_any?(field)) * dir
+      end
+      acc
+    end
+    result
+  end
+
+  private def compare_bson_mixed(a : Alumna::AnyData?, b : Alumna::AnyData?) : Int32
+    compare_rank(min_element(a), min_element(b))
+  end
+
+  # MongoDB ascending: a non-array is compared to the least element of an array.
+  private def min_element(v : Alumna::AnyData?) : Alumna::AnyData?
+    return v unless v.is_a?(Array(Alumna::AnyData))
+    return v if v.empty?
+
+    min = v[0]
+    v.each do |el|
+      if compare_rank(min_element(el), min_element(min)) < 0
+        min = el
+      end
+    end
+    min_element(min)
+  end
+
+  private def compare_rank(a : Alumna::AnyData?, b : Alumna::AnyData?) : Int32
+    wa = rank(a)
+    wb = rank(b)
+    return wa <=> wb if wa != wb
+    if a.is_a?(Int64 | Float64) && b.is_a?(Int64 | Float64)
+      return (a <=> b) || 0
+    end
+    if a.is_a?(String) && b.is_a?(String)
+      return a <=> b
+    end
+    0
+  end
+
+  private def rank(v : Alumna::AnyData?) : Int32
+    case v
+    when Nil                  then 0
+    when Int64, Float64, Bool then 1
+    else                           2
+    end
+  end
+end
+
+Alumna::Testing::AdapterSuite.run("Alumna::MemoryAdapter (bson mixed sort)", mixed_sort: :bson) do
+  BsonMixedSortMemoryAdapter.new(memory_adapter_suite_schema)
+end
+
 describe "MemoryAdapter Unique Constraints" do
   schema = Alumna::Schema.new
     .str("email", unique: true)
