@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.5.10 - 2026-09-01
 
 ### Added
 * **service:** `Service#create_indexes!` is a no-op that database adapters can override. Apps can call `app.services.each_value(&.create_indexes!)` at boot.
