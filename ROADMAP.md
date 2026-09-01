@@ -13,14 +13,19 @@ Every phase below includes not just *what* needs to be built, but the *rationale
 *Goal: Prepare the framework for NoSQL/Document databases and enterprise delivery, ensuring the testing suite and core interfaces are database-agnostic.*
 
 ### 1.1 Make the `AdapterSuite` ID-Agnostic
-*   **The Problem:** Currently, `Alumna::Testing::AdapterSuite` asserts that newly created records return `record["id"] == "1"` and auto-increment. MongoDB uses 24-character hex strings (`ObjectId`). Running the current suite against a MongoDB adapter would force the adapter to fake an auto-incrementing integer collection, which is a severe anti-pattern.
-*   **The Solution:** Refactor the `AdapterSuite` to assert that the generated `id` is present, is a non-empty `String` (inside the `AnyData` payload), is unique, and can be used to successfully retrieve the record via `get`. 
-*   **Implementation Note:** Add an optional configuration flag to the suite macro (e.g., `expect_incremental_ids: true`) so that relational adapters like SQLite and Memory can still rigorously test their auto-increment logic.
+**Status:** done (Unreleased after 0.5.9)
+
+`AdapterSuite.run(name, expect_incremental_ids: true)` — default `true` keeps SQLite and MemoryAdapter asserts (`"1"`, `"2"`, concurrent `1..N`). Pass `false` for opaque string ids: non-empty unique strings, ignore a client-supplied `id`, no integer parsing.
+
+### 1.1b AdapterSuite mixed-sort mode
+**Status:** done (Unreleased after 0.5.9)
+
+`AdapterSuite.run(..., mixed_sort: :sql)`. Default `:sql` keeps SQLite and MemoryAdapter mixed `metadata` order (`2`, `"10"`, `[1]` → `[2, "10", [1]]`). Pass `:bson` for MongoDB native order (arrays by min element: `[[1], 2, "10"]`). MemoryAdapter stays SQLite-like. The suite is the Service contract, not a freeze of SQLite storage classes.
 
 ### 1.2 Standardize Index Generation
-*   **The Problem:** `create_indexes!` is currently a custom method specific to the `SqliteAdapter`. MongoDB heavily relies on programmatic index creation (unique, compound, and sparse indexes).
-*   **The Solution:** Add an empty `def create_indexes! : Nil; end` to the base `Alumna::Service` class.
-*   **Rationale:** This allows the host application to effortlessly iterate over all mounted services at boot (`app.services.values.each(&.create_indexes!)`) and initialize schema constraints universally, regardless of the underlying database engine.
+**Status:** done (Unreleased after 0.5.9)
+
+`Alumna::Service` has `def create_indexes! : Nil; end`. Adapters override it. Apps can run `app.services.each_value(&.create_indexes!)` at boot. `MemoryAdapter` uses the no-op.
 
 ### 1.3 Pluggable Formats Expansion & The `ObjectId` Defense
 *   **The Problem:** If a client requests `GET /users/invalid-id`, the adapter currently passes it as a String. If this string is passed to a MongoDB driver and it attempts to cast it to a `BSON::ObjectId`, the driver will raise a fatal Exception, resulting in a 500 Internal Server Error instead of a 400/404.

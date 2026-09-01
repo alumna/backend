@@ -38,6 +38,12 @@ module Alumna
     abstract def patch(ctx : RuleContext) : Hash(String, AnyData) | ServiceError
     abstract def remove(ctx : RuleContext) : Nil | ServiceError
 
+    # Create unique and indexed fields in the backing store. Adapters override
+    # this. MemoryAdapter needs no indexes. Call at boot:
+    # `app.services.each_value(&.create_indexes!)`.
+    def create_indexes! : Nil
+    end
+
     def set_before_pipeline(method : ServiceMethod, app_rules : Array(Rule), svc_rules : Array(Rule))
       idx = method.value
       @before_pipeline[idx] = app_rules + svc_rules

@@ -1,5 +1,12 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **service:** `Service#create_indexes!` is a no-op that database adapters can override. Apps can call `app.services.each_value(&.create_indexes!)` at boot.
+* **testing:** `AdapterSuite.run` accepts `expect_incremental_ids` (default `true`). When `false`, the suite checks non-empty unique string ids instead of `"1"`, `"2"`, and integer `1..N`. Create still must ignore a client-supplied `id`.
+* **testing:** `AdapterSuite.run` accepts `mixed_sort` (default `:sql`). `:sql` keeps SQLite and MemoryAdapter mixed `metadata` order (`[2, "10", [1]]`). `:bson` is MongoDB native order (`[[1], 2, "10"]`).
+
 ## 0.5.9 - 2026-08-13
 
 ### Developer Experience

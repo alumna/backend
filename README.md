@@ -224,7 +224,7 @@ For real persistence, use one of our official database adapters. They seamlessly
 
 ### Writing a Custom Adapter
 
-To connect a real database manually, inherit from `Alumna::Service` and implement its six abstract methods. Each method receives the full `RuleContext` and returns a typed value.
+To connect a real database manually, inherit from `Alumna::Service` and implement its six abstract methods. Each method receives the full `RuleContext` and returns a typed value. Override `create_indexes!` if the store needs indexes. The base method is a no-op.
 
 ```crystal
 class PostgresUserService < Alumna::Service
@@ -415,6 +415,14 @@ MembershipSchema = Alumna::Schema.new
 ```
 
 Adapters, including the built-in `MemoryAdapter`, read these traits to proactively reject conflicting payloads with a `422 Unprocessable Entity` ("already exists") before the conflict can corrupt your application state or trigger an unhandled SQL constraint exception.
+
+Database adapters create these indexes in `create_indexes!`. `Alumna::Service` provides a no-op. At boot:
+
+```crystal
+app.services.each_value(&.create_indexes!)
+```
+
+`MemoryAdapter` does nothing here. SQLite and other database adapters override the method and create the real indexes.
 
 ### Conditional Requirements
 
@@ -891,7 +899,28 @@ describe "User API" do
 end
 ```
 
-Writing a custom database adapter? Use `Alumna::Testing::AdapterSuite.run("MyAdapter") { MyAdapter.new }` to instantly run dozens of compliance specs against your implementation!
+### Testing Adapters
+
+`Alumna::Testing::AdapterSuite.run` runs the same CRUD, query, and concurrency specs that `MemoryAdapter` uses. The factory block runs inside every example. Yield a fresh adapter each time (empty table or collection).
+
+```crystal
+# Integer string ids ("1", "2", ...). This is the default. Use it for SQLite and MemoryAdapter.
+Alumna::Testing::AdapterSuite.run("MyAdapter") { MyAdapter.new(schema) }
+
+# Opaque string ids. Does not require ids to be integers.
+Alumna::Testing::AdapterSuite.run("MyAdapter", expect_incremental_ids: false) { MyAdapter.new(schema) }
+
+# Mixed-type $sort. Default :sql matches SQLite and MemoryAdapter ([2, "10", [1]]).
+# Pass :bson for MongoDB native order (arrays by min element: [[1], 2, "10"]).
+Alumna::Testing::AdapterSuite.run("MyAdapter", expect_incremental_ids: false, mixed_sort: :bson) { MyAdapter.new(schema) }
+```
+
+When `expect_incremental_ids` is `false`:
+- `create` must return a non-empty String `id` and ignore a client-supplied `id`.
+- Later `get` / `update` / `patch` / `remove` use that returned id.
+- Concurrent creates must return unique ids. The suite does not parse them as integers.
+
+`mixed_sort` only changes the mixed `metadata` `$sort` example. Same-type sorts stay the same.
 
 ---
 
@@ -899,7 +928,7 @@ Writing a custom database adapter? Use `Alumna::Testing::AdapterSuite.run("MyAda
 
 Alumna is prioritized to support high-availability and real-time distributed platforms (specifically targeting MongoDB, Redis, and NATS.io).
 
-- **v0.6 - Core Resilience & MongoDB:** Refactoring the `AdapterSuite` to be completely ID-agnostic (supporting `ObjectId`). Releasing the official **MongoDB** adapter targeting v8.x, featuring native BSON translation, deep dot-notation querying, and strict type-casting at the framework boundary.
+- **v0.6 - Core Resilience & MongoDB:** `AdapterSuite` can test adapters that do not use integer ids (`expect_incremental_ids: false`) and adapters whose mixed-type `$sort` is BSON order (`mixed_sort: :bson`). `Service#create_indexes!` is a no-op that adapters may override. An official MongoDB adapter is planned (not released in this version).
 - **v0.7 - Security & Auth:** Built-in, zero-allocation rules for JWT verification and secure session handling. Improved internal routing with robust `ServiceError` propagation across `ctx.call` boundaries.
 - **v0.8 - Horizontal Caching:** Extracting internal rate-limiting storage interfaces to support an official **Redis** adapter. This will enable distributed rate-limiting and transparent query caching with auto-invalidation.
 - **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
