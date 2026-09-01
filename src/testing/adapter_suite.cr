@@ -3,13 +3,21 @@ require "spec"
 # ============================================================================
 # Alumna Adapter Compliance Suite
 # ============================================================================
-# This suite guarantees that any custom database adapter (SQLite, Postgres,
-# Redis, etc.) behaves exactly like the built-in MemoryAdapter.
+# This suite is the Alumna Service contract: CRUD, filters, skip/limit,
+# same-type sort, and errors. Store-specific mixed-type $sort uses mixed_sort.
 #
-# To test your adapter, simply call `Alumna::Testing::AdapterSuite.run`
+# To test your adapter, call `Alumna::Testing::AdapterSuite.run`
 # and yield a fresh instance of your adapter configured with the standard
 # compliance schema (see the `MemoryAdapter` or `SqliteAdapter` specs for
-# the exact schema definition).
+# the exact schema definition). The factory block runs inside every example.
+#
+# `expect_incremental_ids` (default true) keeps string counter ids ("1", "2",
+# concurrent 1..N). Pass false for opaque ids (for example MongoDB ObjectId):
+# non-empty unique strings, ignore a client-supplied id, no integer parsing.
+#
+# `mixed_sort` (default :sql) is the mixed metadata $sort order. :sql matches
+# SQLite and MemoryAdapter ([2, "10", [1]]). Pass :bson for MongoDB native
+# order (arrays by min element: [[1], 2, "10"]).
 #
 # The suite will run dozens of automated edge-cases against your implementation,
 # ensuring $gt, $in, pagination, and multi-threaded locks are perfectly compliant!
@@ -29,7 +37,9 @@ module Alumna
     end
 
     module AdapterSuite
-      macro run(name, &factory)
+      macro run(name, expect_incremental_ids = true, mixed_sort = :sql, &factory)
+        {% incremental = expect_incremental_ids %}
+        {% sort_mode = mixed_sort %}
         describe {{name}} do
           describe "#create" do
             it "returns the record with an auto-assigned id" do
@@ -38,35 +48,64 @@ module Alumna
               end
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: Alumna.hash(name: "Alice"))
               record = adapter.create(ctx).as(Hash(String, Alumna::AnyData))
-              record["id"].should eq("1")
+              id = record["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              {% if incremental == false %}
+                id.empty?.should be_false
+              {% end %}
               record["name"].should eq("Alice")
             end
 
-            it "auto-increments ids across successive calls" do
+            it "assigns distinct ids across successive creates" do
               adapter = begin
                 {{factory.body}}
               end
               r1 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(title: "a"))
               r2 = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(title: "b"))
-              r1["id"].should eq("1")
-              r2["id"].should eq("2")
+              id1 = r1["id"].as(String)
+              id2 = r2["id"].as(String)
+              {% if incremental %}
+                id1.should eq("1")
+                id2.should eq("2")
+              {% end %}
+              {% if incremental == false %}
+                id1.empty?.should be_false
+                id2.empty?.should be_false
+                id1.should_not eq(id2)
+              {% end %}
             end
 
-            it "overrides any id supplied in the input data with its own counter" do
+            it "ignores a client-supplied id and assigns its own" do
               adapter = begin
                 {{factory.body}}
               end
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Create, data: Alumna.hash(id: "999", name: "Bob"))
               record = adapter.create(ctx).as(Hash(String, Alumna::AnyData))
-              record["id"].should eq("1")
+              id = record["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              {% if incremental == false %}
+                id.should_not eq("999")
+                id.empty?.should be_false
+                get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
+                fetched = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
+                fetched["name"].should eq("Bob")
+              {% end %}
             end
 
             it "persists the record so it can be retrieved afterwards" do
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
-              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
               record = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
             end
@@ -76,8 +115,12 @@ module Alumna
                 {{factory.body}}
               end
               b = Bytes[10, 20]
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(blob: b))
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(blob: b))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
               rec = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
               rec["blob"].should eq(b)
             end
@@ -467,7 +510,7 @@ module Alumna
               adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["is_published"]).should eq([false, true])
             end
 
-            it "applies $sort using string fallback for mismatched types or complex structures" do
+            it "applies $sort correctly with mismatched types or complex structures" do
               adapter = begin
                 {{factory.body}}
               end
@@ -475,7 +518,13 @@ module Alumna
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(metadata: 2_i64))
               Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(metadata: [1_i64].to_any))
               ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Find, params: {"$sort" => "metadata:1"})
-              adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["metadata"]).should eq([2_i64, "10", [1_i64] of Alumna::AnyData])
+              results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).map(&.["metadata"])
+              {% if sort_mode == :sql %}
+                results.should eq([2_i64, "10", [1_i64] of Alumna::AnyData])
+              {% end %}
+              {% if sort_mode == :bson %}
+                results.should eq([[1_i64] of Alumna::AnyData, 2_i64, "10"])
+              {% end %}
             end
 
             it "sorts records by nested fields using dot notation" do
@@ -538,8 +587,12 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
               record = adapter.get(ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
             end
@@ -566,10 +619,19 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Update, id: "1", data: Alumna.hash(name: "Alice", role: "admin"))
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Update, id: id, data: Alumna.hash(name: "Alice", role: "admin"))
               record = adapter.update(ctx).as(Hash(String, Alumna::AnyData))
-              record["id"].should eq("1")
+              {% if incremental %}
+                record["id"].should eq("1")
+              {% end %}
+              {% if incremental == false %}
+                record["id"].should eq(id)
+              {% end %}
               record["role"].should eq("admin")
             end
           end
@@ -579,23 +641,36 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: Alumna.hash(role: "admin"))
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: id, data: Alumna.hash(role: "admin"))
               record = adapter.patch(ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
               record["role"].should eq("admin")
-              record["id"].should eq("1")
+              {% if incremental %}
+                record["id"].should eq("1")
+              {% end %}
+              {% if incremental == false %}
+                record["id"].should eq(id)
+              {% end %}
             end
 
             it "persists the merge so a subsequent get reflects it" do
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
-              patch_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: "1", data: Alumna.hash(role: "admin"))
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice", role: "user"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              patch_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Patch, id: id, data: Alumna.hash(role: "admin"))
               adapter.patch(patch_ctx)
 
-              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
               record = adapter.get(get_ctx).as(Hash(String, Alumna::AnyData))
               record["name"].should eq("Alice")
               record["role"].should eq("admin")
@@ -627,8 +702,12 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
-              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: id)
               adapter.remove(ctx).should be_nil
             end
 
@@ -636,11 +715,15 @@ module Alumna
               adapter = begin
                 {{factory.body}}
               end
-              Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
-              remove_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: "1")
+              inserted = Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(name: "Alice"))
+              id = inserted["id"].as(String)
+              {% if incremental %}
+                id.should eq("1")
+              {% end %}
+              remove_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Remove, id: id)
               adapter.remove(remove_ctx)
 
-              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: "1")
+              get_ctx = Alumna::Testing.build_ctx(service: adapter, method: Alumna::ServiceMethod::Get, id: id)
               adapter.get(get_ctx).should be_nil
             end
 
@@ -666,7 +749,7 @@ module Alumna
           end
 
           describe "concurrency" do
-            it "assigns unique sequential ids under concurrent creates" do
+            it "assigns unique ids under concurrent creates" do
               adapter = begin
                 {{factory.body}}
               end
@@ -687,8 +770,15 @@ module Alumna
               records = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
 
               records.size.should eq(count)
-              ids = records.map { |rec| rec["id"].as(String).to_i64 }.sort!
-              ids.should eq((1_i64..count.to_i64).to_a)
+              {% if incremental %}
+                ids = records.map { |rec| rec["id"].as(String).to_i64 }.sort!
+                ids.should eq((1_i64..count.to_i64).to_a)
+              {% end %}
+              {% if incremental == false %}
+                ids = records.map { |rec| rec["id"].as(String) }
+                ids.each { |id| id.empty?.should be_false }
+                ids.uniq.size.should eq(count)
+              {% end %}
             end
 
             it "does not lose updates under concurrent patches to the same record" do

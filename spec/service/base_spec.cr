@@ -153,4 +153,11 @@ describe "Service::Base" do
       end
     end
   end
+
+  describe "create_indexes!" do
+    it "is a no-op on Service" do
+      svc = Alumna::MemoryAdapter.new
+      svc.create_indexes!.should be_nil
+    end
+  end
 end
