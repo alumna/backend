@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.6.1 - 2026-09-03
 
 ### Added
 * **schema:** Strict validate skips reserved key `"$unset"` (path string or list of path strings).
