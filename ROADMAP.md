@@ -3,7 +3,7 @@
 This document outlines the strategic roadmap for the Alumna Backend framework leading up to v1.0. 
 
 **Context & Direction:** 
-Now the immediate focus is on distributed NoSQL capabilities, real-time WebSockets, horizontal scaling via Redis, and event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
+The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Next focus is real-time WebSockets, horizontal scaling via Redis, and event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
 
 Every phase below includes not just *what* needs to be built, but the *rationale* behind how it must integrate with Alumna's strict, zero-allocation, 100% test-coverage philosophy.
 
@@ -14,34 +14,34 @@ Every phase below includes not just *what* needs to be built, but the *rationale
 **Status:** done (1.1–1.5)
 
 ### 1.1 Make the `AdapterSuite` ID-Agnostic
-**Status:** done (Unreleased after 0.5.9)
+**Status:** done (0.5.10)
 
 `AdapterSuite.run(name, expect_incremental_ids: true)` — default `true` keeps SQLite and MemoryAdapter asserts (`"1"`, `"2"`, concurrent `1..N`). Pass `false` for opaque string ids: non-empty unique strings, ignore a client-supplied `id`, no integer parsing.
 
 ### 1.1b AdapterSuite mixed-sort mode
-**Status:** done (Unreleased after 0.5.9)
+**Status:** done (0.5.10)
 
 `AdapterSuite.run(..., mixed_sort: :sql)`. Default `:sql` keeps SQLite and MemoryAdapter mixed `metadata` order (`2`, `"10"`, `[1]` → `[2, "10", [1]]`). Pass `:bson` for MongoDB native order (arrays by min element: `[[1], 2, "10"]`). MemoryAdapter stays SQLite-like. The suite is the Service contract, not a freeze of SQLite storage classes.
 
 ### 1.2 Standardize Index Generation
-**Status:** done (Unreleased after 0.5.9)
+**Status:** done (0.5.10)
 
 `Alumna::Service` has `def create_indexes! : Nil; end`. Adapters override it. Apps can run `app.services.each_value(&.create_indexes!)` at boot. `MemoryAdapter` uses the no-op.
 
 ### 1.3 Pluggable Formats Expansion & The `ObjectId` Defense
-**Status:** done (Unreleased after 0.5.10)
+**Status:** done (0.6.0)
 
 Built-in `:object_id` format: 24 hex characters (`0-9`, `a-f`, `A-F`). Same rules as BSON ObjectId hex. The backend does not depend on bson.cr. Apps can set `.str("id", format: :object_id)` (or another body field) for 422 on invalid hex in the body. Path `ctx.id` is still the adapter (bad hex is 404 / nil, not 422).
 
 ### 1.4 Global Query Limitations (`$limit` Cap)
-**Status:** done (Unreleased after 0.5.10)
+**Status:** done (0.6.0)
 
 `app.default_query_limit` and `app.max_query_limit` (both nil by default). Query applies them after parse so adapters see a clamped `q.limit`. Nil means no cap. If the client omits `$limit` and default is set, that default is used. If a limit exists and max is set, Query clamps to max. Max does not invent a limit. Invalid `$limit` / `$skip` is 400. Adapter `max_limit` may still clamp; the effective limit is the tighter one.
 
 ### 1.5 The Official Alumna MongoDB Adapter
-**Status:** done (published at [alumna/mongodb](https://github.com/alumna/mongodb))
+**Status:** done (published at [alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**)
 
-Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crystal 1.21, MongoDB 8.x). Alumna `id` is a 24-character hex string. MongoDB `_id` is ObjectId. Do not store both. `update` is `replace_one`. `patch` is `$set` (dotted schema paths allowed) and optional `$unset`. Query uses `typed_filters`. Native array `$eq` / `$ne` / `$in` / `$nin`. AdapterSuite flags: `expect_incremental_ids: false`, `mixed_sort: :bson`. Transactions and change streams are later adapter work, not this phase.
+Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crystal 1.21, MongoDB 8.x). Alumna `id` is a 24-character hex string. MongoDB `_id` is ObjectId. Do not store both. `update` is `replace_one`. `patch` is `$set` (dotted schema paths allowed) and optional `$unset`. Query uses `typed_filters`. Native array `$eq` / `$ne` / `$in` / `$nin`. AdapterSuite flags: `expect_incremental_ids: false`, `mixed_sort: :bson`. `#transaction` shipped in **0.8.2**. `#watch` shipped in **0.9.0** (replica set). Next adapter work is GridFS, then client-side encryption after the driver has CSFLE.
 
 ---
 

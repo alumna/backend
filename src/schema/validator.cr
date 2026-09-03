@@ -10,6 +10,9 @@ module Alumna
   class Schema
     EMPTY_ERRORS = [] of FieldError
 
+    # Patch operators that are not schema fields. Tuple constant: one load, no Set per key.
+    RESERVED_KEYS = {"$unset"}
+
     def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
       errors = nil
       path = [] of String | Int32
@@ -23,11 +26,12 @@ module Alumna
 
       if @strict
         data.each_key do |key|
-          unless @fields_by_name.has_key?(key)
-            path.push(key)
-            errors = push_error(errors, path, "is not allowed")
-            path.pop
-          end
+          next if @fields_by_name.has_key?(key)
+          # Reserved keys exist only at the payload root. Nested objects still reject them.
+          next if path.empty? && RESERVED_KEYS.includes?(key)
+          path.push(key)
+          errors = push_error(errors, path, "is not allowed")
+          path.pop
         end
       end
 

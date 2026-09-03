@@ -132,6 +132,29 @@ describe "Alumna System Integration" do
     data["content"].should eq("Patched")
   end
 
+  it "accepts reserved $unset path on a strict schema patch" do
+    id = authenticated_client.post("/test", body: %({"title":"Unset path","content":"keep"})).json_hash["id"].as(String)
+    res = authenticated_client.patch("/test/#{id}", body: %({"$unset":"content"}))
+    res.status.should eq(200)
+    data = res.json_hash
+    # MemoryAdapter does not implement $unset: the key stays, the field is not removed.
+    data["$unset"].should eq("content")
+    data["content"].should eq("keep")
+  end
+
+  it "accepts reserved $unset list on a strict schema patch" do
+    id = authenticated_client.post("/test", body: %({"title":"Unset list","content":"keep"})).json_hash["id"].as(String)
+    res = authenticated_client.patch("/test/#{id}", body: %({"$unset":["content"]}))
+    res.status.should eq(200)
+  end
+
+  it "still returns 422 for unknown real fields when $unset is present" do
+    id = authenticated_client.post("/test", body: %({"title":"Unset extra"})).json_hash["id"].as(String)
+    res = authenticated_client.patch("/test/#{id}", body: %({"$unset":"content","nope":"x"}))
+    res.status.should eq(422)
+    res.json_hash.dig_str("details.nope").should eq("is not allowed")
+  end
+
   it "update and patch cannot change id because it is read-only" do
     id = authenticated_client.post("/test", body: %({"title":"ID Test"})).json_hash["id"].as(String)
     res = authenticated_client.patch("/test/#{id}", body: %({"id":"hacked","title":"ID Test"}))
