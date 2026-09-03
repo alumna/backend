@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.6.0 - 2026-09-03
 
 ### Added
 * **schema:** Built-in format `:object_id`.
