@@ -1,5 +1,18 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **schema:** Strict validate skips reserved key `"$unset"` (path string or list of path strings).
+  * It is not a schema field. Nested `"$unset"` is still rejected.
+  * Unknown real fields still get `"is not allowed"` (HTTP **422**).
+  * MemoryAdapter does not implement `$unset`.
+
+### Changed
+* **docs:**
+  * Official MongoDB adapter is **0.9.0**.
+  * Strict validate skips reserved `"$unset"`.
+
 ## 0.6.0 - 2026-09-03
 
 ### Added

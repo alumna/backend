@@ -393,6 +393,44 @@ describe Alumna::Schema do
       errs.first.field.should eq("profile.extra")
       errs.first.message.should eq("is not allowed")
     end
+
+    it "skips reserved $unset path on a strict schema" do
+      schema = Alumna::Schema.new.str("name", required: false).str("age", required: false)
+      data = Alumna.hash(name: "Alice")
+      data["$unset"] = "age"
+      errors_for(schema, data, Alumna::ServiceMethod::Patch).should be_empty
+      schema.fields.none? { |f| f.name == "$unset" }.should be_true
+    end
+
+    it "skips reserved $unset list on a strict schema" do
+      schema = Alumna::Schema.new.str("name", required: false).str("age", required: false)
+      data = Alumna.hash(name: "Alice")
+      data["$unset"] = ["age", "name"] of Alumna::AnyData
+      errors_for(schema, data, Alumna::ServiceMethod::Patch).should be_empty
+    end
+
+    it "still rejects unknown real fields when $unset is present" do
+      schema = Alumna::Schema.new.str("name", required: false)
+      data = Alumna.hash(name: "Alice")
+      data["$unset"] = "name"
+      data["nope"] = "x"
+      errs = errors_for(schema, data, Alumna::ServiceMethod::Patch)
+      errs.size.should eq(1)
+      errs.first.field.should eq("nope")
+      errs.first.message.should eq("is not allowed")
+    end
+
+    it "still rejects nested $unset as an unknown field" do
+      schema = Alumna::Schema.new.hash("profile") do |s|
+        s.str("username")
+      end
+      nested = Alumna.hash(username: "bob")
+      nested["$unset"] = "username"
+      errs = errors_for(schema, Alumna.hash(profile: nested), Alumna::ServiceMethod::Patch)
+      errs.size.should eq(1)
+      errs.first.field.should eq("profile.$unset")
+      errs.first.message.should eq("is not allowed")
+    end
   end
 
   describe "Read-Only Fields" do

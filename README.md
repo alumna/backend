@@ -102,7 +102,7 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Zero-allocation validation formats resolved at definition time
 - ✅ In-memory adapter implementing the full service interface
 - ✅ Official SQLite adapter with native JSON dot-notation querying
-- ✅ Official MongoDB adapter ([`alumna/mongodb`](https://github.com/alumna/mongodb))
+- ✅ Official MongoDB adapter
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with safe, zero-allocation views for headers and params
 - ✅ Advanced query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.)
@@ -244,8 +244,8 @@ Alumna ships with a built-in `MemoryAdapter` out of the box, perfect for prototy
 
 For real persistence, use one of our official database adapters. They translate Alumna schemas and queries into store operations.
 
-- **SQLite:** [`alumna/sqlite`](https://github.com/alumna/sqlite) — Official SQLite adapter. Zero-allocation JSON streaming for nested fields, native dot-notation on JSON columns, and schema checks that block SQL injection.
-- **MongoDB:** [`alumna/mongodb`](https://github.com/alumna/mongodb) — Official MongoDB 8.0 adapter. MongoDB stores `_id` as ObjectId. Alumna exposes `id` as a 24-character hex string. Use `Alumna.mongo(client, database, collection, schema)`. For `AdapterSuite`, pass `expect_incremental_ids: false` and `mixed_sort: :bson`.
+- **SQLite:** [`alumna/sqlite`](https://github.com/alumna/sqlite) - Official SQLite adapter. Zero-allocation JSON streaming for nested fields, native dot-notation on JSON columns, and schema checks that block SQL injection.
+- **MongoDB:** [`alumna/mongodb`](https://github.com/alumna/mongodb) - Official MongoDB 8.0 adapter. MongoDB stores `_id` as ObjectId. Alumna exposes `id` as a 24-character hex string. Use `Alumna.mongo(client, database, collection, schema)`. Opt-in `#transaction` and `#watch` need a replica set. For `AdapterSuite`, pass `expect_incremental_ids: false` and `mixed_sort: :bson`.
 
 ### Writing a Custom Adapter
 
@@ -462,7 +462,9 @@ PostSchema = Alumna::Schema.new
 
 ### Strict Validation and Read-Only Fields
 
-Alumna schemas are **strict by default**. If a client attempts to send extra fields that are not defined in the schema (e.g., a Mass Assignment attack), the validator will automatically reject the payload with an `"is not allowed"` error. 
+Alumna schemas are **strict by default**. If a client attempts to send extra fields that are not defined in the schema (e.g., a Mass Assignment attack), the validator will automatically reject the payload with an `"is not allowed"` error.
+
+Reserved patch keys such as `"$unset"` are not schema fields. Strict validate skips them at the top of the payload. Nested `"$unset"` is still rejected. Unknown real fields still get `"is not allowed"` (HTTP **422**). Adapters that implement `$unset` (for example MongoDB) strip the key. MemoryAdapter does not implement `$unset`.
 
 To opt out and allow unknown fields, initialize the schema with `Alumna::Schema.new(strict: false)`. Strictness settings automatically cascade to all nested hashes and arrays.
 
