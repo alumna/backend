@@ -139,3 +139,101 @@ describe "MemoryAdapter Unique Constraints" do
     res2.as(Hash(String, Alumna::AnyData))["bio"].should eq("new bio")
   end
 end
+
+private def insert_sequences(adapter : Alumna::Service, n : Int32)
+  n.times do |i|
+    Alumna::Testing::AdapterSuiteHelpers.insert(adapter, Alumna.hash(sequence: i.to_s))
+  end
+end
+
+describe "MemoryAdapter query limit caps" do
+  it "returns all matching rows when App caps are nil and $limit is omitted" do
+    app = Alumna::App.new
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(app: app, service: adapter, method: Alumna::ServiceMethod::Find)
+    results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+    results.size.should eq(5)
+  end
+
+  it "returns remaining rows for $skip without $limit when caps are unset" do
+    app = Alumna::App.new
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(
+      app: app,
+      service: adapter,
+      method: Alumna::ServiceMethod::Find,
+      params: {"$skip" => "2"}
+    )
+    results = adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData)))
+    results.size.should eq(3)
+    results.map(&.["sequence"]).should eq(["2", "3", "4"])
+  end
+
+  it "applies default_query_limit when the client omits $limit" do
+    app = Alumna::App.new
+    app.default_query_limit = 2
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(app: app, service: adapter, method: Alumna::ServiceMethod::Find)
+    adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).size.should eq(2)
+  end
+
+  it "clamps a client $limit that is above max_query_limit" do
+    app = Alumna::App.new
+    app.max_query_limit = 2
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(
+      app: app,
+      service: adapter,
+      method: Alumna::ServiceMethod::Find,
+      params: {"$limit" => "10"}
+    )
+    adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).size.should eq(2)
+  end
+
+  it "uses the tighter of default_query_limit and max_query_limit" do
+    app = Alumna::App.new
+    app.default_query_limit = 10
+    app.max_query_limit = 2
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(app: app, service: adapter, method: Alumna::ServiceMethod::Find)
+    adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).size.should eq(2)
+  end
+
+  it "does not invent a limit when only max_query_limit is set" do
+    app = Alumna::App.new
+    app.max_query_limit = 2
+    adapter = Alumna::MemoryAdapter.new
+    insert_sequences(adapter, 5)
+    ctx = Alumna::Testing.build_ctx(app: app, service: adapter, method: Alumna::ServiceMethod::Find)
+    adapter.find(ctx).as(Array(Hash(String, Alumna::AnyData))).size.should eq(5)
+  end
+
+  it "returns 400 for invalid $limit and $skip" do
+    app = Alumna::App.new
+    adapter = Alumna::MemoryAdapter.new
+    limit_ctx = Alumna::Testing.build_ctx(
+      app: app,
+      service: adapter,
+      method: Alumna::ServiceMethod::Find,
+      params: {"$limit" => "abc"}
+    )
+    limit_err = adapter.find(limit_ctx)
+    limit_err.should be_a(Alumna::ServiceError)
+    limit_err.as(Alumna::ServiceError).status.should eq(400)
+
+    skip_ctx = Alumna::Testing.build_ctx(
+      app: app,
+      service: adapter,
+      method: Alumna::ServiceMethod::Find,
+      params: {"$skip" => "-1"}
+    )
+    skip_err = adapter.find(skip_ctx)
+    skip_err.should be_a(Alumna::ServiceError)
+    skip_err.as(Alumna::ServiceError).status.should eq(400)
+  end
+end

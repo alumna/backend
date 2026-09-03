@@ -229,6 +229,17 @@ describe Alumna::Schema do
     it "rejects invalid UUID" { error_on(schema, Alumna.hash(id: "550e8400e29b41d4a71644665544"), "id").should eq("must be a valid UUID") }
   end
 
+  describe "ObjectId format" do
+    schema = Alumna::Schema.new.field("id", Alumna::FieldType::Str, format: :object_id)
+
+    it "accepts lowercase 24 hex" { errors_for(schema, Alumna.hash(id: "507f1f77bcf86cd799439011")).should be_empty }
+    it "accepts uppercase 24 hex" { errors_for(schema, Alumna.hash(id: "507F1F77BCF86CD799439011")).should be_empty }
+    it "rejects short hex like AdapterSuite 99" { error_on(schema, Alumna.hash(id: "99"), "id").should eq("must be a valid ObjectId") }
+    it "rejects empty" { error_on(schema, Alumna.hash(id: ""), "id").should eq("must be a valid ObjectId") }
+    it "rejects odd length" { error_on(schema, Alumna.hash(id: "507f1f77bcf86cd79943901"), "id").should eq("must be a valid ObjectId") }
+    it "rejects non-hex" { error_on(schema, Alumna.hash(id: "507f1f77bcf86cd79943901g"), "id").should eq("must be a valid ObjectId") }
+  end
+
   # ── Constraint skipping on type error ────────────────────────────────────────
 
   describe "skipping length/format checks when type is wrong" do

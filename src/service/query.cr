@@ -31,19 +31,43 @@ module Alumna
     getter sort : Array(Tuple(String, Int32))?
     getter select : Array(String)?
 
-    def initialize(params : Http::ParamsView)
+    # Set when $limit or $skip is present but not a non-negative integer.
+    # typed_filters returns this so sqlite / MemoryAdapter / MongoAdapter need no rewrite.
+    @parse_error : ServiceError?
+
+    def initialize(params : Http::ParamsView, default_limit : Int32? = nil, max_limit : Int32? = nil)
+      if n = default_limit
+        raise ArgumentError.new("default_query_limit must be >= 0") if n < 0
+      end
+      if n = max_limit
+        raise ArgumentError.new("max_query_limit must be >= 0") if n < 0
+      end
+
       @filters = Hash(String, Array(Condition)).new { |h, k| h[k] = [] of Condition }
       @limit = nil
       @skip = nil
       @sort = nil
       @select = nil
+      @parse_error = nil
+
+      # True only when the client sent $limit (including invalid). Max must not invent a limit.
+      client_sent_limit = false
 
       params.each do |k, v|
         case k
         when "$limit"
-          @limit = parse_positive_int(v)
+          client_sent_limit = true
+          if n = parse_nonneg_int(v)
+            @limit = n
+          else
+            store_parse_error("Invalid $limit")
+          end
         when "$skip"
-          @skip = parse_positive_int(v)
+          if n = parse_nonneg_int(v)
+            @skip = n
+          else
+            store_parse_error("Invalid $skip")
+          end
         when "$sort"
           @sort = v.split(',').compact_map do |part|
             # Avoid split(':', 2) array allocation — use index directly.
@@ -81,9 +105,15 @@ module Alumna
           end
         end
       end
+
+      apply_limit_caps(client_sent_limit, default_limit, max_limit)
     end
 
     def typed_filters(schema : Schema?) : Hash(String, Array(TypedCondition)) | ServiceError
+      if err = @parse_error
+        return err
+      end
+
       res = Hash(String, Array(TypedCondition)).new { |h, k| h[k] = [] of TypedCondition }
 
       @filters.each do |key, conds|
@@ -156,10 +186,33 @@ module Alumna
       end
     end
 
+    # Present $limit / $skip must be a non-negative integer. Missing is not invalid.
     @[AlwaysInline]
-    private def parse_positive_int(str : String) : Int32?
+    private def parse_nonneg_int(str : String) : Int32?
       n = str.to_i?(whitespace: false)
       n && n >= 0 ? n : nil
+    end
+
+    @[AlwaysInline]
+    private def store_parse_error(message : String) : Nil
+      return if @parse_error
+      @parse_error = ServiceError.bad_request(message)
+    end
+
+    # Client omitted $limit: use App default if set. Max never invents a limit.
+    # If a limit exists (client or default), clamp to max when max is set.
+    private def apply_limit_caps(client_sent_limit : Bool, default_limit : Int32?, max_limit : Int32?) : Nil
+      unless client_sent_limit
+        if d = default_limit
+          @limit = d
+        end
+      end
+
+      if lim = @limit
+        if max = max_limit
+          @limit = lim > max ? max : lim
+        end
+      end
     end
   end
 end

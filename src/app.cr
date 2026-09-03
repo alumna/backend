@@ -12,6 +12,11 @@ module Alumna
 
     property max_body_size : Int64 = 1_048_576
 
+    # Nil = no default $limit. AdapterSuite and sqlite keep all matching rows.
+    getter default_query_limit : Int32? = nil
+    # Nil = do not clamp. Max never invents a limit when the client omitted $limit.
+    getter max_query_limit : Int32? = nil
+
     @pipeline_mutex : Sync::Mutex
     @pipelines_compiled : Atomic(Bool)
     @server : HTTP::Server?
@@ -22,6 +27,21 @@ module Alumna
       @pipeline_mutex = Sync::Mutex.new
       @active_requests = Atomic(Int32).new(0)
       @server = nil
+    end
+
+    # Negative is a config error, not a per-request 400.
+    def default_query_limit=(value : Int32?) : Int32?
+      if n = value
+        raise ArgumentError.new("default_query_limit must be >= 0") if n < 0
+      end
+      @default_query_limit = value
+    end
+
+    def max_query_limit=(value : Int32?) : Int32?
+      if n = value
+        raise ArgumentError.new("max_query_limit must be >= 0") if n < 0
+      end
+      @max_query_limit = value
     end
 
     def close : Nil

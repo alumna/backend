@@ -339,4 +339,19 @@ describe Alumna::RuleContext do
       ])
     end
   end
+
+  describe "query" do
+    it "passes App query limit caps into Query" do
+      app = Alumna::App.new
+      app.default_query_limit = 3
+      app.max_query_limit = 10
+      ctx = Alumna::Testing.build_ctx(app: app)
+      ctx.query.limit.should eq(3)
+    end
+
+    it "leaves limit nil when App caps are unset" do
+      ctx = Alumna::Testing.build_ctx
+      ctx.query.limit.should be_nil
+    end
+  end
 end

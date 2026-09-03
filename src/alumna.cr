@@ -24,6 +24,7 @@ require "./schema/formats/registry"
 require "./schema/formats/email"
 require "./schema/formats/url"
 require "./schema/formats/uuid"
+require "./schema/formats/object_id"
 require "./schema/validator"
 
 # Context and Query - safe because App and Service exist as forward declarations

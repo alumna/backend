@@ -11,6 +11,7 @@ Every phase below includes not just *what* needs to be built, but the *rationale
 
 ## Phase 1: Core Resilience & MongoDB Native Support (v0.6)
 *Goal: Prepare the framework for NoSQL/Document databases and enterprise delivery, ensuring the testing suite and core interfaces are database-agnostic.*
+**Status:** done (1.1–1.5)
 
 ### 1.1 Make the `AdapterSuite` ID-Agnostic
 **Status:** done (Unreleased after 0.5.9)
@@ -28,27 +29,19 @@ Every phase below includes not just *what* needs to be built, but the *rationale
 `Alumna::Service` has `def create_indexes! : Nil; end`. Adapters override it. Apps can run `app.services.each_value(&.create_indexes!)` at boot. `MemoryAdapter` uses the no-op.
 
 ### 1.3 Pluggable Formats Expansion & The `ObjectId` Defense
-*   **The Problem:** If a client requests `GET /users/invalid-id`, the adapter currently passes it as a String. If this string is passed to a MongoDB driver and it attempts to cast it to a `BSON::ObjectId`, the driver will raise a fatal Exception, resulting in a 500 Internal Server Error instead of a 400/404.
-*   **The Solution:** Introduce a new built-in format, `:object_id` (or `:bson_id`), to `Alumna::Formats`. 
-*   **Rationale:** Developers can declare `.str("id", format: :object_id)` in their schemas. This ensures Alumna validates the hex string format at the HTTP boundary, failing fast with a 422 before the MongoDB driver is ever invoked.
+**Status:** done (Unreleased after 0.5.10)
+
+Built-in `:object_id` format: 24 hex characters (`0-9`, `a-f`, `A-F`). Same rules as BSON ObjectId hex. The backend does not depend on bson.cr. Apps can set `.str("id", format: :object_id)` (or another body field) for 422 on invalid hex in the body. Path `ctx.id` is still the adapter (bad hex is 404 / nil, not 422).
 
 ### 1.4 Global Query Limitations (`$limit` Cap)
-*   **The Problem:** Currently, a malicious client could pass `?$limit=1000000`, potentially causing an Out-Of-Memory (OOM) scenario when the adapter attempts to serialize a massive dataset.
-*   **The Solution:** Introduce `app.default_query_limit` and `app.max_query_limit`.
-*   **Rationale:** Security. Even if an adapter handles streaming natively, the framework must enforce an absolute upper bound on query sizes to protect the memory footprint of the Crystal process.
+**Status:** done (Unreleased after 0.5.10)
+
+`app.default_query_limit` and `app.max_query_limit` (both nil by default). Query applies them after parse so adapters see a clamped `q.limit`. Nil means no cap. If the client omits `$limit` and default is set, that default is used. If a limit exists and max is set, Query clamps to max. Max does not invent a limit. Invalid `$limit` / `$skip` is 400. Adapter `max_limit` may still clamp; the effective limit is the tighter one.
 
 ### 1.5 The Official Alumna MongoDB Adapter
-*   **Driver Strategy:** Writing a MongoDB driver from scratch is notoriously difficult due to SDAM (Server Discovery and Monitoring) and SCRAM-SHA Auth handshakes. Instead, we will fork `cryomongo`, upgrade it to Crystal 1.20, ensure thread-safety (`Sync::Mutex` vs `Mutex`), strip out unused legacy bloat, and test it against MongoDB 8.x.
-*   **`id` vs `_id` Mapping:** MongoDB strictly stores `_id`. Alumna strictly exposes `id` (as a String). The adapter must intercept data at the boundary (`cast_to_db` / `cast_from_db`) to translate `id` to `{"_id": BSON::ObjectId(ctx.id)}`. Do *not* store both `id` and `_id` in the database.
-*   **Patch vs Update Semantics:** 
-    *   `update` must replace the entire document.
-    *   `patch` must translate to MongoDB's `$set` operator, rather than replacing the document. 
-    *   *Constraint:* For v1 of the adapter, we will explicitly block dot-notation in `patch` payload keys to maintain strict compliance with the current `AdapterSuite`. We will unlock nested dot-notation patching in a future release.
-*   **BSON Casting & Filter Translation:** 
-    *   Leverage `Query#typed_filters`. 
-    *   Map `Op::Eq` and `Op::In` directly. 
-    *   Map `Op::Ne` to `$ne`. *Crucial constraint:* Respect the `MemoryAdapter` semantics—when applying `$ne` to an array, it means *none* of the elements equal the value. MongoDB natively handles this, but it must be tested rigorously.
-    *   Map Alumna `Time` to BSON `Date`, and `Bytes` to BSON `Binary`.
+**Status:** done (published at [alumna/mongodb](https://github.com/alumna/mongodb))
+
+Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crystal 1.21, MongoDB 8.x). Alumna `id` is a 24-character hex string. MongoDB `_id` is ObjectId. Do not store both. `update` is `replace_one`. `patch` is `$set` (dotted schema paths allowed) and optional `$unset`. Query uses `typed_filters`. Native array `$eq` / `$ne` / `$in` / `$nin`. AdapterSuite flags: `expect_incremental_ids: false`, `mixed_sort: :bson`. Transactions and change streams are later adapter work, not this phase.
 
 ---
 
