@@ -1,5 +1,26 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **schema:** Built-in format `:object_id`.
+  * A string must be exactly 24 hex characters (`0-9`, `a-f`, `A-F`).
+  * Same rules as BSON ObjectId hex. The backend does not depend on bson.cr.
+  * Invalid values get the message `"must be a valid ObjectId"`.
+* **app:** `default_query_limit` and `max_query_limit` (both default `nil`).
+  * Nil means no cap. AdapterSuite and sqlite still return all matching rows when the client omits `$limit`.
+  * If the client omits `$limit` and default is set, Query uses that default.
+  * If a limit is present (client or default) and max is set, Query clamps to max.
+  * If both are set, the tighter value wins.
+  * Max does not invent a limit when default is nil and the client omitted `$limit`.
+  * Invalid `$limit` / `$skip` (not a non-negative integer) is `400`.
+  * Negative App options raise `ArgumentError`.
+  * Adapter `max_limit` may still clamp. The effective limit is the tighter of App max and adapter max.
+
+### Changed
+* **docs:** README lists the official MongoDB adapter ([`alumna/mongodb`](https://github.com/alumna/mongodb)).
+  The README Roadmap v0.6 item is removed. That work is done (ROADMAP 1.1–1.5).
+
 ## 0.5.10 - 2026-09-01
 
 ### Added

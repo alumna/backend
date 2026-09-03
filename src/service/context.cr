@@ -32,8 +32,13 @@ module Alumna
     @store : Hash(String, StoreType)?
     @query : Query?
 
+    # Caps come from App. Nil means no default and no max (AdapterSuite / sqlite today).
     def query : Query
-      @query ||= Query.new(@params)
+      @query ||= Query.new(
+        @params,
+        default_limit: @app.default_query_limit,
+        max_limit: @app.max_query_limit,
+      )
     end
 
     def store : Hash(String, StoreType)

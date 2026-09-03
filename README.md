@@ -43,6 +43,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [1. Services](#1-services)
     - [HTTP Routing Mapping](#http-routing-mapping)
     - [Querying](#querying)
+        - [Query limit caps](#query-limit-caps)
     - [Database Adapters](#database-adapters)
     - [Writing a Custom Adapter](#writing-a-custom-adapter)
     - [Inter-Service Communication](#inter-service-communication)
@@ -101,9 +102,11 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Zero-allocation validation formats resolved at definition time
 - ✅ In-memory adapter implementing the full service interface
 - ✅ Official SQLite adapter with native JSON dot-notation querying
+- ✅ Official MongoDB adapter ([`alumna/mongodb`](https://github.com/alumna/mongodb))
 - ✅ JSON and MessagePack serialization
 - ✅ Rich `RuleContext` with safe, zero-allocation views for headers and params
 - ✅ Advanced query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.)
+- ✅ Optional App query limit caps (`default_query_limit`, `max_query_limit`)
 - ✅ Safe multi-threading and graceful server shutdown
 - ✅ Cross-platform CI with full test coverage
 - ✅ Path normalization and duplicate-route protection
@@ -214,13 +217,35 @@ ctx.query.sort  # => [{"age", -1}]
 
 **Supported operators:** `$eq` (default), `$ne`, `$gt`, `$gte`, `$lt`, `$lte`, `$in`, `$nin`.
 
+### Query limit caps
+
+`app.default_query_limit` and `app.max_query_limit` are optional. Both default to `nil` (no cap).
+
+```crystal
+app = Alumna::App.new
+app.default_query_limit = 50
+app.max_query_limit = 200
+```
+
+- If the client omits `$limit` and `default_query_limit` is set, Query uses that default.
+- If a limit is present (client or default) and `max_query_limit` is set, Query clamps to max.
+- If both are set, the tighter value wins.
+- If the client omits `$limit` and default is `nil`, there is no limit, even when max is set.
+- Invalid `$limit` or `$skip` (not a non-negative integer) is `400`. `$limit=0` is valid (zero rows).
+- Negative App options raise `ArgumentError` at config time.
+
+Query applies these caps after parse. Adapters read the already-clamped `ctx.query.limit`.
+
+The MongoDB adapter constructor still has `max_limit`. Both may clamp. The effective limit is the tighter of App max and adapter max.
+
 ### Database Adapters
 
-Alumna ships with a built-in `MemoryAdapter` out of the box, perfect for prototyping and rapid testing. 
+Alumna ships with a built-in `MemoryAdapter` out of the box, perfect for prototyping and rapid testing.
 
-For real persistence, use one of our official database adapters. They seamlessly translate Alumna Schemas and queries into optimized database operations.
+For real persistence, use one of our official database adapters. They translate Alumna schemas and queries into store operations.
 
-- **SQLite:** [`alumna/sqlite`](https://github.com/alumna/sqlite) – The official SQLite adapter. Features zero-allocation JSON streaming for nested fields, native dot-notation querying for JSON columns, and built-in security against SQL injection.
+- **SQLite:** [`alumna/sqlite`](https://github.com/alumna/sqlite) — Official SQLite adapter. Zero-allocation JSON streaming for nested fields, native dot-notation on JSON columns, and schema checks that block SQL injection.
+- **MongoDB:** [`alumna/mongodb`](https://github.com/alumna/mongodb) — Official MongoDB 8.0 adapter. MongoDB stores `_id` as ObjectId. Alumna exposes `id` as a 24-character hex string. Use `Alumna.mongo(client, database, collection, schema)`. For `AdapterSuite`, pass `expect_incremental_ids: false` and `mixed_sort: :bson`.
 
 ### Writing a Custom Adapter
 
@@ -310,7 +335,7 @@ extras["actor"] = "system"
 ctx.call("/audit", :create, Alumna.hash(action: "created"), store: extras)
 ```
 
-If the caller already has a store (for example after authentication), the extras are merged on top of a shallow copy. If the caller has no store, the given hash is used directly — child writes then alias that hash.
+If the caller already has a store (for example after authentication), the extras are merged on top of a shallow copy. If the caller has no store, the given hash is used directly - child writes then alias that hash.
 
 **How it is handled internally**
 When you invoke `ctx.call`:
@@ -390,7 +415,7 @@ ProfileSchema = Alumna::Schema.new
 
 ### Indexes and Unique Constraints
 
-Because Alumna schemas act as the blueprint for Database Adapters, they support explicit index and uniqueness definitions. This allows adapters (like SQLite or Postgres) to automatically generate database schemas or enforce data integrity at the application level.
+Because Alumna schemas act as the blueprint for database adapters, they support explicit index and uniqueness definitions. Adapters (SQLite, MongoDB, and later Postgres) can create indexes or enforce uniqueness from those traits.
 
 You can apply `unique: true` or `indexed: true` directly to individual fields, including deeply nested hashes:
 
@@ -422,7 +447,7 @@ Database adapters create these indexes in `create_indexes!`. `Alumna::Service` p
 app.services.each_value(&.create_indexes!)
 ```
 
-`MemoryAdapter` does nothing here. SQLite and other database adapters override the method and create the real indexes.
+`MemoryAdapter` does nothing here. SQLite and MongoDB override the method and create the real indexes.
 
 ### Conditional Requirements
 
@@ -471,7 +496,12 @@ app.use "/accounts", Alumna.memory(AccountSchema) {
 
 ### Pluggable Formats
 
-Alumna ships with `:email`, `:url`, and `:uuid` backed by Crystal's stdlib. You can register your own formats once at application boot, which are directly compiled as Proc calls (no runtime hash lookups):
+Alumna ships with these built-in formats:
+
+- `:email`, `:url`, `:uuid` - Crystal stdlib
+- `:object_id` - 24 hex characters (`0-9`, `a-f`, `A-F`). Same rules as BSON ObjectId hex. The backend does not depend on bson.cr.
+
+You can register your own formats once at application boot. They compile as Proc calls (no runtime hash lookups):
 
 ```crystal
 Alumna::Formats.register("hex_color", "must be a valid hex color") do |v|
@@ -926,9 +956,8 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized to support high-availability and real-time distributed platforms (specifically targeting MongoDB, Redis, and NATS.io).
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Next work is Redis, WebSockets, and NATS.io.
 
-- **v0.6 - Core Resilience & MongoDB:** `AdapterSuite` can test adapters that do not use integer ids (`expect_incremental_ids: false`) and adapters whose mixed-type `$sort` is BSON order (`mixed_sort: :bson`). `Service#create_indexes!` is a no-op that adapters may override. An official MongoDB adapter is planned (not released in this version).
 - **v0.7 - Security & Auth:** Built-in, zero-allocation rules for JWT verification and secure session handling. Improved internal routing with robust `ServiceError` propagation across `ctx.call` boundaries.
 - **v0.8 - Horizontal Caching:** Extracting internal rate-limiting storage interfaces to support an official **Redis** adapter. This will enable distributed rate-limiting and transparent query caching with auto-invalidation.
 - **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
