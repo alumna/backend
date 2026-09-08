@@ -45,6 +45,24 @@ describe Alumna::Http::Responder do
       resp.headers["X-Custom"].should eq("abc")
     end
 
+    it "writes each cookie as a Set-Cookie header" do
+      ctx = build_ctx(result: {"ok" => true} of String => Alumna::AnyData)
+      ctx.http.add_cookie(HTTP::Cookie.new("a", "1", path: "/"))
+      ctx.http.add_cookie(HTTP::Cookie.new("b", "2", path: "/"))
+      resp = fake_response
+
+      Alumna::Http::Responder.write(resp, ctx, json_serializer)
+      resp.close
+
+      set_cookie = resp.headers.get?("Set-Cookie")
+      set_cookie.should_not be_nil
+      if set_cookie
+        set_cookie.size.should eq(2)
+        set_cookie.join('\n').should contain("a=1")
+        set_cookie.join('\n').should contain("b=2")
+      end
+    end
+
     it "handles redirects with default 302" do
       ctx = build_ctx
       ctx.http.location = "/new-location"

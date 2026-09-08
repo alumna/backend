@@ -272,4 +272,15 @@ describe "Alumna System Integration" do
     res.status.should eq(200)
     res.headers["X-Request-ID"]?.should_not be_nil
   end
+
+  it "returns HTTP 500 with a JSON body when a before-rule raises" do
+    app = Alumna::App.new
+    app.use "/explode", Alumna.memory(Alumna::Schema.new) {
+      before { |_ctx| raise "pipe burst" }
+    }
+    client = Alumna::Testing::AppClient.new(app)
+    res = client.get("/explode")
+    res.status.should eq(500)
+    res.json_hash["error"].should eq("pipe burst")
+  end
 end

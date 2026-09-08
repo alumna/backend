@@ -1,5 +1,5 @@
 module Alumna
-  VERSION = "0.6.1"
+  VERSION = "0.7.0"
 end
 
 # Core enums and primitives - no dependencies
@@ -40,6 +40,8 @@ require "./rule/builtin/cors"
 require "./rule/builtin/rate_limiter"
 require "./rule/builtin/logger"
 require "./rule/builtin/timestamp"
+require "./rule/builtin/session"
+require "./rule/builtin/jwt"
 
 # Full implementations - these reopen the forward-declared classes
 require "./app"

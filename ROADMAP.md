@@ -47,15 +47,20 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 
 ## Phase 2: Security, Authentication & Error Propagation (v0.7)
 *Goal: First-class, zero-allocation authentication primitives and robust internal routing.*
+**Status:** done (2.1–2.2)
 
 ### 2.1 Context Error Propagation
-*   **The Problem:** Currently, if `ctx.call` triggers an internal service and that service fails (e.g., validation fails), `ctx.call` raises a generic Crystal `Exception`.
-*   **The Solution:** Ensure internal `ctx.call` failures propagate the actual `ServiceError` struct up the chain.
-*   **Rationale:** By raising/returning the typed `ServiceError`, the parent service can cleanly `rescue` it and translate it into an intelligent response, rather than crashing the pipeline with a 500 error.
+**Status:** done (tuple return in 0.5.8; uncaught rule Exception wrap in 0.7)
+
+*   **The Problem:** An internal service failure used to leave `ctx.call` as a generic Crystal `Exception`.
+*   **The Solution:** `ctx.call` returns `{ServiceResult, ServiceError?}`. The parent inspects `err` and can return a new `ServiceError`. `ServiceError` is a struct. It is not an `Exception`. `App#dispatch` converts an uncaught `Exception` from a rule into `ServiceError.internal`. The HTTP status is 500. The body is JSON.
+*   **Rationale:** The parent can translate a child error (for example 404 to 422) without a 500 crash. Expected API errors do not allocate an exception backtrace.
 
 ### 2.2 Built-in Authentication Rules
-*   **The Solution:** Implement built-in rules for JWT (JSON Web Tokens) verification and Session parsing.
-*   **Rationale:** While the framework makes writing custom authentication easy, providing official, heavily-tested, zero-allocation auth rules ensures community standardization and reduces boilerplate for enterprise deployments.
+**Status:** done (0.7.0)
+
+*   **The Solution:** Built-in rules for session cookies (`Alumna::Session` + `MemorySessionStore`) and JWT HS256 (`Alumna.jwt` / `Alumna::JWT.encode`).
+*   **Rationale:** Official, tested auth rules reduce boilerplate. `SessionStore` is a public type so a Redis adapter can drop in later. JWT is HS256 only: Crystal 1.21 stdlib has HMAC and no RSA key type.
 
 ---
 

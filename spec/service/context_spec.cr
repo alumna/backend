@@ -261,8 +261,83 @@ describe Alumna::RuleContext do
       ctx = Alumna::Testing.build_ctx(app: app)
       res, err = ctx.call("/fail", :find)
       err.should_not be_nil
-      err.as(Alumna::ServiceError).status.should eq(400)
-      err.as(Alumna::ServiceError).message.should eq("Custom failure")
+      if err
+        err.status.should eq(400)
+        err.message.should eq("Custom failure")
+      end
+    end
+
+    it "returns child validation 422 and details in the tuple" do
+      app = Alumna::App.new
+      schema = Alumna::Schema.new.str("name", min_length: 1)
+      app.use "/items", Alumna.memory(schema) {
+        before validate, on: :create
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      _res, err = ctx.call("/items", :create, Alumna.hash(name: ""))
+
+      err.should_not be_nil
+      if err
+        err.status.should eq(422)
+        err.message.should eq("Validation failed")
+        err.details["name"].should be_a(String)
+      end
+    end
+
+    it "lets the parent return the child error with no change" do
+      app = Alumna::App.new
+      schema = Alumna::Schema.new.str("name", min_length: 1)
+      app.use "/items", Alumna.memory(schema) {
+        before validate, on: :create
+      }
+      app.use "/proxy", Alumna.memory(Alumna::Schema.new) {
+        before do |c|
+          _res, child_err = c.call("/items", :create, c.data)
+          next child_err if child_err
+          nil
+        end
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app, data: Alumna.hash(name: ""))
+      _res, err = ctx.call("/proxy", :create, Alumna.hash(name: ""))
+
+      err.should_not be_nil
+      if err
+        err.status.should eq(422)
+        err.message.should eq("Validation failed")
+        err.details["name"].should be_a(String)
+      end
+    end
+
+    it "returns 500 when a child rule raises" do
+      app = Alumna::App.new
+      app.use "/boom", Alumna.memory(Alumna::Schema.new) {
+        before { |_c| raise "child rule" }
+      }
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      _res, err = ctx.call("/boom", :find)
+
+      err.should_not be_nil
+      if err
+        err.status.should eq(500)
+        err.message.should eq("child rule")
+      end
+    end
+
+    it "returns 500 for an unknown method symbol" do
+      app = Alumna::App.new
+      app.use "/target", Alumna.memory(Alumna::Schema.new)
+
+      ctx = Alumna::Testing.build_ctx(app: app)
+      _res, err = ctx.call("/target", :not_a_method)
+
+      err.should_not be_nil
+      if err
+        err.status.should eq(500)
+        err.message.should eq("Unknown service method")
+      end
     end
 
     it "dispatches internally using dynamic path resolution" do

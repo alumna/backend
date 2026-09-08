@@ -98,45 +98,59 @@ module Alumna
       end
     end
 
-    # Central dispatch using merged pipelines
+    # Central dispatch using merged pipelines.
+    # Uncaught Exception from a rule becomes ServiceError.internal (500).
+    # Service methods are already wrapped in Service#call_method.
     def dispatch(service : Service, ctx : RuleContext) : RuleContext
       compile_pipelines! unless @pipelines_compiled.get(:acquire)
       m = ctx.method
 
-      # 1. BEFORE (app + service)
-      ctx.phase = RulePhase::Before
-      before_rules = service.before_pipeline(m)
-      res = Orchestrator.run_bounded(before_rules, ctx, service.before_app_len(m), short_circuit: true)
+      begin
+        # 1. BEFORE (app + service)
+        ctx.phase = RulePhase::Before
+        before_rules = service.before_pipeline(m)
+        res = Orchestrator.run_bounded(before_rules, ctx, service.before_app_len(m), short_circuit: true)
 
-      unless res[:ok]
-        ctx.phase = RulePhase::Error
-        # run service error only if stop happened in service part
-        start_idx = res[:stopped_in_app] ? service.error_svc_len(m) : 0
-        Orchestrator.run(service.error_pipeline(m), ctx, start: start_idx)
-        return ctx
-      end
-
-      # 2. SERVICE METHOD
-      unless ctx.result_set?
-        ctx.phase = RulePhase::After
-        result, error = service.call_method(ctx)
-        if error
-          ctx.error = error
+        unless res[:ok]
           ctx.phase = RulePhase::Error
-          Orchestrator.run(service.error_pipeline(m), ctx)
+          # run service error only if stop happened in service part
+          start_idx = res[:stopped_in_app] ? service.error_svc_len(m) : 0
+          Orchestrator.run(service.error_pipeline(m), ctx, start: start_idx)
           return ctx
         end
-        ctx.result = result
-      end
 
-      # 3. AFTER (service + app)
-      ctx.phase = RulePhase::After
-      after_rules = service.after_pipeline(m)
-      unless Orchestrator.run(after_rules, ctx)
+        # 2. SERVICE METHOD
+        unless ctx.result_set?
+          ctx.phase = RulePhase::After
+          result, error = service.call_method(ctx)
+          if error
+            ctx.error = error
+            ctx.phase = RulePhase::Error
+            Orchestrator.run(service.error_pipeline(m), ctx)
+            return ctx
+          end
+          ctx.result = result
+        end
+
+        # 3. AFTER (service + app)
+        ctx.phase = RulePhase::After
+        after_rules = service.after_pipeline(m)
+        unless Orchestrator.run(after_rules, ctx)
+          ctx.phase = RulePhase::Error
+          Orchestrator.run(service.error_pipeline(m), ctx)
+        end
+        ctx
+      rescue ex : Exception
+        ctx.error = ServiceError.internal(ex.message || "Unexpected error") unless ctx.error
+        return ctx if ctx.phase.error?
         ctx.phase = RulePhase::Error
-        Orchestrator.run(service.error_pipeline(m), ctx)
+        begin
+          Orchestrator.run(service.error_pipeline(m), ctx)
+        rescue Exception
+          # Keep the first error. Do not run the error pipeline again.
+        end
+        ctx
       end
-      ctx
     end
 
     def listen(
