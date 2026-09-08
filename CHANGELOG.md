@@ -1,5 +1,19 @@
 # Alumna Backend changelog
 
+## 0.7.0 - 2026-09-08
+
+### Added
+* **session:** `Alumna::SessionStore` interface and `Alumna::MemorySessionStore`. Cookie session rule (`Alumna.session` / `Alumna::Session`). Helpers `start`, `stop`, and `rotate`. Absolute TTL is set on the store and can be overridden per `start` / `set`.
+* **session:** `HttpOverrides#add_cookie`. The responder writes each cookie with `Set-Cookie` add, so more than one cookie can go out.
+* **jwt:** HS256 encode and verify (`Alumna::JWT`). Built-in rule `Alumna.jwt`. No JWT shard. `alg` `none` and non-HS256 algorithms are rejected.
+
+### Fixed
+* **dispatch:** An uncaught `Exception` in a rule becomes `ServiceError.internal` (HTTP 500 JSON). The error phase still runs. If the error phase also raises, the first error is kept.
+* **context:** `ctx.call` with an unknown method symbol returns `{nil, ServiceError.internal("Unknown service method")}`. It does not raise `ArgumentError`.
+
+### Changed
+* **docs:** ROADMAP 2.1 and 2.2 are done. README `:write` matches the code (`create`, `update`, `patch`; not `remove`).
+
 ## 0.6.1 - 2026-09-03
 
 ### Added

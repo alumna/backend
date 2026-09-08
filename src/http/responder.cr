@@ -7,6 +7,11 @@ module Alumna
           h.each { |k, v| response.headers[k] = v }
         end
 
+        # One headers[k] = v would replace a previous Set-Cookie. Use add.
+        if cookies = ctx.http.cookies?
+          cookies.each { |cookie| response.headers.add("Set-Cookie", cookie.to_set_cookie_header) }
+        end
+
         if location = ctx.http.location
           response.headers["Location"] = location
           response.status_code = ctx.http.status || 302

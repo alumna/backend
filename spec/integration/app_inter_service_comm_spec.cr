@@ -89,7 +89,7 @@ describe "Inter-Service Communication (ctx.call)" do
     logs.first.as(Hash)["resource_id"].should eq(post_id)
   end
 
-  it "fails cleanly when an internal call raises an exception" do
+  it "fails cleanly when an internal get does not find the author" do
     res = client.post("/posts", %({"author_id":"999", "content":"Ghost Post"}))
 
     res.status.should eq(422)

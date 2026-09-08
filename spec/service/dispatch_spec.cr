@@ -275,7 +275,76 @@ describe "Dispatch" do
     end
   end
 
-  describe "when the service method raises a ServiceError" do
+  describe "when a rule raises an Exception" do
+    it "converts a before-rule raise into 500 and runs the error phase" do
+      log = [] of String
+      service = TrackedService.new
+      service.before(Alumna::Rule.new { |_ctx| raise "rule boom" })
+      service.error(Alumna::Rule.new { log << "error"; nil })
+
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(500)
+        err.message.should eq("rule boom")
+      end
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+      ctx.result_set?.should be_false
+      log.should eq(["error"])
+      service.called.should be_empty
+    end
+
+    it "converts an after-rule raise into 500" do
+      service = TrackedService.new
+      service.after(Alumna::Rule.new { |_ctx| raise "after boom" })
+
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(500)
+        err.message.should eq("after boom")
+      end
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+
+    it "keeps the first error when the error pipeline also raises" do
+      service = TrackedService.new
+      service.before(Alumna::Rule.new { |_ctx| raise "first" })
+      service.error(Alumna::Rule.new { |_ctx| raise "second" })
+
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(500)
+        err.message.should eq("first")
+      end
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+
+    it "keeps a returned ServiceError when an error-rule raises" do
+      service = TrackedService.new
+      service.before(stopping_rule("no token"))
+      service.error(Alumna::Rule.new { |_ctx| raise "error-rule boom" })
+
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(401)
+        err.message.should eq("no token")
+      end
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+  end
+
+  describe "when the service method returns a ServiceError" do
     it "sets ctx.error with the correct status" do
       service = TrackedService.new
       ctx = dispatch(service, Alumna::ServiceMethod::Update, "999", {"x" => "y"} of String => Alumna::AnyData)

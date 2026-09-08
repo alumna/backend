@@ -66,6 +66,8 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [CORS](#cors)
     - [Logger](#logger)
     - [Rate Limiter](#rate-limiter)
+    - [Session](#session)
+    - [JWT](#jwt)
 - [5. Server Configuration & Multi-threading](#5-server-configuration--multi-threading)
     - [Multi-threading and Workers](#multi-threading-and-workers)
     - [Unix Sockets & Local Providers](#unix-sockets--local-providers)
@@ -113,6 +115,8 @@ Alumna is in active early development. The following core pieces are complete an
 - ✅ Strict request-body limits enforced on all IO entry points
 - ✅ Seamless, zero-serialization inter-service communication via `ctx.call`.
 - ✅ `provider` field on context dynamically resolving `"rest"` (TCP), `"local"` (Unix sockets), and `"internal"` (Service-to-Service).
+- ✅ Built-in session rule with a swappable `SessionStore` (in-memory store included)
+- ✅ Built-in JWT HS256 verification and encode helper
 
 See the [Roadmap](#roadmap) for what is coming next.
 
@@ -584,7 +588,7 @@ After-rules always run when there is no error, even if a before-rule short-circu
 - an array: `on: [:find, :get]`
 - a shorthand:
   - `:read`  → `find`, `get`
-  - `:write` → `create`, `update`, `patch`, `remove`
+  - `:write` → `create`, `update`, `patch` (not `remove`)
   - `:all`   → all methods *except* `options`
 - omit `on:` → same as `:all`
 
@@ -738,6 +742,54 @@ before Alumna.rate_limit(limit: 100, window_seconds: 60)
 - Returns `429 Too Many Requests` when exceeded.
 - Skips `OPTIONS` requests automatically.
 
+### Session
+
+Cookie session for browser apps. The cookie holds only an opaque id. Session data lives in a `SessionStore`. `MemorySessionStore` is for one process. A later Redis adapter can implement the same `get` / `set` / `delete` methods and drop in.
+
+```crystal
+store = Alumna::MemorySessionStore.new(ttl: 24.hours)
+sessions = Alumna::Session.new(store, secure: true)
+app.before sessions.rule
+
+# In a login method. Optional ttl overrides the store default for this session only.
+sessions.start(ctx, Alumna.hash(user_id: id))
+sessions.start(ctx, Alumna.hash(user_id: id), ttl: 8.hours)
+
+# In logout:
+sessions.stop(ctx)
+```
+
+`Alumna.session(store)` returns the same before-rule when you do not need start/stop on that object. Keep one `Session` instance when you set `cookie`, `secure`, or `same_site`, so login and the rule use the same flags.
+
+- Missing cookie → `401` `"Missing session"`. Unknown or expired id → `401` `"Unauthorized"`.
+- Absolute TTL from `start` / `set`. The store does not extend the deadline on each request.
+- Default skip of `internal` and `local`. Skips `OPTIONS`.
+- Cookie defaults: name `alumna.sid`, `HttpOnly`, `SameSite=Lax`, `Path=/`. Set `secure: true` on HTTPS.
+- `same_site: :none` requires `secure: true`.
+- `get`/`set` copy the data hash (shallow). Mutate then `set` to persist. This matches a remote store.
+
+### JWT
+
+HS256 verification. No JWT shard. Crystal 1.21 has HMAC in stdlib and no RSA key type, so RS256 is not in this release.
+
+```crystal
+secret = ENV["JWT_SECRET"]
+app.before Alumna.jwt(secret)
+
+# In login:
+token = Alumna::JWT.encode(
+  Alumna.hash(sub: id, exp: (Time.utc + 1.hour).to_unix),
+  secret
+)
+```
+
+- Missing header → `401` `"Missing token"`. Expired `exp` → `401` `"Token expired"`. Other failures → `401` `"Unauthorized"`.
+- Default skip of `internal` and `local`. Skips `OPTIONS`.
+- Optional `iss`, `aud`, and `leeway` on `Alumna.jwt`.
+- `exp` / `nbf` / `iat` are Unix seconds (`Int64`). Use `Time.utc.to_unix`. Do not use `Time.instant`.
+- Rejects `alg` `none` and any algorithm that is not HS256.
+- Empty secret is `ArgumentError` at boot.
+
 ---
 
 ## 5. Server Configuration & Multi-threading
@@ -813,7 +865,7 @@ alias AnyData = Alumna::AnyData
 ```
 
 ### Fluid Service Errors
-When raising validation or bad request errors, you can pass details directly as keyword arguments. Alumna automatically casts them:
+When you return a validation or bad request error, you can pass details as keyword arguments. Alumna casts them:
 
 ```crystal
 # Instead of: Alumna::ServiceError.unprocessable("Invalid", {"age" => 18.as(AnyData)})
@@ -958,9 +1010,8 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Next work is Redis, WebSockets, and NATS.io.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Next work is Redis, WebSockets, and NATS.io.
 
-- **v0.7 - Security & Auth:** Built-in, zero-allocation rules for JWT verification and secure session handling. Improved internal routing with robust `ServiceError` propagation across `ctx.call` boundaries.
 - **v0.8 - Horizontal Caching:** Extracting internal rate-limiting storage interfaces to support an official **Redis** adapter. This will enable distributed rate-limiting and transparent query caching with auto-invalidation.
 - **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
 - **v0.10 - Event Bus & NATS:** Introducing bulletproof `after_commit` hooks and official **NATS.io** integration. This allows horizontally scaled Alumna instances to publish data mutations statelessly and fan-out real-time events to connected WebSocket clients.

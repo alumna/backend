@@ -110,7 +110,10 @@ module Alumna
                         when :patch   then ServiceMethod::Patch
                         when :remove  then ServiceMethod::Remove
                         when :options then ServiceMethod::Options
-                        else               ServiceMethod.parse(method.to_s.capitalize)
+                        else
+                          parsed = ServiceMethod.parse?(method.to_s.capitalize)
+                          return {nil, ServiceError.internal("Unknown service method")} unless parsed
+                          parsed
                         end
                       end
 
@@ -172,6 +175,7 @@ module Alumna
     property status : Int32?
     property location : String?
     @headers : Hash(String, String)?
+    @cookies : Array(HTTP::Cookie)?
 
     def headers : Hash(String, String)
       @headers ||= {} of String => String
@@ -179,6 +183,19 @@ module Alumna
 
     def headers? : Hash(String, String)?
       @headers
+    end
+
+    # Lazy list. Responder writes each cookie with headers.add("Set-Cookie", ...).
+    def cookies : Array(HTTP::Cookie)
+      @cookies ||= [] of HTTP::Cookie
+    end
+
+    def cookies? : Array(HTTP::Cookie)?
+      @cookies
+    end
+
+    def add_cookie(cookie : HTTP::Cookie) : Nil
+      cookies << cookie
     end
   end
 end
