@@ -273,7 +273,7 @@ describe "Alumna System Integration" do
     res.headers["X-Request-ID"]?.should_not be_nil
   end
 
-  it "returns JSON 500 when a before-rule raises" do
+  it "returns HTTP 500 with a JSON body when a before-rule raises" do
     app = Alumna::App.new
     app.use "/explode", Alumna.memory(Alumna::Schema.new) {
       before { |_ctx| raise "pipe burst" }

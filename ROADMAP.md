@@ -53,7 +53,7 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 **Status:** done (tuple return in 0.5.8; uncaught rule Exception wrap in 0.7)
 
 *   **The Problem:** An internal service failure used to leave `ctx.call` as a generic Crystal `Exception`.
-*   **The Solution:** `ctx.call` returns `{ServiceResult, ServiceError?}`. The parent inspects `err` and can return a new `ServiceError`. `ServiceError` is a struct. It is not an `Exception`. `App#dispatch` converts an uncaught `Exception` from a rule into `ServiceError.internal` (JSON 500).
+*   **The Solution:** `ctx.call` returns `{ServiceResult, ServiceError?}`. The parent inspects `err` and can return a new `ServiceError`. `ServiceError` is a struct. It is not an `Exception`. `App#dispatch` converts an uncaught `Exception` from a rule into `ServiceError.internal`. The HTTP status is 500. The body is JSON.
 *   **Rationale:** The parent can translate a child error (for example 404 to 422) without a 500 crash. Expected API errors do not allocate an exception backtrace.
 
 ### 2.2 Built-in Authentication Rules

@@ -8,11 +8,11 @@
 * **jwt:** HS256 encode and verify (`Alumna::JWT`). Built-in rule `Alumna.jwt`. No JWT shard. `alg` `none` and non-HS256 algorithms are rejected.
 
 ### Fixed
-* **dispatch:** An uncaught `Exception` in a rule becomes `ServiceError.internal` (HTTP 500 JSON). The error phase still runs. If the error phase also raises, the first error is kept.
+* **dispatch:** An uncaught `Exception` in a rule becomes `ServiceError.internal`. The HTTP status is 500. The body is JSON `{"error":"..."}`. The error phase still runs. If the error phase also raises, the first error is kept.
 * **context:** `ctx.call` with an unknown method symbol returns `{nil, ServiceError.internal("Unknown service method")}`. It does not raise `ArgumentError`.
 
 ### Changed
-* **docs:** ROADMAP 2.1 and 2.2 are done. README `:write` matches the code (`create`, `update`, `patch`; not `remove`).
+* **docs:** ROADMAP 2.1 and 2.2 are done. README `:write` matches the code (`create`, `update`, `patch`; not `remove`). Examples: `examples/session.cr` and `examples/jwt.cr`.
 
 ## 0.6.1 - 2026-09-03
 
