@@ -10,7 +10,7 @@
 * **cache:** `Alumna.cache` caches `find`. Query fingerprint in the key. Collection generation via `Cache#incr` on create/update/patch/remove. Old find keys expire by TTL. Attach `before` on `:read`.
 
 ### Changed
-* **docs:** Store-neutral `Cache` is done (Unreleased). Official Redis shard (`alumna-redis`) implements `Cache`, `SessionStore`, and `RateLimitStore` (Unreleased). Not a Service adapter.
+* **docs:** Store-neutral `Cache` is done. Official Redis shard (`alumna-redis`) implements `Cache`, `SessionStore`, and `RateLimitStore`. Not a Service adapter.
 
 ## 0.7.0 - 2026-09-08
 
