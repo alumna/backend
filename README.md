@@ -775,11 +775,11 @@ Start with one service:
 
 ```crystal
 cache = Alumna::MemoryCache.new
-rule = Alumna.cache(cache, ttl: 30.seconds)
+cache_rule = Alumna.cache(cache, ttl: 30.seconds)
 
 app.use "/posts", Alumna.memory(PostSchema) {
-  before rule, on: :read
-  after rule
+  before cache_rule, on: :read
+  after cache_rule
 }
 ```
 
