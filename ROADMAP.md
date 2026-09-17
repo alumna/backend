@@ -3,7 +3,7 @@
 This document outlines the strategic roadmap for the Alumna Backend framework leading up to v1.0. 
 
 **Context & Direction:** 
-The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Next focus is real-time WebSockets, horizontal scaling via Redis, and event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
+The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache and rate-limit ports are Unreleased. Next focus is the official Redis shard, real-time WebSockets, and event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
 
 Every phase below includes not just *what* needs to be built, but the *rationale* behind how it must integrate with Alumna's strict, zero-allocation, 100% test-coverage philosophy.
 
@@ -65,16 +65,28 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 ---
 
 ## Phase 3: Distributed State & Caching (v0.8)
-*Goal: Prepare the framework for horizontal scaling by extracting memory-bound state.*
+*Goal: Share session, rate-limit, and cache state across processes.*
+**Status:** backend ports done. Redis shard: Cache, session, and rate limit done in `alumna-redis`.
 
 ### 3.1 Extract `RateLimitStore` Interface
-*   **The Problem:** The current `RateLimiter` rule uses a brilliant, monotonic, in-memory store. However, in a multi-instance deployment, rate limits must be shared across servers.
-*   **The Solution:** Extract the core logic into an abstract `Alumna::RateLimitStore` interface.
-*   **Rationale:** This decoupling allows the framework to easily swap the in-memory store for a `RedisRateLimitStore` without changing the rule's public API.
+**Status:** done
 
-### 3.2 Alumna Redis Adapter
-*   **The Solution:** Build a Redis adapter to act as the distributed backbone.
-*   **Rationale:** Beyond rate-limiting, a Redis adapter will provide an `Alumna::RedisCache` helper. This will allow developers to memoize expensive `find` and `get` operations, with the adapter automatically and transparently invalidating specific cache keys during `create`, `update`, `patch`, and `remove` operations.
+*   **The Problem:** The RateLimiter rule used a private in-memory store. In a multi-instance deployment, rate limits must be shared across servers.
+*   **The Solution:** Public abstract `Alumna::RateLimitStore`. `MemoryRateLimitStore` is the default. `Alumna.rate_limit` takes `store:`.
+*   **Rationale:** A Redis store can implement `hit` and drop in. The rule API stays the same.
+
+### 3.2 Store-neutral Cache
+**Status:** done
+
+*   **The Problem:** `find` and `get` results lived only in the service adapter. Multi-process apps need a shared byte store.
+*   **The Solution:** Public `Alumna::Cache` and `MemoryCache`. Rule `Alumna.cache` for `get` and `find`. Get uses one key per id: write-through `set`, miss fill `set_nx`, `delete` on remove. Find uses a collection generation (`incr` on write). Old find keys expire by TTL. The app names `Cache`, not Redis.
+*   **Rationale:** A Redis or Memcached shard implements the same methods. The rule stays in the backend.
+
+### 3.3 Official Redis shard
+**Status:** done in `alumna-redis`: `RedisCache`, `RedisSessionStore`, `RedisRateLimitStore`, and GitHub CI.
+
+*   **The Solution:** Shard `alumna-redis`. `Alumna::Redis.new(uri)` gives `.cache` (`RedisCache`), `.session_store` (`RedisSessionStore`), and `.rate_limit_store` (`RedisRateLimitStore`). Apps attach `Alumna.cache(redis.cache, ttl:)`, `Alumna.session(redis.session_store)`, and `Alumna.rate_limit(store: redis.rate_limit_store)`. One `Redis::Client` per process. Not a Service adapter. No `AdapterSuite`.
+*   **Rationale:** `SessionStore`, `RateLimitStore`, and `Cache` already exist. Redis implements them so several Alumna processes can share state.
 
 ---
 

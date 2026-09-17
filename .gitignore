@@ -4,11 +4,14 @@
 /bin/
 /.shards/
 *.dwarf
-/coverage/
 
 # Libraries don't need dependency lock
 # Dependencies will be locked in applications that use them
 /shard.lock
+
+# Coverage, generated spec binary, local smoke
+/coverage/
+all_specs.cr
 
 # Junit files
 /junit/

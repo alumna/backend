@@ -51,6 +51,15 @@ module Alumna
 
     # --- new tests for the bounded store ---
 
+    it "uses an injected store across rules" do
+      store = MemoryRateLimitStore.new(60.seconds)
+      rule_a = Alumna.rate_limit(limit: 1, store: store)
+      rule_b = Alumna.rate_limit(limit: 1, store: store)
+
+      Alumna::Testing.run_rule(rule_a, remote_ip: "9.9.9.9").error.should be_nil
+      Alumna::Testing.run_rule(rule_b, remote_ip: "9.9.9.9").error.should_not be_nil
+    end
+
     it "isolates counts per key" do
       rule = Alumna.rate_limit(limit: 1, window_seconds: 60, key: ->(ctx : RuleContext) { ctx.remote_ip })
 
@@ -63,7 +72,7 @@ module Alumna
     end
 
     it "prunes expired entries to prevent unbounded growth" do
-      store = RateLimitStore.new(10.milliseconds, cleanup_every: 1000)
+      store = MemoryRateLimitStore.new(10.milliseconds, cleanup_every: 1000)
       store.hit("a")
       store.hit("b")
       store.size.should eq(2)
@@ -83,7 +92,7 @@ module Alumna
 
     it "cleans up automatically every N operations" do
       # use tiny cleanup_every to avoid sleeping in CI
-      store = RateLimitStore.new(5.milliseconds, cleanup_every: 2)
+      store = MemoryRateLimitStore.new(5.milliseconds, cleanup_every: 2)
       store.hit("x") # ops=1
       store.hit("y") # ops=2 -> triggers cleanup, but nothing expired yet
       store.size.should eq(2)
