@@ -1,5 +1,17 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **rate_limit:** Public `Alumna::RateLimitStore` interface and `Alumna::MemoryRateLimitStore`. `Alumna.rate_limit` takes `store:`. Default store stays in-memory. `window_seconds` sets the memory store window when `store:` is omitted.
+* **cache:** Public `Alumna::Cache` interface and `Alumna::MemoryCache`. `get` / `set` / `delete` store `Bytes`. Optional TTL. `ttl` nil means no expiry. get/set copy the byte slice.
+* **cache:** `Alumna.cache` rule for `get`. One key per id. Hit sets `ctx.result`. Miss fill uses `set_nx`. Create/update/patch write-through `set`. Remove `delete`. Default `skip_providers:` is `["internal"]` on get and find. Internal writes still update get keys.
+* **cache:** `Cache#set_nx`. True if the key was missing or expired.
+* **cache:** `Alumna.cache` caches `find`. Query fingerprint in the key. Collection generation via `Cache#incr` on create/update/patch/remove. Old find keys expire by TTL. Attach `before` on `:read`.
+
+### Changed
+* **docs:** Store-neutral `Cache` is done (Unreleased). Official Redis shard (`alumna-redis`) implements `Cache`, `SessionStore`, and `RateLimitStore` (Unreleased). Not a Service adapter.
+
 ## 0.7.0 - 2026-09-08
 
 ### Added

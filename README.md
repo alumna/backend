@@ -66,6 +66,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [CORS](#cors)
     - [Logger](#logger)
     - [Rate Limiter](#rate-limiter)
+    - [Cache](#cache)
     - [Session](#session)
     - [JWT](#jwt)
 - [5. Server Configuration & Multi-threading](#5-server-configuration--multi-threading)
@@ -96,29 +97,17 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in active early development. The following core pieces are complete and tested:
+Alumna is in early development, but moving fast. The core is complete and tested: HTTP REST, the rule pipeline (`before`, `after`, `error`), schemas, queries, in-memory persistence, JSON, and MessagePack.
 
-- ✅ HTTP layer with RESTful routing and content negotiation
-- ✅ Rule pipeline with explicit `before`, `after`, and `error` phases
-- ✅ Deep schema validation with path-tracing for nested arrays/objects
-- ✅ Zero-allocation validation formats resolved at definition time
-- ✅ In-memory adapter implementing the full service interface
-- ✅ Official SQLite adapter with native JSON dot-notation querying
-- ✅ Official MongoDB adapter
-- ✅ JSON and MessagePack serialization
-- ✅ Rich `RuleContext` with safe, zero-allocation views for headers and params
-- ✅ Advanced query parsing (`$limit`, `$skip`, `$sort`, `$select`, `$in`, `$gt`, etc.)
-- ✅ Optional App query limit caps (`default_query_limit`, `max_query_limit`)
-- ✅ Safe multi-threading and graceful server shutdown
-- ✅ Cross-platform CI with full test coverage
-- ✅ Path normalization and duplicate-route protection
-- ✅ Strict request-body limits enforced on all IO entry points
-- ✅ Seamless, zero-serialization inter-service communication via `ctx.call`.
-- ✅ `provider` field on context dynamically resolving `"rest"` (TCP), `"local"` (Unix sockets), and `"internal"` (Service-to-Service).
-- ✅ Built-in session rule with a swappable `SessionStore` (in-memory store included)
-- ✅ Built-in JWT HS256 verification and encode helper
+Official database adapters:
+- [SQLite](https://github.com/alumna/sqlite)
+- [MongoDB](https://github.com/alumna/mongodb).
 
-See the [Roadmap](#roadmap) for what is coming next.
+Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate limit, and cache use store ports. In-memory stores ship in this repository.
+
+Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with [alumna-redis](https://github.com/alumna/redis).
+
+See [Roadmap](#roadmap) for WebSockets, NATS, PostgreSQL, and MySQL.
 
 ---
 
@@ -731,42 +720,166 @@ Logs in combined format using a monotonic clock to measure request duration corr
 
 ### Rate Limiter
 
+The simplest form is one line. One hundred requests per minute, counted by client IP:
+
 ```crystal
-before Alumna.rate_limit(limit: 100, window_seconds: 60)
+app.before Alumna.rate_limit(limit: 100, window_seconds: 60)
 ```
 
-- In-memory fixed-window limiter per key (defaults to client IP; override with `key: ->(ctx) { ... }`).
-- Uses a monotonic clock for expiry, so limits stay accurate across system clock changes.
-- Memory-bounded store: entries expire after their window and are pruned by an amortized in-request cleanup – no background fiber.
-- Sets `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`.
-- Returns `429 Too Many Requests` when exceeded.
-- Skips `OPTIONS` requests automatically.
+Each request ticks a counter. Under the limit, the request continues and the response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Over the limit, Alumna returns `429 Too Many Requests`. CORS `OPTIONS` preflights are skipped so they do not consume the budget.
+
+#### Count by something other than IP
+
+The default key is `ctx.remote_ip`. If you would rather count by user, or mix both, pass `key:`:
+
+```crystal
+app.before Alumna.rate_limit(
+  limit: 20,
+  window_seconds: 60,
+  key: ->(ctx : Alumna::RuleContext) {
+    ctx.store["user_id"]?.as?(String) || ctx.remote_ip
+  },
+)
+```
+
+#### Share a store
+
+That still uses an in-memory store local to this process. When two rules should share the same counters, build the store once and pass it in. `window_seconds` only applies when `store:` is omitted; here the window lives on the store:
+
+```crystal
+store = Alumna::MemoryRateLimitStore.new(60.seconds)
+app.before Alumna.rate_limit(limit: 100, store: store)
+app.before Alumna.rate_limit(limit: 10, store: store, key: ->(ctx : Alumna::RuleContext) { ctx.path })
+```
+
+#### Redis
+
+Several processes cannot share that memory store. Give them Redis from [`alumna-redis`](https://github.com/alumna/redis) and they share the same counters:
+
+```crystal
+require "alumna-redis"
+
+redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
+app.before Alumna.rate_limit(limit: 100, store: redis.rate_limit_store(60.seconds))
+```
+
+The memory store drops expired windows as requests come in. There is no background fiber. Expiry uses a monotonic clock so NTP jumps do not stretch the window; `X-RateLimit-Reset` is still wall-clock time for the client.
+
+### Cache
+
+You attach a rule to a service. That rule talks to a store. You keep thinking in records; the rule writes the data for you (JSON into the store).
+
+`MemoryCache` is one process. Several processes use Redis from [`alumna-redis`](https://github.com/alumna/redis). The rule is the same.
+
+Start with one service:
+
+```crystal
+cache = Alumna::MemoryCache.new
+rule = Alumna.cache(cache, ttl: 30.seconds)
+
+app.use "/posts", Alumna.memory(PostSchema) {
+  before rule, on: :read
+  after rule
+}
+```
+
+`before` on `:read` covers `get` and `find`. If the data is already in the store, the rule sets `ctx.result` and the adapter never runs. `after` keeps the store in sync: it writes on create/update/patch, deletes on remove, and fills a miss.
+
+#### Get
+
+Get is one record, keyed by path and id (`alumna:get:/posts:12`). Create puts it in the cache immediately, so the next GET does not touch the adapter:
+
+```
+POST   /posts           write the new id into the cache
+GET    /posts/12        hit (adapter skipped)
+PATCH  /posts/12        write the new body into the cache
+GET    /posts/12        hit with the new body
+DELETE /posts/12        delete the key
+GET    /posts/12        miss → adapter 404
+```
+
+If GET misses but the row exists, the adapter runs, then the rule stores the result with `set_nx`. That will not overwrite a key a concurrent write just saved.
+
+#### Find
+
+Find is a list, and lists are trickier. `GET /posts?status=draft` is not `GET /posts?status=published`. The rule hashes the query (filters, `$limit`, `$skip`, `$sort`, `$select`) so each distinct list has its own key.
+
+A POST would still make those lists stale if the key were only the hash. So the rule also keeps a generation per path (`alumna:fgen:/posts`). Every create, update, patch, and remove increments it. Find keys include that number:
+
+`alumna:find:{generation}:/posts:{query-hash}`
+
+After a write, new finds use the new generation. Old list keys sit until `ttl` ends. The rule never scans the store to delete them.
+
+`ttl` must be greater than 0. It is how long get keys and find lists live after a write. The generation key has no TTL on purpose: if it disappeared while old `find:0:…` keys were still around, those stale lists could look valid again.
+
+#### Internal calls
+
+By default `skip_providers:` is `["internal"]`. A `ctx.call` get or find skips the cache so a later step in the same request can see a fresh row. Internal writes still update get keys and bump the find generation.
+
+#### Redis
+
+Same attach on Redis (`before` on `:read`, `after`):
+
+```crystal
+require "alumna-redis"
+
+redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
+rule = Alumna.cache(redis.cache, ttl: 30.seconds)
+```
+
+Processes that share Redis share get results. They share find only if they also share the document store (two in-memory adapters each have their own rows).
+
+The store hands you a copy of the data. Changing that copy does not change the store; call `set` if you want to persist. `MemoryCache` expires on a monotonic clock and drops stale rows on `get`. No background fiber.
 
 ### Session
 
-Cookie session for browser apps. The cookie holds only an opaque id. Session data lives in a `SessionStore`. `MemorySessionStore` is for one process. A later Redis adapter can implement the same `get` / `set` / `delete` methods and drop in.
+The browser cookie is only an id. The data lives in a store. Start with memory, one process, login and logout:
 
 ```crystal
 store = Alumna::MemorySessionStore.new(ttl: 24.hours)
 sessions = Alumna::Session.new(store, secure: true)
 app.before sessions.rule
+```
 
-# In a login method. Optional ttl overrides the store default for this session only.
+In login, `start` writes the data and sets the cookie. In logout, `stop` deletes both. You can give one session a shorter life than the store default:
+
+```crystal
 sessions.start(ctx, Alumna.hash(user_id: id))
 sessions.start(ctx, Alumna.hash(user_id: id), ttl: 8.hours)
-
-# In logout:
 sessions.stop(ctx)
 ```
 
-`Alumna.session(store)` returns the same before-rule when you do not need start/stop on that object. Keep one `Session` instance when you set `cookie`, `secure`, or `same_site`, so login and the rule use the same flags.
+No cookie → `401` `"Missing session"`. Unknown or expired id → `401` `"Unauthorized"`. The deadline is set on `start` (or `set`) and does not move on each request.
 
-- Missing cookie → `401` `"Missing session"`. Unknown or expired id → `401` `"Unauthorized"`.
-- Absolute TTL from `start` / `set`. The store does not extend the deadline on each request.
-- Default skip of `internal` and `local`. Skips `OPTIONS`.
-- Cookie defaults: name `alumna.sid`, `HttpOnly`, `SameSite=Lax`, `Path=/`. Set `secure: true` on HTTPS.
-- `same_site: :none` requires `secure: true`.
-- `get`/`set` copy the data hash (shallow). Mutate then `set` to persist. This matches a remote store.
+#### Cookie flags
+
+Keep **one** `Session` object for the rule and for `start` / `stop`, so the cookie name and flags stay in sync. Defaults are `alumna.sid`, `HttpOnly`, `SameSite=Lax`, `Path=/`. Set `secure: true` on HTTPS. `same_site: :none` requires `secure: true`.
+
+If you only need the before-rule and will call `Alumna::Session.start(ctx, store, data)` yourself, `Alumna.session(store)` is enough. Prefer the instance as soon as you set `cookie`, `secure`, or `same_site`.
+
+#### Rotate
+
+`rotate` deletes the old id and starts a new one — useful after login or a privilege change:
+
+```crystal
+sessions.rotate(ctx, Alumna.hash(user_id: id, role: "admin"))
+```
+
+`internal` and `local` are skipped, as is `OPTIONS`. After HTTP has loaded the session, `ctx.call` does not need the cookie again.
+
+#### Redis
+
+Several processes share a store the same way as cache and rate limit:
+
+```crystal
+require "alumna-redis"
+
+redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
+sessions = Alumna::Session.new(redis.session_store(ttl: 24.hours), secure: true)
+app.before sessions.rule
+```
+
+`get` / `set` copy the top-level hash. Mutate it, then `set` (or `start`) to persist. That matches a remote store.
 
 ### JWT
 
@@ -1010,9 +1123,9 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Next work is Redis, WebSockets, and NATS.io.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports ship in Unreleased. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore` (Unreleased). WebSockets and NATS.io remain.
 
-- **v0.8 - Horizontal Caching:** Extracting internal rate-limiting storage interfaces to support an official **Redis** adapter. This will enable distributed rate-limiting and transparent query caching with auto-invalidation.
+- **v0.8 - Horizontal Caching:** Backend ports: `RateLimitStore`, `Cache`, `MemoryCache`, and `Alumna.cache` (`get` and `find`). Official Redis shard (`alumna-redis`): `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore` done (Unreleased). It is not a Service adapter.
 - **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
 - **v0.10 - Event Bus & NATS:** Introducing bulletproof `after_commit` hooks and official **NATS.io** integration. This allows horizontally scaled Alumna instances to publish data mutations statelessly and fan-out real-time events to connected WebSocket clients.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.

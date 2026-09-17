@@ -5,6 +5,7 @@ end
 # Core enums and primitives - no dependencies
 require "./core/types"
 require "./core/json_helper"
+require "./cache"
 require "./service/method"
 require "./rule/phase"
 require "./service/error"
@@ -42,6 +43,7 @@ require "./rule/builtin/logger"
 require "./rule/builtin/timestamp"
 require "./rule/builtin/session"
 require "./rule/builtin/jwt"
+require "./rule/builtin/cache"
 
 # Full implementations - these reopen the forward-declared classes
 require "./app"
