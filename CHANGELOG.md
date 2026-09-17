@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.8.0 - 2026-09-17
 
 ### Added
 * **rate_limit:** Public `Alumna::RateLimitStore` interface and `Alumna::MemoryRateLimitStore`. `Alumna.rate_limit` takes `store:`. Default store stays in-memory. `window_seconds` sets the memory store window when `store:` is omitted.
