@@ -72,6 +72,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [5. Server Configuration & Multi-threading](#5-server-configuration--multi-threading)
     - [Multi-threading and Workers](#multi-threading-and-workers)
     - [Unix Sockets & Local Providers](#unix-sockets--local-providers)
+    - [WebSockets](#websockets)
     - [Graceful Shutdown](#graceful-shutdown)
     - [Trusted Proxies](#trusted-proxies)
 - [Developer Experience](#developer-experience)
@@ -105,9 +106,10 @@ Official database adapters:
 
 Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate limit, and cache use store ports. In-memory stores ship in this repository.
 
-Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with [alumna-redis](https://github.com/alumna/redis).
+Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
+- [Alumna Redis](https://github.com/alumna/redis).
 
-See [Roadmap](#roadmap) for WebSockets, NATS, PostgreSQL, and MySQL.
+Native WebSockets landed. See [Roadmap](#roadmap) for NATS, PostgreSQL, and MySQL.
 
 ---
 
@@ -953,9 +955,27 @@ Authenticate = Alumna::Rule.new do |ctx|
 end
 ```
 
+### WebSockets
+
+The same HTTP server accepts `Upgrade: websocket`. `ctx.provider` is `"websocket"`. Handshake headers (Cookie, Authorization) are copied onto every frame. One `ctx.store` Hash lasts for the life of the socket.
+
+JSON frames use the same services as REST:
+
+```json
+{"id":"1","method":"find","path":"/posts","params":{"$limit":10}}
+{"id":"2","method":"get","path":"/posts","resource_id":"12"}
+{"id":"3","method":"create","path":"/posts","data":{"title":"Hi"}}
+```
+
+`method` is `find`, `get`, `create`, `update`, `patch`, or `remove`. The reply has the same `id` and either `result` or `error` (`message`, `status`, optional `details`).
+
+`App#connections` is `MemoryConnections`. Each socket has a `connection_id` in `ctx.store`. Use `send(id, payload)` for one socket. Use `watch` / `unwatch` / `send_topic` for a local topic. Delivery is this process only. Cross-process fan-out is NATS (later).
+
+The frame size cap is `app.max_body_size` (default 1 MiB). An oversize frame returns status 413.
+
 ### Graceful Shutdown
 
-Alumna safely traps `SIGINT` (Ctrl+C) and `SIGTERM`. When a shutdown signal is received, the server immediately stops accepting new connections but allows active requests to finish processing. 
+Alumna safely traps `SIGINT` (Ctrl+C) and `SIGTERM`. When a shutdown signal is received, the server immediately stops accepting new connections but allows active HTTP requests to finish processing. Open WebSockets are closed first. They are not counted as active HTTP requests.
 
 You can configure the maximum wait time using `shutdown_timeout` (defaults to 10 seconds). Once the timeout is reached, the server force-quits to prevent hanging indefinitely.
 
@@ -1096,6 +1116,21 @@ describe "User API" do
 end
 ```
 
+### Testing WebSockets
+
+Use `SocketClient` to run JSON frames through `App#dispatch` in memory. No `listen`.
+
+```crystal
+require "alumna/testing"
+
+app = Alumna::App.new
+app.use("/posts", Alumna.memory)
+client = Alumna::Testing::SocketClient.new(app)
+reply = client.call("create", "/posts", data: Alumna.hash(title: "Hi"))
+reply["result"].as(Hash)["title"].should eq("Hi")
+client.close
+```
+
 ### Testing Adapters
 
 `Alumna::Testing::AdapterSuite.run` runs the same CRUD, query, and concurrency specs that `MemoryAdapter` uses. The factory block runs inside every example. Yield a fresh adapter each time (empty table or collection).
@@ -1123,10 +1158,8 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports ship in Unreleased. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore` (Unreleased). WebSockets and NATS.io remain.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. NATS.io remains.
 
-- **v0.8 - Horizontal Caching:** Backend ports: `RateLimitStore`, `Cache`, `MemoryCache`, and `Alumna.cache` (`get` and `find`). Official Redis shard (`alumna-redis`): `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore` done (Unreleased). It is not a Service adapter.
-- **v0.9 - Real-time WebSockets:** Native WebSocket transport inside the Alumna router. Connections will dynamically set `ctx.provider = "websocket"` and maintain persistent authentication state across message frames, routing seamlessly through standard Services and Rules.
 - **v0.10 - Event Bus & NATS:** Introducing bulletproof `after_commit` hooks and official **NATS.io** integration. This allows horizontally scaled Alumna instances to publish data mutations statelessly and fan-out real-time events to connected WebSocket clients.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 

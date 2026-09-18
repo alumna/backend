@@ -45,6 +45,10 @@ require "./rule/builtin/session"
 require "./rule/builtin/jwt"
 require "./rule/builtin/cache"
 
+# Local socket table (this process only). App holds one instance.
+require "./connections"
+require "./connections/memory"
+
 # Full implementations - these reopen the forward-declared classes
 require "./app"
 require "./service/base"

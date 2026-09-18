@@ -1,5 +1,6 @@
 require "../spec_helper"
 require "http/client"
+require "http/web_socket"
 require "socket"
 
 private def wait_for_port(host : String, port : Int32, timeout : Time::Span = 5.seconds)
@@ -181,6 +182,17 @@ describe "App#close and graceful shutdown" do
       # 4. Clean up: wait for the sleeping request to finish so we don't leak
       # background fibers into other tests.
       request_finished.receive
+    end
+
+    it "closes WebSocket connections on App#close" do
+      app = Alumna::App.new
+      app.use("/items", Alumna.memory)
+      port = 34640
+      spawn { app.listen(port, host: "127.0.0.1", trap_signals: false) }
+      wait_for_port("127.0.0.1", port)
+      ws = HTTP::WebSocket.new("127.0.0.1", "/", port)
+      app.close
+      ws.receive?.should be_nil
     end
   end
 
