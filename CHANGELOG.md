@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.9.0 - 2026-09-18
 
 ### Added
 * **http:** Native WebSocket upgrade on the same HTTP server. A valid handshake returns 101. A bad handshake returns JSON `ServiceError` (400 or 426). REST is unchanged. The session `provider` is `"websocket"`.
