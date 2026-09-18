@@ -3,7 +3,7 @@
 This document outlines the strategic roadmap for the Alumna Backend framework leading up to v1.0. 
 
 **Context & Direction:** 
-The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache and rate-limit ports are Unreleased. Next focus is the official Redis shard, real-time WebSockets, and event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
+The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache, rate-limit ports, Redis shard, and native WebSockets are released in v0.8.0. Next focus is event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
 
 Every phase below includes not just *what* needs to be built, but the *rationale* behind how it must integrate with Alumna's strict, zero-allocation, 100% test-coverage philosophy.
 
@@ -92,15 +92,20 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 
 ## Phase 4: Real-time Transports (v0.9)
 *Goal: Enable bi-directional communication leveraging Crystal's lightweight fibers.*
+**Status:** done
 
 ### 4.1 Native WebSockets
-*   **The Solution:** Upgrade the HTTP Router to natively detect and negotiate WebSocket (`ws://` / `wss://`) connections. 
-*   **Integration:** When a connection is established via WebSocket, the router will dynamically set `ctx.provider = "websocket"`.
+**Status:** done
+
+*   **The Solution:** Upgrade the HTTP Router to natively detect and negotiate WebSocket (`ws://` / `wss://`) connections. JSON frames call `App#dispatch` on the same services as REST.
+*   **Integration:** When a connection is established via WebSocket, the router sets `ctx.provider = "websocket"`. Handshake headers are copied onto every frame.
 *   **Rationale:** Real-time applications require push semantics. Alumna's pipeline and rule architecture is already agnostic to the transport layer. A WebSocket connection will route payloads through the exact same Services and Schemas as HTTP REST.
 
 ### 4.2 Stateful Connections
-*   **The Solution:** Allow the framework to persist a connection's state (specifically the `ctx.store`) across multiple WebSocket frames.
-*   **Rationale:** If a user authenticates on connection, their `User` object is saved to the store. Subsequent messages sent over that WebSocket should not need to undergo JWT parsing or database lookups again; the pipeline should inherit the stateful store.
+**Status:** done
+
+*   **The Solution:** Persist `ctx.store` across WebSocket frames. `App#connections` (`MemoryConnections`) can send to one id or a local topic. Delivery is this process only.
+*   **Rationale:** If a user authenticates on connection, their `User` object is saved to the store. Subsequent messages sent over that WebSocket should not need to undergo JWT parsing or database lookups again; the pipeline should inherit the stateful store. Cross-process fan-out is Phase 5.2.
 
 ---
 

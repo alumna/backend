@@ -1,6 +1,7 @@
 require "http/server"
 require "./router/*"
 require "./serializers"
+require "./websocket"
 
 module Alumna
   module Http
@@ -28,6 +29,11 @@ module Alumna
       def handle(http_ctx : HTTP::Server::Context) : Nil
         request = http_ctx.request
         response = http_ctx.response
+
+        if Http.websocket_upgrade?(request)
+          Http.accept_websocket(http_ctx, app: @app, remote_ip: remote_ip(http_ctx))
+          return
+        end
 
         input_serializer = resolve_input_serializer(request) || @app.serializer
         output_serializer = resolve_output_serializer(request) || input_serializer
@@ -72,31 +78,7 @@ module Alumna
       end
 
       private def resolve_service(path : String) : {Service, String?}?
-        # treat /items and /items/ as identical
-        path = path == "/" ? path : path.chomp('/')
-
-        # 1) exact match – find/create – single hash lookup, no allocations
-        if service = @services[path]?
-          return {service, nil}
-        end
-
-        # 2) must be /base/id – find the first '/' after the leading one
-        # index('/', 1) is cheaper than rindex and tells us the base length
-        sep = path.index('/', 1)
-        return nil unless sep
-
-        # 3) reject /base/id/extra in the same scan – no id.includes?('/')
-        return nil if path.index('/', sep + 1)
-
-        # 4) only now allocate the base string and do the second hash lookup
-        base = path[0...sep]
-        service = @services[base]?
-        return nil unless service
-
-        # 5) id is the tail – we already know it's non-empty and has no '/'
-        id = path[sep + 1..]
-        return nil if id.empty?
-        {service, id}
+        Http.resolve_mounted_service(@services, path)
       end
 
       private def resolve_method(http_verb : String, id : String?) : ServiceMethod?

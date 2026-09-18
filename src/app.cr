@@ -9,6 +9,8 @@ module Alumna
     getter serializer : Http::Serializer
     getter services : Hash(String, Service)
     getter active_requests : Atomic(Int32)
+    # Local sockets. Not a bus. Default is in-process MemoryConnections.
+    property connections : Connections
 
     property max_body_size : Int64 = 1_048_576
 
@@ -27,6 +29,7 @@ module Alumna
       @pipeline_mutex = Sync::Mutex.new
       @active_requests = Atomic(Int32).new(0)
       @server = nil
+      @connections = MemoryConnections.new
     end
 
     # Negative is a config error, not a per-request 400.
@@ -45,6 +48,7 @@ module Alumna
     end
 
     def close : Nil
+      @connections.close_all
       @server.try(&.close)
     end
 

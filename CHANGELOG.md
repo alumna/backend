@@ -1,5 +1,15 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **http:** Native WebSocket upgrade on the same HTTP server. A valid handshake returns 101. A bad handshake returns JSON `ServiceError` (400 or 426). REST is unchanged. The session `provider` is `"websocket"`.
+* **http:** WebSocket JSON frames call `App#dispatch` on the same services as REST. Each frame has `id`, `method`, `path`, optional `resource_id`, `data`, and `params`. The reply has the same `id` and either `result` or `error`. Bad JSON and unknown methods return an error object. The handler does not raise.
+* **http:** One `ctx.store` Hash per WebSocket. A value set on one frame is visible on the next frame. Session and JWT rules can keep claims on the socket.
+* **connections:** `Alumna::Connections` and `Alumna::MemoryConnections`. Register and unregister sockets on this process. `send(id, payload)` pushes to one socket. `watch` / `unwatch` / `send_topic` push to every local socket on a topic. `close_all` closes sockets. Default on `App#connections`. Each WebSocket gets a `connection_id` in `ctx.store`.
+* **http:** WebSocket frame size uses `app.max_body_size`. Oversize frames return 413. `App#close` closes WebSockets, then the HTTP server.
+* **testing:** `Alumna::Testing::SocketClient` runs JSON frames in memory. No `listen`.
+
 ## 0.8.0 - 2026-09-17
 
 ### Added
