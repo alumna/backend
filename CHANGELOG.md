@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## 0.9.0 - 2026-09-18
+## 0.9.1 - 2026-09-19
 
 ### Added
 * **rules:** `RulePhase::AfterCommit` and `after_commit` on App and Service. Same `Rule` type and `on:` as `after`. `App#dispatch` runs AfterCommit after a successful After pipeline, only if the service method ran. A cache hit or a before-rule that set `ctx.result` skips AfterCommit. After still runs. A successful `remove` (nil result) runs AfterCommit. Order is service then app. AfterCommit `ServiceError` or an uncaught Exception uses the error pipeline. AfterCommit runs for every `ctx.provider`. `ctx.call` from AfterCommit is allowed.
