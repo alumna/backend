@@ -5,12 +5,14 @@ module Alumna
     # Eager, non-nilable storage - each App/Service gets its own hashes
     @before_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
     @after_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
+    @after_commit_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
     @error_rules = Hash(ServiceMethod, Array(Rule)).new { |h, k| h[k] = [] of Rule }
 
     # Explicit method sets - used at boot time only, no runtime cost
-    READ_METHODS  = [ServiceMethod::Find, ServiceMethod::Get]
-    WRITE_METHODS = [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch]
-    ALL_METHODS   = ServiceMethod.values.reject(&.options?)
+    READ_METHODS   = [ServiceMethod::Find, ServiceMethod::Get]
+    WRITE_METHODS  = [ServiceMethod::Create, ServiceMethod::Update, ServiceMethod::Patch]
+    MUTATE_METHODS = WRITE_METHODS + [ServiceMethod::Remove]
+    ALL_METHODS    = ServiceMethod.values.reject(&.options?)
 
     def freeze_rules!
       @frozen.set(true)
@@ -44,6 +46,16 @@ module Alumna
       after(block, on: on)
     end
 
+    def after_commit(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      ensure_not_frozen!
+      register_rule(RulePhase::AfterCommit, rule, on)
+      self
+    end
+
+    def after_commit(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
+      after_commit(block, on: on)
+    end
+
     def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
       register_rule(RulePhase::Error, rule, on)
@@ -57,17 +69,19 @@ module Alumna
     # ---- internals ----
     def collect_rules(method : ServiceMethod, phase : RulePhase) : Array(Rule)
       case phase
-      in RulePhase::Before then @before_rules[method]
-      in RulePhase::After  then @after_rules[method]
-      in RulePhase::Error  then @error_rules[method]
+      in RulePhase::Before      then @before_rules[method]
+      in RulePhase::After       then @after_rules[method]
+      in RulePhase::AfterCommit then @after_commit_rules[method]
+      in RulePhase::Error       then @error_rules[method]
       end
     end
 
     private def register_rule(phase : RulePhase, rule : Rule, on)
       target = case phase
-               in RulePhase::Before then @before_rules
-               in RulePhase::After  then @after_rules
-               in RulePhase::Error  then @error_rules
+               in RulePhase::Before      then @before_rules
+               in RulePhase::After       then @after_rules
+               in RulePhase::AfterCommit then @after_commit_rules
+               in RulePhase::Error       then @error_rules
                end
 
       expand_on(on).each { |m| target[m] << rule }
@@ -81,6 +95,7 @@ module Alumna
         when ServiceMethod then return [on]
         when :read         then return READ_METHODS
         when :write        then return WRITE_METHODS
+        when :mutate       then return MUTATE_METHODS
         when :all          then return ALL_METHODS
         when Symbol        then return [ServiceMethod.parse(on.to_s)]
         else                    return [] of ServiceMethod
@@ -92,6 +107,7 @@ module Alumna
         when ServiceMethod then [item]
         when :read         then READ_METHODS
         when :write        then WRITE_METHODS
+        when :mutate       then MUTATE_METHODS
         when :all          then ALL_METHODS
         when Symbol        then [ServiceMethod.parse(item.to_s)]
         else                    [] of ServiceMethod

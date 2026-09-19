@@ -19,5 +19,10 @@ module Alumna
     def write? : Bool
       create? || update? || patch?
     end
+
+    # Create, update, patch, and remove. `:write` does not include remove.
+    def mutate? : Bool
+      write? || remove?
+    end
   end
 end
