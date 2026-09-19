@@ -3,6 +3,16 @@
 ## Unreleased
 
 ### Added
+* **rules:** `RulePhase::AfterCommit` and `after_commit` on App and Service. Same `Rule` type and `on:` as `after`. `App#dispatch` runs AfterCommit after a successful After pipeline, only if the service method ran. A cache hit or a before-rule that set `ctx.result` skips AfterCommit. After still runs. A successful `remove` (nil result) runs AfterCommit. Order is service then app. AfterCommit `ServiceError` or an uncaught Exception uses the error pipeline. AfterCommit runs for every `ctx.provider`. `ctx.call` from AfterCommit is allowed.
+* **rules:** `on: :mutate` expands to create, update, patch, and remove. `on: :write` does not change (create, update, patch; not remove).
+* **service:** `ServiceMethod#mutate?` is true for create, update, patch, and remove.
+
+### Changed
+* **docs:** README documents four rule phases, `on: :mutate`, AfterCommit errors after a durable write, and the Mongo `#transaction` caveat. ROADMAP 5.1 is done. ROADMAP 5.2 stays open.
+
+## 0.9.0 - 2026-09-18
+
+### Added
 * **http:** Native WebSocket upgrade on the same HTTP server. A valid handshake returns 101. A bad handshake returns JSON `ServiceError` (400 or 426). REST is unchanged. The session `provider` is `"websocket"`.
 * **http:** WebSocket JSON frames call `App#dispatch` on the same services as REST. Each frame has `id`, `method`, `path`, optional `resource_id`, `data`, and `params`. The reply has the same `id` and either `result` or `error`. Bad JSON and unknown methods return an error object. The handler does not raise.
 * **http:** One `ctx.store` Hash per WebSocket. A value set on one frame is visible on the next frame. Session and JWT rules can keep claims on the socket.

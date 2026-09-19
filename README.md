@@ -57,6 +57,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
 - [3. Rules](#3-rules)
     - [Defining Rules](#defining-rules)
     - [Execution Order & Hooks](#execution-order--hooks)
+    - [After commit](#after-commit)
     - [Targeting Methods with `on:`](#targeting-methods-with-on)
     - [The Rule Context](#the-rule-context)
     - [Headers, Params, and Views](#headers-params-and-views)
@@ -98,7 +99,7 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in early development, but moving fast. The core is complete and tested: HTTP REST, the rule pipeline (`before`, `after`, `error`), schemas, queries, in-memory persistence, JSON, and MessagePack.
+Alumna is in early development, but moving fast. The core is complete and tested: HTTP REST, the rule pipeline (`before`, `after`, `after_commit`, `error`), schemas, queries, in-memory persistence, JSON, and MessagePack.
 
 Official database adapters:
 - [SQLite](https://github.com/alumna/sqlite)
@@ -109,7 +110,7 @@ Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate 
 Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
 - [Alumna Redis](https://github.com/alumna/redis).
 
-Native WebSockets landed. See [Roadmap](#roadmap) for NATS, PostgreSQL, and MySQL.
+Native WebSockets landed. The `after_commit` hook is available. See [Roadmap](#roadmap) for NATS WebSocket fan-out, PostgreSQL, and MySQL.
 
 ---
 
@@ -545,12 +546,13 @@ Both compile to the same `Proc`. The block form runs once at boot with the servi
 
 ### Execution Order & Hooks
 
-Rules can be attached to the Application (global) or a specific Service. They are hooked into three phases:
+Rules can be attached to the Application (global) or a specific Service. They are hooked into four phases:
 
 ```crystal
-before rule, on: :write  # runs before the service method
-after  rule, on: :all    # runs after a successful service method
-error  rule              # runs if an error occurs anywhere
+before       rule, on: :write   # runs before the service method
+after        rule, on: :all     # runs after success (also on a cache hit)
+after_commit rule, on: :mutate  # after the after phase, only if the method ran
+error        rule               # runs if an error occurs anywhere
 ```
 
 **Pipeline Execution Sequence:**
@@ -559,12 +561,48 @@ error  rule              # runs if an error occurs anywhere
 3. **service method** (`find`, `get`, etc.) - *skipped if a before-rule sets `ctx.result`*
 4. `service.after` rules
 5. `app.after` rules
+6. `service.after_commit` rules — *only if the service method ran*
+7. `app.after_commit` rules
 
 If *any* rule or method returns a `ServiceError`, the pipeline jumps immediately to the error phase:
-6. `service.error` rules
-7. `app.error` rules
+8. `service.error` rules
+9. `app.error` rules
 
-After-rules always run when there is no error, even if a before-rule short-circuited the service method. Error-rules always run when there is an error, even if it occurred in a before-rule. This makes logging, metrics, and response headers reliable for both success and failure paths.
+After-rules always run when there is no error, even if a before-rule short-circuited the service method. After-commit rules do not run on that shortcut. They also do not run if before, the method, or after went to the error phase. A successful `remove` (nil result, HTTP 204) still runs after-commit, because the method ran.
+
+Error-rules always run when there is an error, even if it occurred in a before-rule. This makes logging, metrics, and response headers reliable for both success and failure paths.
+
+### After commit
+
+`after_commit` uses the same `Rule` type as `after`. Register it on App or Service. Use it for work that must not run on a cache hit. For example, publish after a write.
+
+```crystal
+app.after_commit on: :mutate do |ctx|
+  # The service method already returned. Typical adapters autocommit in the method.
+  nil
+end
+```
+
+**When it runs**
+
+- After a successful `after` pipeline.
+- Only if the service method ran (`Service#call_method`).
+- A successful `remove` (nil result, HTTP 204) still runs it.
+- A cache hit or a before-rule that set `ctx.result` skips it. `after` still runs.
+- It does not run if before, the method, or after went to the error phase.
+- Order is service then app.
+- It runs for every `ctx.provider` (`rest`, `websocket`, `local`, `internal`).
+- An `after_commit` rule may call `ctx.call`. Nested dispatch has its own `after_commit`.
+
+**Errors after a durable write**
+
+If an `after_commit` rule returns `ServiceError` or raises an uncaught `Exception`, `dispatch` runs the error pipeline. The client sees an error. The adapter write already completed. Alumna does not roll it back.
+
+**Mongo `#transaction`**
+
+There is no request transaction around `dispatch`. Official MongoDB `MongoAdapter#transaction` wraps adapter CRUD on that fiber, not `App#dispatch`. If you open `#transaction` and then call `dispatch` or `ctx.call` on the same fiber, `after` and `after_commit` still run before that block commits. In that case, publish after the block.
+
+Cache fill, write-through, and the logger stay on `before` and `after`. Do not register those built-in rules on `after_commit`.
 
 > **Note:** `options` HTTP calls (CORS preflights) are excluded from default `:all` scopes. To run a rule on an OPTIONS request, you must explicitly pass `on: :options`.
 
@@ -578,10 +616,13 @@ After-rules always run when there is no error, even if a before-rule short-circu
 - a symbol: `on: :create`, `on: :patch`
 - an array: `on: [:find, :get]`
 - a shorthand:
-  - `:read`  → `find`, `get`
-  - `:write` → `create`, `update`, `patch` (not `remove`)
-  - `:all`   → all methods *except* `options`
+  - `:read`   → `find`, `get`
+  - `:write`  → `create`, `update`, `patch` (not `remove`)
+  - `:mutate` → `create`, `update`, `patch`, `remove`
+  - `:all`    → all methods *except* `options`
 - omit `on:` → same as `:all`
+
+Use `on: :mutate` for `after_commit` when the rule must run on create, update, patch, and remove. `:write` does not include `remove`.
 
 `options` is excluded by design since it's reserved for CORS preflights. If you need a rule to run on preflights, be explicit:
 
@@ -597,7 +638,7 @@ before Alumna.cors(origins: ["*"]), on: :options
 | `ctx.method` | The current enum method (`Find`, `Create`, etc.) |
 | `ctx.http_method` | The raw HTTP verb (`GET`, `POST`, etc.) |
 | `ctx.remote_ip` | Client IP (supports trusted proxy chains) |
-| `ctx.provider` | **Read-Only** The request source: `"rest"` (TCP/HTTP), `"local"` (Unix socket), or `"internal"` (via `ctx.call`). |
+| `ctx.provider` | **Read-Only** The request source: `"rest"` (TCP/HTTP), `"local"` (Unix socket), `"websocket"`, or `"internal"` (via `ctx.call`). |
 | `ctx.id` | **Read-Only** URL ID of the targeted resource. |
 | `ctx.params` / `ctx.headers`| Zero-allocation views of the request |
 | `ctx.data` | The parsed request body |
@@ -1158,9 +1199,9 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. NATS.io remains.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. NATS.io WebSocket fan-out remains.
 
-- **v0.10 - Event Bus & NATS:** Introducing bulletproof `after_commit` hooks and official **NATS.io** integration. This allows horizontally scaled Alumna instances to publish data mutations statelessly and fan-out real-time events to connected WebSocket clients.
+- **v0.10 - Event Bus & NATS:** Official **NATS.io** integration. Horizontally scaled Alumna instances can publish data mutations and fan-out real-time events to connected WebSocket clients. Use `after_commit` for that publish. Cross-process fan-out is not in this tree yet.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---
@@ -1168,7 +1209,7 @@ Alumna is prioritized for high-availability and real-time distributed platforms.
 ## Design Decisions and Trade-offs
 
 **Why rules instead of middleware?** 
-Middleware in most frameworks is a general-purpose mechanism with implicit ordering and no declared intent. A rule has an explicit phase (`before`, `after`, or `error`), an explicit target (all methods or a named subset), and a contract that returns a typed result. The intent is visible directly from the registration site.
+Middleware in most frameworks is a general-purpose mechanism with implicit ordering and no declared intent. A rule has an explicit phase (`before`, `after`, `after_commit`, or `error`), an explicit target (all methods or a named subset), and a contract that returns a typed result. The intent is visible directly from the registration site.
 
 **Why no resolvers?** 
 FeathersJS resolvers automatically transform the result payload based on context. Alumna omits them in favour of explicit `after` rules that transform `ctx.result` directly. This is slightly more code in trivial cases but significantly easier to debug.

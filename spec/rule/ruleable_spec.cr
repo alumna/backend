@@ -130,6 +130,45 @@ describe Alumna::Ruleable do
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(0)
   end
 
+  it "registers after_commit rules" do
+    r = DummyRuleable.new.after_commit(rule)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Options, Alumna::RulePhase::AfterCommit).size.should eq(0)
+  end
+
+  it "registers after_commit via block form with on: :mutate" do
+    r = DummyRuleable.new.after_commit(on: :mutate) { |_ctx| nil }
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Update, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Patch, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::AfterCommit).size.should eq(0)
+    r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::AfterCommit).size.should eq(0)
+  end
+
+  it "expands :mutate in an array and leaves :write unchanged" do
+    r = DummyRuleable.new.after_commit(rule, on: [:mutate])
+    r.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::AfterCommit).size.should eq(0)
+
+    w = DummyRuleable.new.after(rule, on: [:write, :remove])
+    w.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After).size.should eq(1)
+    w.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::After).size.should eq(1)
+    w.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(0)
+  end
+
+  it "accepts a single enum for after_commit" do
+    r = DummyRuleable.new
+    r.after_commit(rule, on: Alumna::ServiceMethod::Remove)
+    r.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::AfterCommit).size.should eq(1)
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::AfterCommit).size.should eq(0)
+  end
+
+  it "returns self for after_commit chaining" do
+    r = DummyRuleable.new
+    (r.after_commit(rule).after(rule)).should be(r)
+  end
+
   it "registers error rules via block form with on: :read" do
     r = DummyRuleable.new.error(on: :read) { |_ctx| nil }
     r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
@@ -142,6 +181,14 @@ describe Alumna::Ruleable do
     r.freeze_rules!
     expect_raises(Exception, "Cannot register rules after pipelines are compiled") do
       r.before { |_ctx| nil }
+    end
+  end
+
+  it "raises when registering after_commit after freeze_rules!" do
+    r = DummyRuleable.new
+    r.freeze_rules!
+    expect_raises(Exception, "Cannot register rules after pipelines are compiled") do
+      r.after_commit { |_ctx| nil }
     end
   end
 end
