@@ -3,7 +3,7 @@
 This document outlines the strategic roadmap for the Alumna Backend framework leading up to v1.0. 
 
 **Context & Direction:** 
-The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache, rate-limit ports, Redis shard, and native WebSockets are released in v0.8.0. Next focus is event-driven architecture via NATS.io. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
+The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache, rate-limit ports, Redis shard, and native WebSockets are released. The `after_commit` hook is in this tree. Next focus is NATS.io WebSocket fan-out (5.2). Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
 
 Every phase below includes not just *what* needs to be built, but the *rationale* behind how it must integrate with Alumna's strict, zero-allocation, 100% test-coverage philosophy.
 
@@ -111,13 +111,21 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 
 ## Phase 5: Event Bus & Messaging (v0.10)
 *Goal: Reactive architecture across horizontally scaled instances.*
+**Status:** 5.1 done. 5.2 open.
 
 ### 5.1 The `after_commit` Hook
-*   **The Problem:** Currently, the `after` hook runs immediately after the service method. If we introduce database transactions in the future, emitting an event in an `after` hook could result in a false positive if the transaction subsequently rolls back.
-*   **The Solution:** Introduce a distinct `after_commit` hook phase (or an event-bus specific hook).
-*   **Rationale:** We need a bulletproof guarantee that an event is only broadcasted to the system *if and only if* the data is permanently persisted.
+**Status:** done
+
+*   **The Problem:** The `after` hook runs immediately after the service method. If a later transaction rolls back, an event from `after` is incorrect.
+*   **The Solution:** Distinct `RulePhase::AfterCommit` and `after_commit` on App and Service. Same `Rule` type and `on:` as `after`. `App#dispatch` runs AfterCommit after a successful After pipeline, only if the service method ran. A cache hit or a before-rule that set `ctx.result` skips it. A successful `remove` still runs it. Order is service then app. `on: :mutate` is create, update, patch, and remove. Cache and logger stay on After.
+*   **Commit in this version:** The adapter already returned from the service method (typical autocommit). There is no request transaction around `dispatch`. There is no `MongoAdapter#transaction` hook.
+*   **Errors:** AfterCommit `ServiceError` or an uncaught Exception uses the error pipeline. The write already happened. The client sees an error.
+*   **Mongo `#transaction`:** That API wraps adapter CRUD on the fiber. If `dispatch` or `ctx.call` runs inside the block, AfterCommit still runs before the block commits. Those apps publish after the block.
+*   **Rationale:** Apps that autocommit in the method can publish from `after_commit` without a cache-hit event. A later request-scoped transaction can wrap method + After. AfterCommit stays after that commit.
 
 ### 5.2 NATS.io Integration & WebSocket Fan-out
+**Status:** open
+
 *   **The Solution:** Build official integration with NATS.io to publish successful mutations (`created`, `updated`, `patched`, `removed`).
 *   **Rationale:** In a scaled deployment, Instance A might process a `PATCH /posts/1` request. Instance B might hold the active WebSocket connection for the user viewing that post. Instance A publishes the mutation to NATS; Instance B subscribes to NATS, receives the mutation, and pushes the payload directly down the WebSocket to the client. This achieves stateless, horizontally scaled real-time sync.
 

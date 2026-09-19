@@ -23,6 +23,11 @@ private class TrackedService < Alumna::MemoryAdapter
     @called << "update"
     super
   end
+
+  def remove(ctx : Alumna::RuleContext) : Nil | Alumna::ServiceError
+    @called << "remove"
+    super
+  end
 end
 
 private def dispatch(service, method, id = nil, data = {} of String => Alumna::AnyData, app = nil)
@@ -365,6 +370,163 @@ describe "Dispatch" do
       service.after(continuing_rule(log, "after"))
       dispatch(service, Alumna::ServiceMethod::Update, "999", {"x" => "y"} of String => Alumna::AnyData)
       log.should be_empty
+    end
+  end
+
+  describe "after_commit" do
+    it "runs service then app after_commit after after" do
+      log = [] of String
+      app = Alumna::App.new
+      svc = TrackedService.new
+      app.after(Alumna::Rule.new { log << "app-after"; nil })
+      app.after_commit(Alumna::Rule.new { log << "app-ac"; nil })
+      svc.after(Alumna::Rule.new { log << "svc-after"; nil })
+      svc.after_commit(Alumna::Rule.new { log << "svc-ac"; nil })
+      app.use("/ordered", svc)
+
+      ctx = Alumna::Testing.build_ctx(app: app, service: svc, path: "/ordered", method: Alumna::ServiceMethod::Find)
+      app.dispatch(svc, ctx)
+
+      log.should eq(["svc-after", "app-after", "svc-ac", "app-ac"])
+      ctx.phase.should eq(Alumna::RulePhase::AfterCommit)
+      ctx.error.should be_nil
+    end
+
+    it "skips after_commit when a before-rule sets ctx.result" do
+      log = [] of String
+      service = TrackedService.new
+      service.before(result_setting_rule("cached"))
+      service.after(continuing_rule(log, "after"))
+      service.after_commit(continuing_rule(log, "ac"))
+      dispatch(service, Alumna::ServiceMethod::Find)
+      log.should eq(["after"])
+      service.called.should be_empty
+    end
+
+    it "skips after_commit when before stops" do
+      log = [] of String
+      service = TrackedService.new
+      service.before(stopping_rule("blocked"))
+      service.after_commit(continuing_rule(log, "ac"))
+      dispatch(service, Alumna::ServiceMethod::Find)
+      log.should be_empty
+    end
+
+    it "skips after_commit when the service method returns a ServiceError" do
+      log = [] of String
+      service = TrackedService.new
+      service.after_commit(continuing_rule(log, "ac"))
+      dispatch(service, Alumna::ServiceMethod::Update, "999", {"x" => "y"} of String => Alumna::AnyData)
+      log.should be_empty
+    end
+
+    it "skips after_commit when after returns a ServiceError" do
+      log = [] of String
+      service = TrackedService.new
+      service.after(stopping_rule("after-fail"))
+      service.after_commit(continuing_rule(log, "ac"))
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+      log.should be_empty
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+
+    it "runs after_commit on a successful remove with a nil result" do
+      log = [] of String
+      service = TrackedService.new
+      service.after_commit(continuing_rule(log, "ac"), on: :mutate)
+      created = dispatch(service, Alumna::ServiceMethod::Create, nil, {"x" => "y"} of String => Alumna::AnyData)
+      id = created.result.as(Hash(String, Alumna::AnyData))["id"].as(String)
+      log.clear
+      ctx = dispatch(service, Alumna::ServiceMethod::Remove, id)
+      log.should eq(["ac"])
+      service.called.should contain("remove")
+      ctx.result.should be_nil
+      ctx.error.should be_nil
+      ctx.phase.should eq(Alumna::RulePhase::AfterCommit)
+    end
+
+    it "does not run on: :mutate after_commit for find" do
+      log = [] of String
+      service = TrackedService.new
+      service.after_commit(continuing_rule(log, "ac"), on: :mutate)
+      dispatch(service, Alumna::ServiceMethod::Find)
+      log.should be_empty
+    end
+
+    it "runs the error pipeline when after_commit returns a ServiceError" do
+      log = [] of String
+      service = TrackedService.new
+      service.after_commit(stopping_rule("ac-fail"))
+      service.error(Alumna::Rule.new { log << "error"; nil })
+      ctx = dispatch(service, Alumna::ServiceMethod::Create, nil, {"x" => "y"} of String => Alumna::AnyData)
+
+      log.should eq(["error"])
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(401)
+        err.message.should eq("ac-fail")
+      end
+      ctx.result_set?.should be_true
+    end
+
+    it "converts an after_commit raise into 500" do
+      service = TrackedService.new
+      service.after_commit(Alumna::Rule.new { |_ctx| raise "ac boom" })
+      ctx = dispatch(service, Alumna::ServiceMethod::Find)
+
+      err = ctx.error
+      err.should be_a(Alumna::ServiceError)
+      if err
+        err.status.should eq(500)
+        err.message.should eq("ac boom")
+      end
+      ctx.phase.should eq(Alumna::RulePhase::Error)
+    end
+
+    it "allows ctx.call from after_commit; nested dispatch has its own after_commit" do
+      nested = [] of String
+      app = Alumna::App.new
+      inner = Alumna::MemoryAdapter.new
+      outer = Alumna::MemoryAdapter.new
+      inner.after_commit(Alumna::Rule.new { nested << "inner-ac"; nil })
+      outer.after_commit(Alumna::Rule.new { |c|
+        nested << "outer-ac"
+        c.call("/inner", :create, Alumna.hash(n: "i"))
+        nil
+      })
+      app.use("/inner", inner)
+      app.use("/outer", outer)
+
+      ctx = Alumna::Testing.build_ctx(
+        app: app,
+        service: outer,
+        path: "/outer",
+        method: Alumna::ServiceMethod::Create,
+        data: Alumna.hash(n: "o")
+      )
+      app.dispatch(outer, ctx)
+
+      nested.should eq(["outer-ac", "inner-ac"])
+      ctx.error.should be_nil
+    end
+
+    it "runs after_commit for the websocket provider" do
+      log = [] of String
+      app = Alumna::App.new
+      svc = Alumna::MemoryAdapter.new
+      app.after_commit(Alumna::Rule.new { log << "ac"; nil })
+      app.use("/items", svc)
+      session = Alumna::Http::WebSocketSession.new(
+        HTTP::WebSocket.new(IO::Memory.new),
+        HTTP::Headers.new,
+        "127.0.0.1",
+        app,
+      )
+      reply = session.process_frame(%({"id":"1","method":"create","path":"/items","data":{"name":"a"}}))
+      reply["result"].as(Hash)["name"].should eq("a")
+      log.should eq(["ac"])
     end
   end
 end

@@ -74,11 +74,13 @@ describe "Service::Base" do
       svc = Alumna.memory(schema) do # use the factory, not.new directly
         before { |_c| nil }
         after { |_c| nil }
+        after_commit { |_c| nil }
         error { |_c| nil }
       end
 
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).size.should eq(1)
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).size.should eq(1)
+      svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::AfterCommit).size.should eq(1)
       svc.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).size.should eq(1)
     end
 

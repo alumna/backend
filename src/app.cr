@@ -86,6 +86,10 @@ module Alumna
             app_a = collect_rules(m, RulePhase::After)
             service.set_after_pipeline(m, svc_a, app_a)
 
+            svc_ac = service.collect_rules(m, RulePhase::AfterCommit)
+            app_ac = collect_rules(m, RulePhase::AfterCommit)
+            service.set_after_commit_pipeline(m, svc_ac, app_ac)
+
             svc_e = service.collect_rules(m, RulePhase::Error)
             app_e = collect_rules(m, RulePhase::Error)
             service.set_error_pipeline(m, svc_e, app_e)
@@ -124,6 +128,7 @@ module Alumna
         end
 
         # 2. SERVICE METHOD
+        method_ran = false
         unless ctx.result_set?
           ctx.phase = RulePhase::After
           result, error = service.call_method(ctx)
@@ -134,6 +139,7 @@ module Alumna
             return ctx
           end
           ctx.result = result
+          method_ran = true
         end
 
         # 3. AFTER (service + app)
@@ -142,6 +148,16 @@ module Alumna
         unless Orchestrator.run(after_rules, ctx)
           ctx.phase = RulePhase::Error
           Orchestrator.run(service.error_pipeline(m), ctx)
+          return ctx
+        end
+
+        # 4. AFTER COMMIT (service + app). Skip if the method did not run.
+        if method_ran
+          ctx.phase = RulePhase::AfterCommit
+          unless Orchestrator.run(service.after_commit_pipeline(m), ctx)
+            ctx.phase = RulePhase::Error
+            Orchestrator.run(service.error_pipeline(m), ctx)
+          end
         end
         ctx
       rescue ex : Exception

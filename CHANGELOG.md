@@ -1,5 +1,15 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **rules:** `RulePhase::AfterCommit` and `after_commit` on App and Service. Same `Rule` type and `on:` as `after`. `App#dispatch` runs AfterCommit after a successful After pipeline, only if the service method ran. A cache hit or a before-rule that set `ctx.result` skips AfterCommit. After still runs. A successful `remove` (nil result) runs AfterCommit. Order is service then app. AfterCommit `ServiceError` or an uncaught Exception uses the error pipeline. AfterCommit runs for every `ctx.provider`. `ctx.call` from AfterCommit is allowed.
+* **rules:** `on: :mutate` expands to create, update, patch, and remove. `on: :write` does not change (create, update, patch; not remove).
+* **service:** `ServiceMethod#mutate?` is true for create, update, patch, and remove.
+
+### Changed
+* **docs:** README documents four rule phases, `on: :mutate`, AfterCommit errors after a durable write, and the Mongo `#transaction` caveat. ROADMAP 5.1 is done. ROADMAP 5.2 stays open.
+
 ## 0.9.0 - 2026-09-18
 
 ### Added

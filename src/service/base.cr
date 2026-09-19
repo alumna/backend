@@ -8,6 +8,7 @@ module Alumna
     # Merged pipelines built by App.use
     @before_pipeline : Array(Array(Rule))
     @after_pipeline : Array(Array(Rule))
+    @after_commit_pipeline : Array(Array(Rule))
     @error_pipeline : Array(Array(Rule))
     @before_app_len : Array(Int32)
     @error_svc_len : Array(Int32)
@@ -16,6 +17,7 @@ module Alumna
       size = ServiceMethod.values.size
       @before_pipeline = Array.new(size) { [] of Rule }
       @after_pipeline = Array.new(size) { [] of Rule }
+      @after_commit_pipeline = Array.new(size) { [] of Rule }
       @error_pipeline = Array.new(size) { [] of Rule }
       @before_app_len = Array.new(size, 0)
       @error_svc_len = Array.new(size, 0)
@@ -54,6 +56,10 @@ module Alumna
       @after_pipeline[method.value] = svc_rules + app_rules
     end
 
+    def set_after_commit_pipeline(method : ServiceMethod, svc_rules : Array(Rule), app_rules : Array(Rule))
+      @after_commit_pipeline[method.value] = svc_rules + app_rules
+    end
+
     def set_error_pipeline(method : ServiceMethod, svc_rules : Array(Rule), app_rules : Array(Rule))
       idx = method.value
       @error_pipeline[idx] = svc_rules + app_rules
@@ -66,6 +72,10 @@ module Alumna
 
     def after_pipeline(method) : Array(Rule)
       @after_pipeline[method.value]
+    end
+
+    def after_commit_pipeline(method) : Array(Rule)
+      @after_commit_pipeline[method.value]
     end
 
     def error_pipeline(method) : Array(Rule)

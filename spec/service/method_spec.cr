@@ -27,5 +27,13 @@ describe Alumna::ServiceMethod do
     Alumna::ServiceMethod::Patch.write?.should be_true
     Alumna::ServiceMethod::Find.write?.should be_false
     Alumna::ServiceMethod::Remove.write?.should be_false
+
+    Alumna::ServiceMethod::Create.mutate?.should be_true
+    Alumna::ServiceMethod::Update.mutate?.should be_true
+    Alumna::ServiceMethod::Patch.mutate?.should be_true
+    Alumna::ServiceMethod::Remove.mutate?.should be_true
+    Alumna::ServiceMethod::Find.mutate?.should be_false
+    Alumna::ServiceMethod::Get.mutate?.should be_false
+    Alumna::ServiceMethod::Options.mutate?.should be_false
   end
 end
