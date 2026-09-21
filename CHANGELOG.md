@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Changed
+* **docs:** ROADMAP 5.2 is done. Cross-process WebSocket fan-out is application composition with Alumna NATS. README points to `examples/websocket_fanout.cr` in that shard. Backend does not import NATS.
+
 ## 0.9.1 - 2026-09-19
 
 ### Added

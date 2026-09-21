@@ -110,7 +110,7 @@ Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate 
 Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
 - [Alumna Redis](https://github.com/alumna/redis).
 
-Native WebSockets landed. The `after_commit` hook is available. See [Roadmap](#roadmap) for NATS WebSocket fan-out, PostgreSQL, and MySQL.
+Native WebSockets landed. The `after_commit` hook is available. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats). See [Roadmap](#roadmap) for PostgreSQL and MySQL.
 
 ---
 
@@ -579,6 +579,7 @@ Error-rules always run when there is an error, even if it occurred in a before-r
 ```crystal
 app.after_commit on: :mutate do |ctx|
   # The service method already returned. Typical adapters autocommit in the method.
+  # Publish to NATS here. See alumna-nats examples/websocket_fanout.cr.
   nil
 end
 ```
@@ -1010,7 +1011,7 @@ JSON frames use the same services as REST:
 
 `method` is `find`, `get`, `create`, `update`, `patch`, or `remove`. The reply has the same `id` and either `result` or `error` (`message`, `status`, optional `details`).
 
-`App#connections` is `MemoryConnections`. Each socket has a `connection_id` in `ctx.store`. Use `send(id, payload)` for one socket. Use `watch` / `unwatch` / `send_topic` for a local topic. Delivery is this process only. Cross-process fan-out is NATS (later).
+`App#connections` is `MemoryConnections`. Each socket has a `connection_id` in `ctx.store`. Use `send(id, payload)` for one socket. Use `watch` / `unwatch` / `send_topic` for a local topic. Delivery is this process only. Cross-process fan-out uses [Alumna NATS](https://github.com/alumna/nats) in the application. See `examples/websocket_fanout.cr` in that shard. Backend does not import NATS.
 
 The frame size cap is `app.max_body_size` (default 1 MiB). An oversize frame returns status 413.
 
@@ -1199,9 +1200,9 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. NATS.io WebSocket fan-out remains.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats).
 
-- **v0.10 - Event Bus & NATS:** Official **NATS.io** integration. Horizontally scaled Alumna instances can publish data mutations and fan-out real-time events to connected WebSocket clients. Use `after_commit` for that publish. Cross-process fan-out is not in this tree yet.
+- **v0.10 - Event Bus & NATS:** Official **NATS.io** shard. Horizontally scaled Alumna instances publish from `after_commit` and fan-out to WebSocket clients through local `Connections`. Backend does not import NATS. See [alumna/nats](https://github.com/alumna/nats) `examples/websocket_fanout.cr`.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---
