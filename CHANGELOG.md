@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.9.2 - 2026-09-21
 
 ### Added
 * **ports:** `Alumna::StoreError` struct for `Cache`, `SessionStore`, and `RateLimitStore`. Not HTTP `ServiceError`. Memory stores never construct it.
