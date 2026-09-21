@@ -3,7 +3,7 @@
 This document outlines the strategic roadmap for the Alumna Backend framework leading up to v1.0. 
 
 **Context & Direction:** 
-The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache, rate-limit ports, Redis shard, and native WebSockets are released. The `after_commit` hook is available. NATS.io WebSocket fan-out is now possible as an application logic combining [Alumna NATS](https://github.com/alumna/nats). Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
+The official MongoDB adapter is available ([alumna/mongodb](https://github.com/alumna/mongodb) **0.9.0**). Backend cache, rate-limit ports, Redis shard, and native WebSockets are released. The `after_commit` hook is available. NATS.io WebSocket fan-out is now possible as an application logic combining [Alumna NATS](https://github.com/alumna/nats). Mail send port (5.3) is in this source (unreleased, target 0.10.0). Amazon SES is the `alumna-ses` shard. Relational database adapters (MySQL, PostgreSQL) remain on the roadmap but have been moved to later phases.
 
 Every phase below includes not just *what* needs to be built, but the *rationale* behind how it must integrate with Alumna's strict, zero-allocation, 100% test-coverage philosophy.
 
@@ -111,7 +111,7 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 
 ## Phase 5: Event Bus & Messaging (v0.10)
 *Goal: Reactive architecture across horizontally scaled instances.*
-**Status:** 5.1 done. 5.2 done.
+**Status:** 5.1 done. 5.2 done. 5.3 port is in this source (unreleased, target 0.10.0).
 
 ### 5.1 The `after_commit` Hook
 **Status:** done
@@ -128,6 +128,13 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 
 *   **The Solution:** Official [Alumna NATS](https://github.com/alumna/nats) shard. The application composes it with local `Connections`. `after_commit` (with `on: :mutate`) publishes successful mutations (`created`, `updated`, `patched`, `removed`). Each process that holds sockets subscribes with no queue group and calls `connections.send_topic`. Backend does not import NATS. The NATS shard does not import HTTP WebSocket. See `examples/websocket_fanout.cr` in alumna-nats.
 *   **Rationale:** In a scaled deployment, Instance A might process a `PATCH /posts/1` request. Instance B might hold the active WebSocket connection for the user viewing that post. Instance A publishes the mutation to NATS; Instance B subscribes to NATS, receives the mutation, and pushes the payload directly down the WebSocket to the client. This achieves stateless, horizontally scaled real-time sync.
+
+### 5.3 Mail send port
+**Status:** in this source (unreleased, target 0.10.0). SES delivery is the `alumna-ses` shard.
+
+*   **The Problem:** Apps need to send mail (verify links, receipts). Specs must not hit Amazon SES or SMTP. Backend must not depend on AWS.
+*   **The Solution:** Public `Alumna::Mail`, abstract `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError` in this repository. `send` returns `Nil | MailError`. Memory never returns `MailError`. `delivered` returns copies. Empty `from`, empty `to`, or empty `subject` raises `ArgumentError`. Official shard `alumna-ses` implements `Mailer` as `Alumna::SES`. No built-in `Alumna.mail` rule in the first mail release. SMTP is a later shard.
+*   **Rationale:** Same split as `SessionStore` / `alumna-redis`. The port stays in Backend so specs stay fake. AWS stays in a shard.
 
 ---
 

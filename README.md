@@ -76,6 +76,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [WebSockets](#websockets)
     - [Graceful Shutdown](#graceful-shutdown)
     - [Trusted Proxies](#trusted-proxies)
+- [6. Mail](#6-mail)
 - [Developer Experience](#developer-experience)
 - [Full Example](#full-example)
 - [Serialization](#serialization)
@@ -112,6 +113,10 @@ Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
 
 Cross-process WebSocket, queue and pub/sub:
 - [Alumna NATS](https://github.com/alumna/nats).
+
+Mail send port (this source, release target 0.10.0):
+- `Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError`.
+- Specs use `MemoryMailer`. Amazon SES is the separate `alumna-ses` shard.
 
 PostgreSQL and MySQL adapters pending. See [Roadmap](#roadmap).
 
@@ -1055,6 +1060,37 @@ When Alumna runs behind Nginx, HAProxy, Cloudflare, or a Load Balancer, `ctx.rem
 
 ---
 
+## 6. Mail
+
+The app builds an `Alumna::Mail` and calls `Mailer#send`. There is no `Alumna.mail` rule. Call `send` from `after_commit` when the message must follow a successful write. Cache and the logger stay on `before` and `after`.
+
+```crystal
+mailer = Alumna::MemoryMailer.new
+
+app.after_commit on: :mutate do |ctx|
+  mail = Alumna::Mail.new(
+    from: "noreply@example.com",
+    to: "user@example.com",
+    subject: "Welcome",
+    text: "Hello",
+  )
+  failed = mailer.send(mail)
+  next Alumna::ServiceError.internal(failed.message) if failed.is_a?(Alumna::MailError)
+end
+```
+
+`send` returns `nil` on success and `Alumna::MailError` on failure. `MemoryMailer` records the message in this process and returns `nil`. `delivered` returns copies in send order. A change to a returned message does not change the recorded message. A change to the message after `send` does not change the recorded message.
+
+`Mail.new` accepts one `to` address or an array. Optional fields are `html` and `reply_to`. Empty `from`, empty `to`, or empty `subject` raises `ArgumentError`. An empty address in `to` raises `ArgumentError`. An empty `reply_to` raises `ArgumentError`.
+
+`MailError` is a struct. It is separate from `StoreError`. Map it to `ServiceError` in the rule when the HTTP response must fail. The write already completed.
+
+`MemoryMailer` uses a `Sync::Mutex`, so concurrent `send` calls from `preview_mt` specs are safe. One process does not share the recorded messages with another process.
+
+Amazon SES implements this same `Mailer` port in the `alumna-ses` shard (`Alumna::SES`). This repository has no AWS library. Specs here use `MemoryMailer`.
+
+---
+
 ## Developer Experience
 
 Alumna provides helpers to make writing rules and tests easier. We also recommend aliasing `Alumna::AnyData` at the top of your app:
@@ -1224,9 +1260,10 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats).
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats). Mail send port (`Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, `Alumna::MailError`) is in this source. Release target is v0.10.0. Official SES shard is `alumna-ses`.
 
-- **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
+- **v0.10 - Mail send port:** `Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError` are in this source. `MemoryMailer` is the in-process mailer. Amazon SES is the `alumna-ses` shard. `shard.yml` stays 0.9.2 until the 0.10.0 release.
+- **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-based SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---
 
