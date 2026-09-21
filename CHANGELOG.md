@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.10.0 - 2026-09-21
 
 ### Added
 * **mail:** `Alumna::Mail`, abstract `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError`. `send` returns `Nil | MailError`. `MemoryMailer` records messages in this process and returns `nil`. `delivered` returns copies. Empty `from`, empty `to`, or empty `subject` raises `ArgumentError`. An empty `reply_to` raises `ArgumentError`.

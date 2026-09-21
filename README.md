@@ -77,6 +77,11 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Graceful Shutdown](#graceful-shutdown)
     - [Trusted Proxies](#trusted-proxies)
 - [6. Mail](#6-mail)
+    - [Message](#message)
+    - [Send](#send)
+    - [Send after a write](#send-after-a-write)
+    - [MemoryMailer](#memorymailer)
+    - [Amazon SES](#amazon-ses)
 - [Developer Experience](#developer-experience)
 - [Full Example](#full-example)
 - [Serialization](#serialization)
@@ -104,19 +109,18 @@ Alumna is in early development, but moving fast. The core is complete and tested
 
 Official database adapters:
 - [SQLite](https://github.com/alumna/sqlite)
-- [MongoDB](https://github.com/alumna/mongodb).
+- [MongoDB](https://github.com/alumna/mongodb)
 
 Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate limit, and cache use store ports. In-memory stores ship in this repository.
 
 Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
-- [Alumna Redis](https://github.com/alumna/redis).
+- [Alumna Redis](https://github.com/alumna/redis)
 
 Cross-process WebSocket, queue and pub/sub:
-- [Alumna NATS](https://github.com/alumna/nats).
+- [Alumna NATS](https://github.com/alumna/nats)
 
-Mail send port (this source, release target 0.10.0):
-- `Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError`.
-- Specs use `MemoryMailer`. Amazon SES is the separate `alumna-ses` shard.
+Mail send port:
+- [SES](https://github.com/alumna/ses)
 
 PostgreSQL and MySQL adapters pending. See [Roadmap](#roadmap).
 
@@ -1062,7 +1066,58 @@ When Alumna runs behind Nginx, HAProxy, Cloudflare, or a Load Balancer, `ctx.rem
 
 ## 6. Mail
 
-The app builds an `Alumna::Mail` and calls `Mailer#send`. There is no `Alumna.mail` rule. Call `send` from `after_commit` when the message must follow a successful write. Cache and the logger stay on `before` and `after`.
+Mail is a port: a message, an abstract mailer, an in-process mailer, and a failure struct. The app builds `Alumna::Mail` and calls `mailer.send`. This release has no `Alumna.mail` rule.
+
+### Message
+
+`Mail.new` takes keyword arguments.
+
+| Field | Type | Rule |
+|---|---|---|
+| `from` | `String` | Required. `""` raises `ArgumentError`. |
+| `to` | `String` or `Array(String)` | Required. One address or a list. Stored as `Array(String)`. An empty list or an empty address raises `ArgumentError`. |
+| `subject` | `String` | Required. `""` raises `ArgumentError`. |
+| `text` | `String` | Required. `""` is a valid body. |
+| `html` | `String?` | Optional. `nil` means no HTML part. `""` is stored as an empty string. |
+| `reply_to` | `String?` | Optional. Omit the argument when there is no reply address. `""` raises `ArgumentError`. |
+
+A single `to` string is stored as a one-element array. `Mail.new` copies the list, so a later change to the caller's array does not change the mail.
+
+This release has no cc, bcc, or attachments.
+
+```crystal
+mail = Alumna::Mail.new(
+  from: "noreply@example.com",
+  to: ["a@example.com", "b@example.com"],
+  subject: "Welcome",
+  text: "Hello",
+  html: "<p>Hello</p>",
+  reply_to: "reply@example.com",
+)
+```
+
+### Send
+
+```crystal
+mailer.send(mail) # Nil | Alumna::MailError
+```
+
+`nil` means the mailer accepted the message. `Alumna::MailError` means the send failed. `send` returns that struct. The call does not raise it.
+
+`MailError` is a struct with `message`. `to_s` writes that message. It is separate from `StoreError`. `StoreError` stays on `Cache`, `SessionStore`, and `RateLimitStore`.
+
+Map `MailError` to `ServiceError` in the rule when the HTTP response must fail:
+
+```crystal
+failed = mailer.send(mail)
+next Alumna::ServiceError.internal(failed.message) if failed.is_a?(Alumna::MailError)
+```
+
+### Send after a write
+
+Call `send` from `after_commit` when the message must follow a successful write. `on: :mutate` covers create, update, patch, and remove. Keep cache and the logger on `before` and `after`.
+
+If that rule returns `ServiceError`, the client sees an error. The adapter write already completed. See [After commit](#after-commit).
 
 ```crystal
 mailer = Alumna::MemoryMailer.new
@@ -1079,15 +1134,34 @@ app.after_commit on: :mutate do |ctx|
 end
 ```
 
-`send` returns `nil` on success and `Alumna::MailError` on failure. `MemoryMailer` records the message in this process and returns `nil`. `delivered` returns copies in send order. A change to a returned message does not change the recorded message. A change to the message after `send` does not change the recorded message.
+`MemoryMailer` returns `nil`. Keep the `MailError` check so a remote mailer can take the same place.
 
-`Mail.new` accepts one `to` address or an array. Optional fields are `html` and `reply_to`. Empty `from`, empty `to`, or empty `subject` raises `ArgumentError`. An empty address in `to` raises `ArgumentError`. An empty `reply_to` raises `ArgumentError`.
+### MemoryMailer
 
-`MailError` is a struct. It is separate from `StoreError`. Map it to `ServiceError` in the rule when the HTTP response must fail. The write already completed.
+`Alumna::MemoryMailer` records messages in this process. Use it in specs, and in a process that only records mail.
 
-`MemoryMailer` uses a `Sync::Mutex`, so concurrent `send` calls from `preview_mt` specs are safe. One process does not share the recorded messages with another process.
+`send` copies the message under a `Sync::Mutex` and returns `nil`. It never returns `MailError`. Concurrent `send` calls are safe under `preview_mt`.
 
-Amazon SES implements this same `Mailer` port in the `alumna-ses` shard (`Alumna::SES`). This repository has no AWS library. Specs here use `MemoryMailer`.
+`delivered` returns a new array of copies, in send order.
+
+- A change to the `Mail` after `send` does not change the record.
+- A change to a `Mail` from `delivered` does not change the record.
+
+The record stays in this process. Another process does not see it.
+
+```crystal
+mailer = Alumna::MemoryMailer.new
+mailer.send(mail)
+mailer.delivered.first.to # => ["user@example.com"]
+```
+
+### Amazon SES
+
+`Alumna::SES` in the [`alumna-ses`](https://github.com/alumna/ses) shard implements this `Mailer`. This repository has no AWS library. Specs here use `MemoryMailer`.
+
+Available official ports:
+
+- [SES](https://github.com/alumna/ses)
 
 ---
 
