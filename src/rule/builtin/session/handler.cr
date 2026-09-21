@@ -6,7 +6,8 @@ module Alumna
   #
   #   sessions = Alumna::Session.new(Alumna::MemorySessionStore.new(ttl: 24.hours))
   #   app.before sessions.rule
-  #   sessions.start(ctx, Alumna.hash(user_id: id))
+  #   started = sessions.start(ctx, Alumna.hash(user_id: id))
+  #   next ServiceError.internal(started.message) if started.is_a?(StoreError)
   class Session
     DEFAULT_COOKIE    = "alumna.sid"
     DEFAULT_STORE_KEY = "session"
@@ -65,6 +66,7 @@ module Alumna
         end
 
         data = store.get(id)
+        next ServiceError.internal(data.message) if data.is_a?(StoreError)
         next ServiceError.unauthorized unless data
 
         ctx.store[store_key] = data
@@ -72,29 +74,37 @@ module Alumna
       end
     end
 
-    def start(ctx : RuleContext, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String
+    def start(ctx : RuleContext, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String | StoreError
       span = ttl || @store.default_ttl
       id = @store.new_id
-      @store.set(id, data, span)
+      result = @store.set(id, data, span)
+      return result if result.is_a?(StoreError)
       ctx.http.add_cookie(build_cookie(id, span))
       ctx.store[@store_key] = data
       id
     end
 
-    def stop(ctx : RuleContext) : Nil
+    def stop(ctx : RuleContext) : Nil | StoreError
       if raw = ctx.headers["cookie"]?
         if id = Http.cookie_value(raw, @cookie)
-          @store.delete(id) unless id.empty?
+          unless id.empty?
+            result = @store.delete(id)
+            return result if result.is_a?(StoreError)
+          end
         end
       end
       ctx.http.add_cookie(build_cookie("", Time::Span.zero))
       ctx.store.delete(@store_key)
+      nil
     end
 
-    def rotate(ctx : RuleContext, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String
+    def rotate(ctx : RuleContext, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String | StoreError
       if raw = ctx.headers["cookie"]?
         if id = Http.cookie_value(raw, @cookie)
-          @store.delete(id) unless id.empty?
+          unless id.empty?
+            result = @store.delete(id)
+            return result if result.is_a?(StoreError)
+          end
         end
       end
       start(ctx, data, ttl)
@@ -102,15 +112,15 @@ module Alumna
 
     # Class helpers use the default cookie name and flags. Prefer an instance
     # when you set cookie, secure, or same_site on the rule.
-    def self.start(ctx : RuleContext, store : SessionStore, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String
+    def self.start(ctx : RuleContext, store : SessionStore, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String | StoreError
       new(store).start(ctx, data, ttl)
     end
 
-    def self.stop(ctx : RuleContext, store : SessionStore) : Nil
+    def self.stop(ctx : RuleContext, store : SessionStore) : Nil | StoreError
       new(store).stop(ctx)
     end
 
-    def self.rotate(ctx : RuleContext, store : SessionStore, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String
+    def self.rotate(ctx : RuleContext, store : SessionStore, data : Hash(String, AnyData), ttl : Time::Span? = nil) : String | StoreError
       new(store).rotate(ctx, data, ttl)
     end
 

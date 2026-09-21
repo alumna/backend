@@ -104,5 +104,23 @@ module Alumna
       store.hit("w")          # ops=2 -> triggers cleanup, removes x and y
       store.size.should eq(2) # only z and w remain
     end
+
+    it "returns 500 when the store is down and does not allow the request" do
+      rule = Alumna.rate_limit(limit: 100, store: DownRateLimitStore.new)
+      res = Alumna::Testing.run_rule(rule, remote_ip: "1.1.1.1")
+      err = res.error
+      err.should_not be_nil
+      if err
+        err.status.should eq(500)
+        err.message.should eq("rate limit down")
+      end
+      res.ctx.http.headers.has_key?("X-RateLimit-Limit").should be_false
+    end
+  end
+end
+
+private class DownRateLimitStore < Alumna::RateLimitStore
+  def hit(key : String) : Tuple(Int32, Time) | Alumna::StoreError
+    Alumna::StoreError.new("rate limit down")
   end
 end

@@ -73,7 +73,7 @@ describe "Alumna.session" do
     store = Alumna::MemorySessionStore.new
     sessions = Alumna::Session.new(store)
     ctx = Alumna::Testing.build_ctx
-    id = sessions.start(ctx, Alumna.hash(user_id: "42"))
+    id = must_sid(sessions.start(ctx, Alumna.hash(user_id: "42")))
 
     rule = sessions.rule
     res = Alumna::Testing.run_rule(rule, headers: {"Cookie" => "alumna.sid=#{id}"})
@@ -122,7 +122,7 @@ describe "Alumna::Session start/stop/rotate" do
     store = Alumna::MemorySessionStore.new(ttl: 1.hour)
     sessions = Alumna::Session.new(store, http_only: true, same_site: :lax)
     ctx = Alumna::Testing.build_ctx
-    id = sessions.start(ctx, Alumna.hash(user_id: "1"))
+    id = must_sid(sessions.start(ctx, Alumna.hash(user_id: "1")))
 
     store.get(id).try(&.["user_id"]).should eq("1")
     cookies = ctx.http.cookies?
@@ -142,7 +142,7 @@ describe "Alumna::Session start/stop/rotate" do
     store = Alumna::MemorySessionStore.new(ttl: 1.hour)
     sessions = Alumna::Session.new(store)
     ctx = Alumna::Testing.build_ctx
-    id = sessions.start(ctx, Alumna.hash(n: "1"), ttl: 1.nanosecond)
+    id = must_sid(sessions.start(ctx, Alumna.hash(n: "1"), ttl: 1.nanosecond))
     sleep 1.milliseconds
     store.get(id).should be_nil
   end
@@ -151,7 +151,7 @@ describe "Alumna::Session start/stop/rotate" do
     store = Alumna::MemorySessionStore.new
     sessions = Alumna::Session.new(store)
     start_ctx = Alumna::Testing.build_ctx
-    id = sessions.start(start_ctx, Alumna.hash(user_id: "1"))
+    id = must_sid(sessions.start(start_ctx, Alumna.hash(user_id: "1")))
 
     ctx = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=#{id}"})
     ctx.store["session"] = Alumna.hash(user_id: "1")
@@ -170,10 +170,10 @@ describe "Alumna::Session start/stop/rotate" do
     store = Alumna::MemorySessionStore.new
     sessions = Alumna::Session.new(store)
     start_ctx = Alumna::Testing.build_ctx
-    old_id = sessions.start(start_ctx, Alumna.hash(user_id: "1"))
+    old_id = must_sid(sessions.start(start_ctx, Alumna.hash(user_id: "1")))
 
     ctx = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=#{old_id}"})
-    new_id = sessions.rotate(ctx, Alumna.hash(user_id: "1"))
+    new_id = must_sid(sessions.rotate(ctx, Alumna.hash(user_id: "1")))
 
     new_id.should_not eq(old_id)
     store.get(old_id).should be_nil
@@ -191,7 +191,7 @@ describe "Alumna::Session start/stop/rotate" do
   it "class helpers use the default cookie name" do
     store = Alumna::MemorySessionStore.new
     ctx = Alumna::Testing.build_ctx
-    id = Alumna::Session.start(ctx, store, Alumna.hash(user_id: "9"))
+    id = must_sid(Alumna::Session.start(ctx, store, Alumna.hash(user_id: "9")))
     store.get(id).try(&.["user_id"]).should eq("9")
 
     ctx2 = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=#{id}"})
@@ -199,9 +199,9 @@ describe "Alumna::Session start/stop/rotate" do
     store.get(id).should be_nil
 
     ctx3 = Alumna::Testing.build_ctx
-    id2 = Alumna::Session.start(ctx3, store, Alumna.hash(user_id: "8"))
+    id2 = must_sid(Alumna::Session.start(ctx3, store, Alumna.hash(user_id: "8")))
     ctx4 = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=#{id2}"})
-    id3 = Alumna::Session.rotate(ctx4, store, Alumna.hash(user_id: "8"))
+    id3 = must_sid(Alumna::Session.rotate(ctx4, store, Alumna.hash(user_id: "8")))
     id3.should_not eq(id2)
     store.get(id2).should be_nil
     store.get(id3).try(&.["user_id"]).should eq("8")
@@ -211,11 +211,106 @@ describe "Alumna::Session start/stop/rotate" do
     store = Alumna::MemorySessionStore.new
     sessions = Alumna::Session.new(store, cookie: "sid", secure: true, same_site: :strict, path: "/app")
     ctx = Alumna::Testing.build_ctx
-    id = sessions.start(ctx, Alumna.hash(x: "1"))
+    id = must_sid(sessions.start(ctx, Alumna.hash(x: "1")))
     header = ctx.http.cookies.first.to_set_cookie_header
     header.should contain("sid=#{id}")
     header.should contain("Secure")
     header.should contain("SameSite=Strict")
     header.should contain("path=/app")
+  end
+end
+
+private class DownSessionStore < Alumna::SessionStore
+  def initialize(
+    ttl : Time::Span = 24.hours,
+    @get_result : Hash(String, Alumna::AnyData)? | Alumna::StoreError = Alumna::StoreError.new("session down"),
+    @set_result : Nil | Alumna::StoreError = Alumna::StoreError.new("session down"),
+    @delete_result : Nil | Alumna::StoreError = Alumna::StoreError.new("session down"),
+  )
+    super(ttl)
+  end
+
+  def get(id : String) : Hash(String, Alumna::AnyData)? | Alumna::StoreError
+    @get_result
+  end
+
+  def set(id : String, data : Hash(String, Alumna::AnyData), ttl : Time::Span) : Nil | Alumna::StoreError
+    @set_result
+  end
+
+  def delete(id : String) : Nil | Alumna::StoreError
+    @delete_result
+  end
+end
+
+describe "Alumna.session store-down" do
+  it "returns 500 when get is down and does not treat it as a missing session" do
+    store = DownSessionStore.new
+    rule = Alumna.session(store)
+    res = Alumna::Testing.run_rule(rule, headers: {"Cookie" => "alumna.sid=abc"})
+    err = res.error
+    err.should_not be_nil
+    if err
+      err.status.should eq(500)
+      err.message.should eq("session down")
+    end
+    res.ctx.store.has_key?("session").should be_false
+  end
+
+  it "returns 500 on get down when required is false" do
+    store = DownSessionStore.new
+    rule = Alumna.session(store, required: false)
+    res = Alumna::Testing.run_rule(rule, headers: {"Cookie" => "alumna.sid=abc"})
+    err = res.error
+    err.should_not be_nil
+    if err
+      err.status.should eq(500)
+    end
+  end
+end
+
+describe "Alumna::Session start/stop/rotate store-down" do
+  it "start returns StoreError and does not set a cookie" do
+    sessions = Alumna::Session.new(DownSessionStore.new)
+    ctx = Alumna::Testing.build_ctx
+    result = sessions.start(ctx, Alumna.hash(user_id: "1"))
+    result.should be_a(Alumna::StoreError)
+    ctx.store.has_key?("session").should be_false
+    ctx.http.cookies?.should be_nil
+  end
+
+  it "stop returns StoreError and does not expire the cookie" do
+    sessions = Alumna::Session.new(DownSessionStore.new)
+    ctx = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=abc"})
+    ctx.store["session"] = Alumna.hash(user_id: "1")
+    result = sessions.stop(ctx)
+    result.should be_a(Alumna::StoreError)
+    ctx.store.has_key?("session").should be_true
+    ctx.http.cookies?.should be_nil
+  end
+
+  it "rotate returns StoreError from delete and does not start a new id" do
+    sessions = Alumna::Session.new(DownSessionStore.new)
+    ctx = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=old"})
+    result = sessions.rotate(ctx, Alumna.hash(user_id: "1"))
+    result.should be_a(Alumna::StoreError)
+    ctx.store.has_key?("session").should be_false
+  end
+
+  it "rotate returns StoreError from start after a successful delete" do
+    store = DownSessionStore.new(delete_result: nil)
+    sessions = Alumna::Session.new(store)
+    ctx = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=old"})
+    result = sessions.rotate(ctx, Alumna.hash(user_id: "1"))
+    result.should be_a(Alumna::StoreError)
+  end
+
+  it "class helpers return StoreError" do
+    store = DownSessionStore.new
+    ctx = Alumna::Testing.build_ctx
+    Alumna::Session.start(ctx, store, Alumna.hash(user_id: "9")).should be_a(Alumna::StoreError)
+    ctx_stop = Alumna::Testing.build_ctx(headers: {"Cookie" => "alumna.sid=abc"})
+    Alumna::Session.stop(ctx_stop, store).should be_a(Alumna::StoreError)
+    Alumna::Session.rotate(ctx, store, Alumna.hash(user_id: "8")).should be_a(Alumna::StoreError)
   end
 end

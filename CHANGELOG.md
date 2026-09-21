@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+### Added
+* **ports:** `Alumna::StoreError` struct for `Cache`, `SessionStore`, and `RateLimitStore`. Not HTTP `ServiceError`. Memory stores never construct it.
+
 ### Changed
+* **ports:** `Cache`, `SessionStore`, and `RateLimitStore` return `T | StoreError`. `Cache#get` is `Bytes? | StoreError`. Nil stays miss. Same pattern for `set` / `set_nx` / `delete` / `incr`, session `get` / `set` / `delete`, and `RateLimitStore#hit`.
+* **rules:** `Alumna.cache`, `Alumna.session`, and `Alumna.rate_limit` map `StoreError` to `ServiceError.internal` (HTTP 500). Cache does not fill from the adapter and does not write-through. Session store-down is not 401. Rate-limit store-down is fail closed and not 429.
+* **session:** `Session#start` / `stop` / `rotate` (and the class helpers) return `T | StoreError`.
 * **docs:** ROADMAP 5.2 is done. Cross-process WebSocket fan-out is application composition with Alumna NATS. README points to `examples/websocket_fanout.cr` in that shard. Backend does not import NATS.
 
 ## 0.9.1 - 2026-09-19

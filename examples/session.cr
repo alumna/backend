@@ -13,7 +13,8 @@ app.after Alumna.logger
 
 app.use "/login", Alumna.memory(Alumna::Schema.new) {
   after on: :create do |ctx|
-    sessions.start(ctx, Alumna.hash(user_id: "1"))
+    started = sessions.start(ctx, Alumna.hash(user_id: "1"))
+    next Alumna::ServiceError.internal(started.message) if started.is_a?(Alumna::StoreError)
     nil
   end
 }
@@ -26,7 +27,8 @@ app.use "/users", Alumna.memory(UserSchema) {
 app.use "/logout", Alumna.memory(Alumna::Schema.new) {
   before sessions.rule
   after on: :create do |ctx|
-    sessions.stop(ctx)
+    stopped = sessions.stop(ctx)
+    next Alumna::ServiceError.internal(stopped.message) if stopped.is_a?(Alumna::StoreError)
     nil
   end
 }

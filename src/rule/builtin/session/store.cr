@@ -9,6 +9,9 @@ module Alumna
   #
   # TTL is absolute from the last set. The store does not slide the deadline
   # on get. Pass a different ttl to set or Session.start when needed.
+  #
+  # get is Hash (session), nil (no session), or StoreError (store down).
+  # Nil is never a failure. MemorySessionStore never returns StoreError.
   abstract class SessionStore
     getter default_ttl : Time::Span
 
@@ -20,8 +23,8 @@ module Alumna
       Random::Secure.urlsafe_base64(32, padding: false)
     end
 
-    abstract def get(id : String) : Hash(String, AnyData)?
-    abstract def set(id : String, data : Hash(String, AnyData), ttl : Time::Span) : Nil
-    abstract def delete(id : String) : Nil
+    abstract def get(id : String) : Hash(String, AnyData)? | StoreError
+    abstract def set(id : String, data : Hash(String, AnyData), ttl : Time::Span) : Nil | StoreError
+    abstract def delete(id : String) : Nil | StoreError
   end
 end

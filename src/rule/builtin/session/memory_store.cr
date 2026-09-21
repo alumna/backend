@@ -5,6 +5,7 @@ module Alumna
   # Expiry uses Time.instant (monotonic). Cookie Max-Age uses wall clock.
   # No background fiber. Expired rows are dropped on get and by an amortized
   # prune every `cleanup_every` writes/reads, same as MemoryRateLimitStore.
+  # Success-only: this store never returns StoreError.
   class MemorySessionStore < SessionStore
     record Entry, data : Hash(String, AnyData), deadline : Time::Instant
 

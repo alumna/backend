@@ -81,7 +81,7 @@ describe "Session E2E" do
     }
 
     start_ctx = Alumna::Testing.build_ctx
-    id = sessions.start(start_ctx, Alumna.hash(user_id: "u2"))
+    id = must_sid(sessions.start(start_ctx, Alumna.hash(user_id: "u2")))
     client = Alumna::Testing::AppClient.new(app)
     res = client.get("/outer", headers: {"Cookie" => "alumna.sid=#{id}"})
     res.status.should eq(200)

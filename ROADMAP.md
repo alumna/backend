@@ -59,7 +59,7 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 ### 2.2 Built-in Authentication Rules
 **Status:** done (0.7.0)
 
-*   **The Solution:** Built-in rules for session cookies (`Alumna::Session` + `MemorySessionStore`) and JWT HS256 (`Alumna.jwt` / `Alumna::JWT.encode`).
+*   **The Solution:** Built-in rules for session cookies (`Alumna::Session` + `MemorySessionStore`) and JWT HS256 (`Alumna.jwt` / `Alumna::JWT.encode`). Session store-down is `ServiceError.internal`, not 401. `start` / `stop` / `rotate` return `T | StoreError`.
 *   **Rationale:** Official, tested auth rules reduce boilerplate. `SessionStore` is a public type so a Redis adapter can drop in later. JWT is HS256 only: Crystal 1.21 stdlib has HMAC and no RSA key type.
 
 ---
@@ -72,20 +72,20 @@ Official `Alumna::MongoAdapter` against MongoDB 8.0. Driver is cryomongo (Crysta
 **Status:** done
 
 *   **The Problem:** The RateLimiter rule used a private in-memory store. In a multi-instance deployment, rate limits must be shared across servers.
-*   **The Solution:** Public abstract `Alumna::RateLimitStore`. `MemoryRateLimitStore` is the default. `Alumna.rate_limit` takes `store:`.
+*   **The Solution:** Public abstract `Alumna::RateLimitStore`. `MemoryRateLimitStore` is the default. `Alumna.rate_limit` takes `store:`. `hit` returns `{count, reset_at} | StoreError`. Memory never returns `StoreError`. Store-down in the rule is `ServiceError.internal` (fail closed).
 *   **Rationale:** A Redis store can implement `hit` and drop in. The rule API stays the same.
 
 ### 3.2 Store-neutral Cache
 **Status:** done
 
 *   **The Problem:** `find` and `get` results lived only in the service adapter. Multi-process apps need a shared byte store.
-*   **The Solution:** Public `Alumna::Cache` and `MemoryCache`. Rule `Alumna.cache` for `get` and `find`. Get uses one key per id: write-through `set`, miss fill `set_nx`, `delete` on remove. Find uses a collection generation (`incr` on write). Old find keys expire by TTL. The app names `Cache`, not Redis.
+*   **The Solution:** Public `Alumna::Cache` and `MemoryCache`. Rule `Alumna.cache` for `get` and `find`. Get uses one key per id: write-through `set`, miss fill `set_nx`, `delete` on remove. Find uses a collection generation (`incr` on write). Old find keys expire by TTL. The app names `Cache`, not Redis. `get` is `Bytes? | StoreError` (bytes = hit, nil = miss, Error = down). Memory never returns `StoreError`. Store-down in the rule is `ServiceError.internal`. No fill. No write-through.
 *   **Rationale:** A Redis or Memcached shard implements the same methods. The rule stays in the backend.
 
 ### 3.3 Official Redis shard
 **Status:** done in `alumna-redis`: `RedisCache`, `RedisSessionStore`, `RedisRateLimitStore`, and GitHub CI.
 
-*   **The Solution:** Shard `alumna-redis`. `Alumna::Redis.new(uri)` gives `.cache` (`RedisCache`), `.session_store` (`RedisSessionStore`), and `.rate_limit_store` (`RedisRateLimitStore`). Apps attach `Alumna.cache(redis.cache, ttl:)`, `Alumna.session(redis.session_store)`, and `Alumna.rate_limit(store: redis.rate_limit_store)`. One `Redis::Client` per process. Not a Service adapter. No `AdapterSuite`.
+*   **The Solution:** Shard `alumna-redis`. `Alumna::Redis.new(uri)` gives `.cache` (`RedisCache`), `.session_store` (`RedisSessionStore`), and `.rate_limit_store` (`RedisRateLimitStore`). Apps attach `Alumna.cache(redis.cache, ttl:)`, `Alumna.session(redis.session_store)`, and `Alumna.rate_limit(store: redis.rate_limit_store)`. One `Redis::Client` per process. Not a Service adapter. No `AdapterSuite`. Port methods return backend `StoreError` on driver failure. Holder `new` / `from_uri` / `from_env` / `ping` / `close` return `T | Alumna::Redis::Error` (struct).
 *   **Rationale:** `SessionStore`, `RateLimitStore`, and `Cache` already exist. Redis implements them so several Alumna processes can share state.
 
 ---
