@@ -7,6 +7,7 @@ module Alumna
   # Expiry uses Time.instant (monotonic). No background fiber. Expired rows
   # are dropped on get and by an amortized prune every `cleanup_every`
   # writes/reads, same as MemorySessionStore.
+  # Success-only: this store never returns StoreError.
   class MemoryCache < Cache
     record Entry, value : Bytes, deadline : Time::Instant?
 

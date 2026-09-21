@@ -11,6 +11,7 @@ module Alumna
   # Find: key is generation + query hash. Writes incr the collection generation.
   # Old find keys stay until TTL. skip_providers applies to get and find.
   # Internal writes still update get keys and bump find generation.
+  # Store-down is ServiceError.internal. Do not fill. Do not write-through.
   private module CacheRule
     DEFAULT_SKIP = ["internal"]
     HIT_KEY      = "alumna.cache.hit"
@@ -34,8 +35,9 @@ module Alumna
       end
     end
 
-    def self.find_gen(cache : Cache, path : String) : Int64
+    def self.find_gen(cache : Cache, path : String) : Int64 | StoreError
       bytes = cache.get(find_gen_key(path))
+      return bytes if bytes.is_a?(StoreError)
       return 0_i64 unless bytes
       String.new(bytes).to_i64? || 0_i64
     end
@@ -141,6 +143,10 @@ module Alumna
     def self.mutates?(method : ServiceMethod) : Bool
       method.create? || method.update? || method.patch? || method.remove?
     end
+
+    def self.down(error : StoreError) : ServiceError
+      ServiceError.internal(error.message)
+    end
   end
 
   def self.cache(
@@ -157,24 +163,31 @@ module Alumna
           id = ctx.id
           next nil unless id && !id.empty?
           key = CacheRule.get_key(ctx.service.path, id)
-          if bytes = cache.get(key)
+          got = cache.get(key)
+          next CacheRule.down(got) if got.is_a?(StoreError)
+          if bytes = got
             if record = CacheRule.decode(bytes)
               ctx.store[CacheRule::HIT_KEY] = true
               ctx.result = record
             else
-              cache.delete(key)
+              deleted = cache.delete(key)
+              next CacheRule.down(deleted) if deleted.is_a?(StoreError)
             end
           end
         elsif ctx.method.find?
           gen = CacheRule.find_gen(cache, ctx.service.path)
+          next CacheRule.down(gen) if gen.is_a?(StoreError)
           ctx.store[CacheRule::FIND_GEN_KEY] = gen
           key = CacheRule.find_key(ctx.service.path, gen, CacheRule.query_fingerprint(ctx.query))
-          if bytes = cache.get(key)
+          got = cache.get(key)
+          next CacheRule.down(got) if got.is_a?(StoreError)
+          if bytes = got
             if list = CacheRule.decode_list(bytes)
               ctx.store[CacheRule::HIT_KEY] = true
               ctx.result = list
             else
-              cache.delete(key)
+              deleted = cache.delete(key)
+              next CacheRule.down(deleted) if deleted.is_a?(StoreError)
             end
           end
         end
@@ -186,30 +199,36 @@ module Alumna
           next nil if ctx.store[CacheRule::HIT_KEY]?
           record = ctx.result.as?(Hash(String, AnyData))
           next nil unless record
-          cache.set_nx(CacheRule.get_key(ctx.service.path, id), CacheRule.encode(record), ttl)
+          wrote = cache.set_nx(CacheRule.get_key(ctx.service.path, id), CacheRule.encode(record), ttl)
+          next CacheRule.down(wrote) if wrote.is_a?(StoreError)
         elsif ctx.method.find?
           next nil if skip_providers.includes?(ctx.provider)
           next nil if ctx.store[CacheRule::HIT_KEY]?
           observed = ctx.store[CacheRule::FIND_GEN_KEY]?.as?(Int64)
           next nil if observed.nil?
           now = CacheRule.find_gen(cache, ctx.service.path)
+          next CacheRule.down(now) if now.is_a?(StoreError)
           next nil unless observed == now
           list = ctx.result.as?(Array(Hash(String, AnyData)))
           next nil unless list
           fp = CacheRule.query_fingerprint(ctx.query)
-          cache.set_nx(CacheRule.find_key(ctx.service.path, now, fp), CacheRule.encode_list(list), ttl)
+          wrote = cache.set_nx(CacheRule.find_key(ctx.service.path, now, fp), CacheRule.encode_list(list), ttl)
+          next CacheRule.down(wrote) if wrote.is_a?(StoreError)
         elsif CacheRule.mutates?(ctx.method)
-          cache.incr(CacheRule.find_gen_key(ctx.service.path))
+          bumped = cache.incr(CacheRule.find_gen_key(ctx.service.path))
+          next CacheRule.down(bumped) if bumped.is_a?(StoreError)
           if ctx.method.remove?
             id = ctx.id
             if id && !id.empty?
-              cache.delete(CacheRule.get_key(ctx.service.path, id))
+              deleted = cache.delete(CacheRule.get_key(ctx.service.path, id))
+              next CacheRule.down(deleted) if deleted.is_a?(StoreError)
             end
           else
             record = ctx.result.as?(Hash(String, AnyData))
             if record
               if id = CacheRule.id_from(ctx)
-                cache.set(CacheRule.get_key(ctx.service.path, id), CacheRule.encode(record), ttl)
+                written = cache.set(CacheRule.get_key(ctx.service.path, id), CacheRule.encode(record), ttl)
+                next CacheRule.down(written) if written.is_a?(StoreError)
               end
             end
           end

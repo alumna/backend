@@ -16,12 +16,15 @@ module Alumna
   #
   # incr is atomic. Missing or non-integer values become 1. The counter
   # has no TTL. The find rule uses it as a collection generation.
+  #
+  # get is Bytes (hit), nil (miss), or StoreError (store down). Nil is never
+  # a failure. MemoryCache never returns StoreError.
   abstract class Cache
-    abstract def get(key : String) : Bytes?
-    abstract def set(key : String, value : Bytes, ttl : Time::Span? = nil) : Nil
-    abstract def set_nx(key : String, value : Bytes, ttl : Time::Span? = nil) : Bool
-    abstract def delete(key : String) : Nil
-    abstract def incr(key : String) : Int64
+    abstract def get(key : String) : Bytes? | StoreError
+    abstract def set(key : String, value : Bytes, ttl : Time::Span? = nil) : Nil | StoreError
+    abstract def set_nx(key : String, value : Bytes, ttl : Time::Span? = nil) : Bool | StoreError
+    abstract def delete(key : String) : Nil | StoreError
+    abstract def incr(key : String) : Int64 | StoreError
   end
 end
 

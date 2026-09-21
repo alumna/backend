@@ -47,6 +47,56 @@ private class CacheKeySpy < Alumna::MemoryCache
   end
 end
 
+private class ScriptedCache < Alumna::Cache
+  getter get_keys = [] of String
+  @gets = [] of Bytes? | Alumna::StoreError
+
+  property set_result : Nil | Alumna::StoreError = nil
+  property set_nx_result : Bool | Alumna::StoreError = true
+  property delete_result : Nil | Alumna::StoreError = nil
+  property incr_result : Int64 | Alumna::StoreError = 1_i64
+
+  def enqueue(result : Bytes? | Alumna::StoreError) : self
+    @gets << result
+    self
+  end
+
+  def get(key : String) : Bytes? | Alumna::StoreError
+    @get_keys << key
+    if @gets.empty?
+      Alumna::StoreError.new("cache down")
+    else
+      @gets.shift
+    end
+  end
+
+  def set(key : String, value : Bytes, ttl : Time::Span? = nil) : Nil | Alumna::StoreError
+    @set_result
+  end
+
+  def set_nx(key : String, value : Bytes, ttl : Time::Span? = nil) : Bool | Alumna::StoreError
+    @set_nx_result
+  end
+
+  def delete(key : String) : Nil | Alumna::StoreError
+    @delete_result
+  end
+
+  def incr(key : String) : Int64 | Alumna::StoreError
+    @incr_result
+  end
+end
+
+private def posts_ctx(
+  method : Alumna::ServiceMethod,
+  phase : Alumna::RulePhase,
+  id : String? = nil,
+)
+  svc = Alumna::MemoryAdapter.new
+  svc.path = "/posts"
+  Alumna::Testing.build_ctx(service: svc, method: method, phase: phase, id: id)
+end
+
 describe "Alumna.cache" do
   it "rejects a non-positive ttl" do
     expect_raises(ArgumentError, "cache ttl must be > 0") do
@@ -624,5 +674,167 @@ describe "Alumna.cache" do
     client.get("/posts?title[$in]=A,B&$sort=title:1&$select=title")
     client.get("/posts?title[$in]=A,B&$sort=title:-1&$select=title")
     posts.find_count.should eq(2)
+  end
+
+  it "returns 500 on get store-down and does not call the adapter" do
+    cache = ScriptedCache.new.enqueue(Alumna::StoreError.new("cache down"))
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    posts = CacheGetCounter.new(cache_schema)
+    posts.before(rule, on: :read)
+    posts.after(rule)
+    app = Alumna::App.new
+    app.use "/posts", posts
+    client = Alumna::Testing::AppClient.new(app)
+    res = client.get("/posts/1")
+    res.status.should eq(500)
+    res.json_hash["error"].should eq("cache down")
+    posts.get_count.should eq(0)
+  end
+
+  it "returns 500 when get is down" do
+    cache = ScriptedCache.new.enqueue(Alumna::StoreError.new("get down"))
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before, id: "1")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("get down")
+    end
+    ctx.result_set?.should be_false
+  end
+
+  it "returns 500 when corrupt get bytes cannot be deleted" do
+    cache = ScriptedCache.new.enqueue("not-json".to_slice)
+    cache.delete_result = Alumna::StoreError.new("delete down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before, id: "1")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("delete down")
+    end
+  end
+
+  it "returns 500 when find generation get is down" do
+    cache = ScriptedCache.new.enqueue(Alumna::StoreError.new("fgen down"))
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before)
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("fgen down")
+    end
+  end
+
+  it "returns 500 when find get is down" do
+    cache = ScriptedCache.new.enqueue(nil).enqueue(Alumna::StoreError.new("find down"))
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before)
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("find down")
+    end
+  end
+
+  it "returns 500 when corrupt find bytes cannot be deleted" do
+    cache = ScriptedCache.new.enqueue(nil).enqueue("not-json".to_slice)
+    cache.delete_result = Alumna::StoreError.new("find delete down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before)
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("find delete down")
+    end
+  end
+
+  it "returns 500 on miss fill set_nx down and does not write-through" do
+    cache = ScriptedCache.new
+    cache.set_nx_result = Alumna::StoreError.new("set_nx down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Get, Alumna::RulePhase::After, id: "1")
+    ctx.result = Alumna.hash(title: "A")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("set_nx down")
+    end
+  end
+
+  it "returns 500 when after find generation get is down" do
+    cache = ScriptedCache.new.enqueue(Alumna::StoreError.new("after fgen down"))
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Find, Alumna::RulePhase::After)
+    ctx.store["alumna.cache.fgen"] = 0_i64
+    ctx.result = [Alumna.hash(title: "A")]
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("after fgen down")
+    end
+  end
+
+  it "returns 500 when find miss fill set_nx is down" do
+    cache = ScriptedCache.new.enqueue(nil)
+    cache.set_nx_result = Alumna::StoreError.new("find set_nx down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Find, Alumna::RulePhase::After)
+    ctx.store["alumna.cache.fgen"] = 0_i64
+    ctx.result = [Alumna.hash(title: "A")]
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("find set_nx down")
+    end
+  end
+
+  it "returns 500 when incr is down on write" do
+    cache = ScriptedCache.new
+    cache.incr_result = Alumna::StoreError.new("incr down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)
+    ctx.result = Alumna.hash(id: "9", title: "A")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("incr down")
+    end
+  end
+
+  it "returns 500 when write-through set is down" do
+    cache = ScriptedCache.new
+    cache.set_result = Alumna::StoreError.new("set down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Create, Alumna::RulePhase::After)
+    ctx.result = Alumna.hash(id: "9", title: "A")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("set down")
+    end
+  end
+
+  it "returns 500 when remove delete is down" do
+    cache = ScriptedCache.new
+    cache.delete_result = Alumna::StoreError.new("remove down")
+    rule = Alumna.cache(cache, ttl: 1.hour)
+    ctx = posts_ctx(Alumna::ServiceMethod::Remove, Alumna::RulePhase::After, id: "1")
+    res = Alumna::Testing.run_rule(rule, ctx: ctx)
+    err = res.error
+    if err
+      err.status.should eq(500)
+      err.message.should eq("remove down")
+    end
   end
 end

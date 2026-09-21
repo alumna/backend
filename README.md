@@ -770,7 +770,7 @@ The simplest form is one line. One hundred requests per minute, counted by clien
 app.before Alumna.rate_limit(limit: 100, window_seconds: 60)
 ```
 
-Each request ticks a counter. Under the limit, the request continues and the response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Over the limit, Alumna returns `429 Too Many Requests`. CORS `OPTIONS` preflights are skipped so they do not consume the budget.
+Each request ticks a counter. Under the limit, the request continues and the response includes `X-RateLimit-Limit`, `X-RateLimit-Remaining`, and `X-RateLimit-Reset`. Over the limit, Alumna returns `429 Too Many Requests`. If the store returns `StoreError` (Redis down), Alumna returns `500` and does not allow the request. That is not `429`. CORS `OPTIONS` preflights are skipped so they do not consume the budget.
 
 #### Count by something other than IP
 
@@ -804,7 +804,11 @@ Several processes cannot share that memory store. Give them Redis from [`alumna-
 require "alumna-redis"
 
 redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
-app.before Alumna.rate_limit(limit: 100, store: redis.rate_limit_store(60.seconds))
+if redis.is_a?(Alumna::Redis::Error)
+  # Handle the connect failure. The message has no URI userinfo.
+else
+  app.before Alumna.rate_limit(limit: 100, store: redis.rate_limit_store(60.seconds))
+end
 ```
 
 The memory store drops expired windows as requests come in. There is no background fiber. Expiry uses a monotonic clock so NTP jumps do not stretch the window; `X-RateLimit-Reset` is still wall-clock time for the client.
@@ -828,6 +832,8 @@ app.use "/posts", Alumna.memory(PostSchema) {
 ```
 
 `before` on `:read` covers `get` and `find`. If the data is already in the store, the rule sets `ctx.result` and the adapter never runs. `after` keeps the store in sync: it writes on create/update/patch, deletes on remove, and fills a miss.
+
+`Cache#get` returns bytes (hit), `nil` (miss), or `StoreError` (store down). `nil` is never a failure. Memory cache never returns `StoreError`. If the store is down, `Alumna.cache` returns `ServiceError.internal`. It does not fill from the adapter. It does not write-through.
 
 #### Get
 
@@ -868,7 +874,11 @@ Same attach on Redis (`before` on `:read`, `after`):
 require "alumna-redis"
 
 redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
-rule = Alumna.cache(redis.cache, ttl: 30.seconds)
+if redis.is_a?(Alumna::Redis::Error)
+  # Handle the connect failure.
+else
+  rule = Alumna.cache(redis.cache, ttl: 30.seconds)
+end
 ```
 
 Processes that share Redis share get results. They share find only if they also share the document store (two in-memory adapters each have their own rows).
@@ -885,15 +895,20 @@ sessions = Alumna::Session.new(store, secure: true)
 app.before sessions.rule
 ```
 
-In login, `start` writes the data and sets the cookie. In logout, `stop` deletes both. You can give one session a shorter life than the store default:
+In login, `start` writes the data and sets the cookie. In logout, `stop` deletes both. You can give one session a shorter life than the store default. `start` / `stop` / `rotate` return `StoreError` when the store is down. Map that to `ServiceError.internal` in the rule:
 
 ```crystal
-sessions.start(ctx, Alumna.hash(user_id: id))
-sessions.start(ctx, Alumna.hash(user_id: id), ttl: 8.hours)
-sessions.stop(ctx)
+started = sessions.start(ctx, Alumna.hash(user_id: id))
+next Alumna::ServiceError.internal(started.message) if started.is_a?(Alumna::StoreError)
+
+started = sessions.start(ctx, Alumna.hash(user_id: id), ttl: 8.hours)
+next Alumna::ServiceError.internal(started.message) if started.is_a?(Alumna::StoreError)
+
+stopped = sessions.stop(ctx)
+next Alumna::ServiceError.internal(stopped.message) if stopped.is_a?(Alumna::StoreError)
 ```
 
-No cookie → `401` `"Missing session"`. Unknown or expired id → `401` `"Unauthorized"`. The deadline is set on `start` (or `set`) and does not move on each request.
+No cookie → `401` `"Missing session"`. Unknown or expired id → `401` `"Unauthorized"`. Store down → `500` (`ServiceError.internal`). Never treat store-down as a missing session. The deadline is set on `start` (or `set`) and does not move on each request.
 
 #### Cookie flags
 
@@ -909,6 +924,8 @@ If you only need the before-rule and will call `Alumna::Session.start(ctx, store
 sessions.rotate(ctx, Alumna.hash(user_id: id, role: "admin"))
 ```
 
+If `rotate` returns `StoreError`, map it the same way as `start`.
+
 `internal` and `local` are skipped, as is `OPTIONS`. After HTTP has loaded the session, `ctx.call` does not need the cookie again.
 
 #### Redis
@@ -919,8 +936,12 @@ Several processes share a store the same way as cache and rate limit:
 require "alumna-redis"
 
 redis = Alumna::Redis.new(URI.parse(ENV["REDIS_URL"]))
-sessions = Alumna::Session.new(redis.session_store(ttl: 24.hours), secure: true)
-app.before sessions.rule
+if redis.is_a?(Alumna::Redis::Error)
+  # Handle the connect failure.
+else
+  sessions = Alumna::Session.new(redis.session_store(ttl: 24.hours), secure: true)
+  app.before sessions.rule
+end
 ```
 
 `get` / `set` copy the top-level hash. Mutate it, then `set` (or `start`) to persist. That matches a remote store.
@@ -1202,7 +1223,6 @@ When `expect_incremental_ids` is `false`:
 
 Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats).
 
-- **v0.10 - Event Bus & NATS:** Official **NATS.io** shard. Horizontally scaled Alumna instances publish from `after_commit` and fan-out to WebSocket clients through local `Connections`. Backend does not import NATS. See [alumna/nats](https://github.com/alumna/nats) `examples/websocket_fanout.cr`.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-driven SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---
@@ -1227,6 +1247,8 @@ This lets every layer – context, services, rules, and serializers – work wit
 
 **Why is `ServiceError` a struct instead of an Exception?** 
 In many frameworks, returning a `404 Not Found` or a `422 Unprocessable Entity` involves raising an exception. In Crystal, instantiating an `Exception` allocates a call stack (backtrace), which adds measurable overhead under high load. By making `ServiceError` a lightweight `struct` returned directly by rules and service methods as a union type, Alumna achieves zero-allocation error paths. Expected API control flow never triggers the exception unwinding machinery, keeping throughput extremely high while remaining completely type-safe.
+
+`StoreError` is the same idea for `Cache`, `SessionStore`, and `RateLimitStore`. It is not HTTP. Rules map it to `ServiceError.internal`. Memory stores never return it. `nil` on `Cache#get` stays a miss.
 
 `FieldDescriptor` on the other hand is a class because it contains nearly 20 fields. As a struct it would copy all fields onto the stack for every field validation. As a class, it pays just a one-time heap allocation at boot and uses lightweight 8-byte references to maximize CPU cache.
 

@@ -31,6 +31,7 @@ module Alumna
   # Hot path remains O(1): one Hash lookup under a Sync::Mutex. Cleanup is O(N) but
   # amortized and infrequent, keeping throughput comparable to Go/Rust
   # implementations while staying fully explicit.
+  # Success-only: this store never returns StoreError.
   class MemoryRateLimitStore < RateLimitStore
     # reset_at is for HTTP headers (wall clock)
     # deadline is for internal expiry (monotonic clock)

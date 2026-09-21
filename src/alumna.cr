@@ -5,7 +5,8 @@ end
 # Core enums and primitives - no dependencies
 require "./core/types"
 require "./core/json_helper"
-require "./cache"
+require "./store/error"
+require "./store/cache"
 require "./service/method"
 require "./rule/phase"
 require "./service/error"
