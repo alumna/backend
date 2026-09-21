@@ -1,5 +1,13 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **mail:** `Alumna::Mail`, abstract `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError`. `send` returns `Nil | MailError`. `MemoryMailer` records messages in this process and returns `nil`. `delivered` returns copies. Empty `from`, empty `to`, or empty `subject` raises `ArgumentError`. An empty `reply_to` raises `ArgumentError`.
+
+### Changed
+* **docs:** README documents the mail port and `MemoryMailer`. ROADMAP 5.3 is this port. Release target is 0.10.0. `shard.yml` stays 0.9.2 until that release. Amazon SES stays in the `alumna-ses` shard.
+
 ## 0.9.2 - 2026-09-21
 
 ### Added
