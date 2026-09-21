@@ -99,7 +99,7 @@ Alumna inherits Crystal's performance characteristics: ahead-of-time compilation
 
 ## Status
 
-Alumna is in early development, but moving fast. The core is complete and tested: HTTP REST, the rule pipeline (`before`, `after`, `after_commit`, `error`), schemas, queries, in-memory persistence, JSON, and MessagePack.
+Alumna is in early development, but moving fast. The core is complete and tested: HTTP REST, the rule pipeline (`before`, `after`, `after_commit`, `error`), schemas, queries, in-memory persistence, JSON, and MessagePack. Native WebSockets support.
 
 Official database adapters:
 - [SQLite](https://github.com/alumna/sqlite)
@@ -110,7 +110,10 @@ Built-in rules include session, JWT HS256, rate limit, and cache. Session, rate 
 Redis stores (`Cache`, `SessionStore`, `RateLimitStore`) are available with:
 - [Alumna Redis](https://github.com/alumna/redis).
 
-Native WebSockets landed. The `after_commit` hook is available. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats). See [Roadmap](#roadmap) for PostgreSQL and MySQL.
+Cross-process WebSocket, queue and pub/sub:
+- [Alumna NATS](https://github.com/alumna/nats).
+
+PostgreSQL and MySQL adapters pending. See [Roadmap](#roadmap).
 
 ---
 
