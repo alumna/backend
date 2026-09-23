@@ -1083,6 +1083,10 @@ Mail is a port: a message, an abstract mailer, an in-process mailer, and a failu
 
 A single `to` string is stored as a one-element array. `Mail.new` copies the list, so a later change to the caller's array does not change the mail.
 
+A CR or LF in `from`, `subject`, `reply_to`, or an address in `to` raises `ArgumentError`. These values go into mail headers and SMTP commands, and a line break there can add headers (header injection). `text` and `html` can contain line breaks.
+
+An address can be bare (`user@example.com`) or have a display name (`User <user@example.com>`).
+
 This release has no cc, bcc, or attachments.
 
 ```crystal
