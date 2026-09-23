@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## 0.10.1 - Unreleased
+## 0.10.1 - 2026-09-23
 
 ### Changed
 * **mail:** `Mail.new` raises `ArgumentError` for a CR or LF in `from`, `subject`, `reply_to`, or an address in `to`. This stops header injection in adapters that write mail headers (SMTP). `text` and `html` can still contain line breaks.
