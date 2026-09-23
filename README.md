@@ -81,7 +81,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Send](#send)
     - [Send after a write](#send-after-a-write)
     - [MemoryMailer](#memorymailer)
-    - [Amazon SES](#amazon-ses)
+    - [Official mailers](#official-mailers)
 - [Developer Experience](#developer-experience)
 - [Full Example](#full-example)
 - [Serialization](#serialization)
@@ -121,6 +121,7 @@ Cross-process WebSocket, queue and pub/sub:
 
 Mail send port:
 - [SES](https://github.com/alumna/ses)
+- [SMTP](https://github.com/alumna/smtp)
 
 PostgreSQL and MySQL adapters pending. See [Roadmap](#roadmap).
 
@@ -1159,13 +1160,23 @@ mailer.send(mail)
 mailer.delivered.first.to # => ["user@example.com"]
 ```
 
-### Amazon SES
+### Official mailers
 
-`Alumna::SES` in the [`alumna-ses`](https://github.com/alumna/ses) shard implements this `Mailer`. This repository has no AWS library. Specs here use `MemoryMailer`.
+Each shard implements this `Mailer`. The app code stays the same when you change the mailer. This repository has no AWS or SMTP library. Specs here use `MemoryMailer`.
+
+| Shard | Class | Delivery |
+|---|---|---|
+| [`alumna-ses`](https://github.com/alumna/ses) | `Alumna::SES` | Amazon SES API v2 over HTTPS |
+| [`alumna-smtp`](https://github.com/alumna/smtp) | `Alumna::SMTP` | Any SMTP server (STARTTLS, implicit TLS, AUTH) |
+
+```crystal
+mailer = Alumna::SMTP.from_env # or Alumna::SES.from_env, or Alumna::MemoryMailer.new
+```
 
 Available official ports:
 
 - [SES](https://github.com/alumna/ses)
+- [SMTP](https://github.com/alumna/smtp)
 
 ---
 
@@ -1338,9 +1349,9 @@ When `expect_incremental_ids` is `false`:
 
 ## Roadmap
 
-Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats). Mail send port (`Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, `Alumna::MailError`) is in this source. Release target is v0.10.0. Official SES shard is `alumna-ses`.
+Alumna is prioritized for high-availability and real-time distributed platforms. The official MongoDB adapter is available at [`alumna/mongodb`](https://github.com/alumna/mongodb). Session and JWT rules ship in this version. Cache and `RateLimitStore` ports landed in v0.8.0. The Redis shard has `RedisCache`, `RedisSessionStore`, and `RedisRateLimitStore`. Native WebSockets landed in v0.9.0. The `after_commit` hook is in this tree. Cross-process WebSocket fan-out is application composition with [Alumna NATS](https://github.com/alumna/nats). The mail send port (`Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, `Alumna::MailError`) landed in v0.10.0. The official mailers are [`alumna-ses`](https://github.com/alumna/ses) and [`alumna-smtp`](https://github.com/alumna/smtp).
 
-- **v0.10 - Mail send port:** `Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError` are in this source. `MemoryMailer` is the in-process mailer. Amazon SES is the `alumna-ses` shard. `shard.yml` stays 0.9.2 until the 0.10.0 release.
+- **v0.10 - Mail send port:** `Alumna::Mail`, `Alumna::Mailer`, `Alumna::MemoryMailer`, and `Alumna::MailError` (v0.10.0). `MemoryMailer` is the in-process mailer. v0.10.1 rejects CR and LF in the header fields of `Mail`. Amazon SES is the `alumna-ses` shard. SMTP is the `alumna-smtp` shard.
 - **v0.11+ - Relational Expansion:** Official adapters for **PostgreSQL** and **MySQL**, utilizing the zero-allocation streaming, schema-based SQL injection defenses, and JSONB dot-notation mapping established by our SQLite adapter.
 
 ---

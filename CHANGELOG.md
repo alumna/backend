@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Changed
+* **docs:** README "Official mailers" lists `alumna-ses` and `alumna-smtp`. ROADMAP 5.3 and the README status show the mail port as released (0.10.0, 0.10.1).
+
 ## 0.10.1 - 2026-09-23
 
 ### Changed
