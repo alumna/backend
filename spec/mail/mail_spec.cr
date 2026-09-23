@@ -87,6 +87,70 @@ describe Alumna::Mail do
     end
   end
 
+  it "rejects a CR or LF in from" do
+    expect_raises(ArgumentError, "from must not contain CR or LF") do
+      Alumna::Mail.new(from: "a@example.com\r\nBcc: x@example.com", to: "to@example.com", subject: "Hello", text: "Plain")
+    end
+    expect_raises(ArgumentError, "from must not contain CR or LF") do
+      Alumna::Mail.new(from: "a@example.com\n", to: "to@example.com", subject: "Hello", text: "Plain")
+    end
+  end
+
+  it "rejects a CR or LF in subject" do
+    expect_raises(ArgumentError, "subject must not contain CR or LF") do
+      Alumna::Mail.new(from: "from@example.com", to: "to@example.com", subject: "Hello\rBcc: x@example.com", text: "Plain")
+    end
+  end
+
+  it "rejects a CR or LF in a recipient" do
+    expect_raises(ArgumentError, "to must not contain CR or LF") do
+      Alumna::Mail.new(from: "from@example.com", to: "to@example.com\n", subject: "Hello", text: "Plain")
+    end
+    expect_raises(ArgumentError, "to must not contain CR or LF") do
+      Alumna::Mail.new(
+        from: "from@example.com",
+        to: ["ok@example.com", "bad@example.com\r\nRCPT TO:<x@example.com>"],
+        subject: "Hello",
+        text: "Plain",
+      )
+    end
+  end
+
+  it "rejects a CR or LF in reply_to" do
+    expect_raises(ArgumentError, "reply_to must not contain CR or LF") do
+      Alumna::Mail.new(
+        from: "from@example.com",
+        to: "to@example.com",
+        subject: "Hello",
+        text: "Plain",
+        reply_to: "reply@example.com\r\n",
+      )
+    end
+  end
+
+  it "keeps line breaks in text and html" do
+    mail = Alumna::Mail.new(
+      from: "from@example.com",
+      to: "to@example.com",
+      subject: "Hello",
+      text: "one\r\ntwo\n",
+      html: "<p>one</p>\n<p>two</p>",
+    )
+    mail.text.should eq("one\r\ntwo\n")
+    mail.html.should eq("<p>one</p>\n<p>two</p>")
+  end
+
+  it "accepts a display name with the address" do
+    mail = Alumna::Mail.new(
+      from: "Alumna <from@example.com>",
+      to: "User <to@example.com>",
+      subject: "Olá",
+      text: "Plain",
+    )
+    mail.from.should eq("Alumna <from@example.com>")
+    mail.to.should eq(["User <to@example.com>"])
+  end
+
   it "rejects an empty reply_to" do
     expect_raises(ArgumentError, "reply_to must not be empty") do
       Alumna::Mail.new(
