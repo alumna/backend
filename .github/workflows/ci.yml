@@ -30,11 +30,11 @@ jobs:
         crystal: [latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: crystal-lang/install-crystal@v1
         with:
           crystal: ${{ matrix.crystal }}
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             lib
@@ -60,7 +60,7 @@ jobs:
       contents: read
       pull-requests: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -73,7 +73,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y kcov
 
-      - uses: actions/cache@v4
+      - uses: actions/cache@v6
         with:
           path: |
             lib
@@ -101,7 +101,7 @@ jobs:
           crystal tool macro_code_coverage --format=codecov --no-color all_specs.cr > ./coverage/macro_coverage.root.codecov.json
 
       - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: alumna/backend
@@ -117,7 +117,7 @@ jobs:
 
       - name: Upload test results to Codecov (Test Analytics)
         if: ${{ !cancelled() }}
-        uses: codecov/codecov-action@v5
+        uses: codecov/codecov-action@v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           slug: alumna/backend
