@@ -3,6 +3,9 @@
 ## Unreleased
 
 ### Changed
+* **json:** `JsonHelper.write` encodes `AnyData` straight into an `IO`. `to_string` and the HTTP JSON serializer use it. No `JSON::Builder` on that path.
+* **cache:** Stored JSON and the find-key fingerprint use that writer. The find key text is unchanged.
+* **schema:** A valid `validate` keeps its field path on the stack.
 * **docs:** README "Official mailers" lists `alumna-ses` and `alumna-smtp`. ROADMAP 5.3 and the README status show the mail port as released (0.10.0, 0.10.1).
 * **ci:** `actions/checkout@v7`, `actions/cache@v6`, and `codecov/codecov-action@v7`.
 

@@ -42,69 +42,133 @@ module Alumna
       String.new(bytes).to_i64? || 0_i64
     end
 
-    def self.query_fingerprint(query : Query) : String
-      Digest::SHA256.hexdigest(query_canonical(query))
-    end
+    # One buffer for JSON bytes that are copied out before the lock is released.
+    @@json_io = IO::Memory.new(128)
+    @@json_mu = Sync::Mutex.new
 
-    def self.query_canonical(query : Query) : String
-      JSON.build do |json|
-        json.object do
-          json.field("f") do
-            json.object do
-              query.filters.keys.sort.each do |field|
-                json.field(field) do
-                  json.array do
-                    query.filters[field].each do |cond|
-                      json.array do
-                        json.string(cond.op.to_s)
-                        val = cond.value
-                        if val.is_a?(Array)
-                          json.array { val.each { |item| json.string(item) } }
-                        else
-                          json.string(val)
-                        end
-                      end
-                    end
-                  end
-                end
-              end
-            end
-          end
-          json.field("l", query.limit)
-          json.field("k", query.skip)
-          json.field("o") do
-            if sort = query.sort
-              json.array do
-                sort.each do |field, dir|
-                  json.array do
-                    json.string(field)
-                    json.number(dir)
-                  end
-                end
-              end
-            else
-              json.null
-            end
-          end
-          json.field("s") do
-            if sel = query.select
-              json.array { sel.sort.each { |field| json.string(field) } }
-            else
-              json.null
-            end
-          end
-        end
+    def self.query_fingerprint(query : Query) : String
+      # LCOV_EXCL_START - kcov misses Sync::Mutex#lock and the following begin
+      @@json_mu.lock
+      begin
+        # LCOV_EXCL_STOP
+        @@json_io.clear
+        write_canonical(@@json_io, query)
+        Digest::SHA256.hexdigest(@@json_io.to_slice)
+      ensure
+        @@json_mu.unlock
       end
     end
 
+    # Same bytes as the previous `JSON.build` document. The hash of this text is the find key.
+    def self.write_canonical(io : IO, query : Query) : Nil
+      io << "{\"f\":{"
+      first_field = true
+      query.filters.keys.sort.each do |field|
+        io << ',' unless first_field
+        first_field = false
+        JsonHelper.write_string(io, field)
+        io << ":["
+        first_cond = true
+        query.filters[field].each do |cond|
+          io << ',' unless first_cond
+          first_cond = false
+          io << '['
+          JsonHelper.write_string(io, cond.op.to_s)
+          io << ','
+          val = cond.value
+          if val.is_a?(Array)
+            io << '['
+            index = 0
+            while index < val.size
+              io << ',' if index > 0
+              JsonHelper.write_string(io, val[index])
+              index &+= 1
+            end
+            io << ']'
+          else
+            JsonHelper.write_string(io, val)
+          end
+          io << ']'
+        end
+        io << ']'
+      end
+      io << "},\"l\":"
+      if limit = query.limit
+        io << limit
+      else
+        io << "null"
+      end
+      io << ",\"k\":"
+      if skip = query.skip
+        io << skip
+      else
+        io << "null"
+      end
+      io << ",\"o\":"
+      if sort = query.sort
+        io << '['
+        index = 0
+        while index < sort.size
+          io << ',' if index > 0
+          field, dir = sort[index]
+          io << '['
+          JsonHelper.write_string(io, field)
+          io << ','
+          io << dir
+          io << ']'
+          index &+= 1
+        end
+        io << ']'
+      else
+        io << "null"
+      end
+      io << ",\"s\":"
+      if sel = query.select
+        io << '['
+        ordered = sel.sort
+        index = 0
+        while index < ordered.size
+          io << ',' if index > 0
+          JsonHelper.write_string(io, ordered[index])
+          index &+= 1
+        end
+        io << ']'
+      else
+        io << "null"
+      end
+      io << '}'
+    end
+
     def self.encode(record : Hash(String, AnyData)) : Bytes
-      JsonHelper.to_string(record).to_slice.dup
+      copy_json { |io| JsonHelper.write(io, record) }
     end
 
     def self.encode_list(records : Array(Hash(String, AnyData))) : Bytes
-      any = Array(AnyData).new(records.size)
-      records.each { |row| any << row }
-      JsonHelper.to_string(any).to_slice.dup
+      copy_json do |io|
+        io << '['
+        index = 0
+        while index < records.size
+          io << ',' if index > 0
+          JsonHelper.write(io, records[index])
+          index &+= 1
+        end
+        io << ']'
+      end
+    end
+
+    def self.copy_json(& : IO ->) : Bytes
+      # LCOV_EXCL_START - kcov misses Sync::Mutex#lock and the following begin
+      @@json_mu.lock
+      begin
+        # LCOV_EXCL_STOP
+        @@json_io.clear
+        yield @@json_io
+        bytes = Bytes.new(@@json_io.bytesize)
+        bytes.copy_from(@@json_io.to_slice)
+        bytes
+      ensure
+        @@json_mu.unlock
+      end
     end
 
     def self.decode(bytes : Bytes) : Hash(String, AnyData)?

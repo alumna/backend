@@ -671,7 +671,7 @@ describe "Alumna.cache" do
     client = Alumna::Testing::AppClient.new(app)
     client.post("/posts", body: %({"title":"A"}))
     client.post("/posts", body: %({"title":"B"}))
-    client.get("/posts?title[$in]=A,B&$sort=title:1&$select=title")
+    client.get("/posts?title[$in]=A,B&$sort=title:1&$select=title&$skip=0")
     client.get("/posts?title[$in]=A,B&$sort=title:-1&$select=title")
     posts.find_count.should eq(2)
   end

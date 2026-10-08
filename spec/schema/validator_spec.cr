@@ -463,4 +463,37 @@ describe Alumna::Schema do
       errors_for(schema, Alumna.hash(name: "Alice"), Alumna::ServiceMethod::Create).should be_empty
     end
   end
+
+  it "reports a path that is deeper than the stack buffer" do
+    schema = Alumna::Schema.new
+    nest_array(schema, 64)
+    data = deep_items(64)
+    errs = errors_for(schema, data, Alumna::ServiceMethod::Create)
+    errs.size.should eq(1)
+    errs.first.message.should eq("is required")
+    errs.first.field.should eq("#{"n." * 64}items[0].v")
+  end
+end
+
+def nest_array(schema : Alumna::Schema, left : Int32) : Nil
+  if left == 0
+    schema.array("items") { |sub| sub.str("v") }
+  else
+    schema.hash("n") { |sub| nest_array(sub, left - 1) }
+  end
+end
+
+def deep_items(left : Int32) : Hash(String, Alumna::AnyData)
+  if left == 0
+    row = {} of String => Alumna::AnyData
+    list = [] of Alumna::AnyData
+    list << row
+    data = {} of String => Alumna::AnyData
+    data["items"] = list
+    data
+  else
+    data = {} of String => Alumna::AnyData
+    data["n"] = deep_items(left - 1)
+    data
+  end
 end

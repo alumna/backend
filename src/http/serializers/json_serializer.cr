@@ -9,11 +9,18 @@ module Alumna
       end
 
       def encode(data : Hash(String, AnyData), io : IO) : Nil
-        JSON.build(io) { |builder| JsonHelper.encode(data, builder) }
+        JsonHelper.write(io, data)
       end
 
       def encode(data : Array(Hash(String, AnyData)), io : IO) : Nil
-        JSON.build(io) { |builder| JsonHelper.encode(data, builder) }
+        io << '['
+        index = 0
+        while index < data.size
+          io << ',' if index > 0
+          JsonHelper.write(io, data[index])
+          index &+= 1
+        end
+        io << ']'
       end
 
       def decode(io : IO) : Hash(String, AnyData) | ServiceError
