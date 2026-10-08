@@ -1,4 +1,75 @@
 module Alumna
+  # Path segments for one validate call. The slots live on the stack.
+  # A heap array is used only after 64 segments.
+  private struct FieldPath
+    CAPACITY = 64
+
+    def initialize
+      @names = StaticArray(String, CAPACITY).new("")
+      @indexes = StaticArray(Int32, CAPACITY).new(0)
+      @indexed = StaticArray(Bool, CAPACITY).new(false)
+      @size = 0
+      @overflow = nil
+    end
+
+    def push(part : String) : Nil
+      if @size < CAPACITY
+        @names[@size] = part
+        @indexed[@size] = false
+        @size += 1
+      else
+        overflow << part
+      end
+    end
+
+    def push(part : Int32) : Nil
+      if @size < CAPACITY
+        @indexes[@size] = part
+        @indexed[@size] = true
+        @size += 1
+      else
+        overflow << part
+      end
+    end
+
+    def empty? : Bool
+      @size == 0
+    end
+
+    def pop : Nil
+      if ov = @overflow
+        unless ov.empty?
+          ov.pop
+          return
+        end
+      end
+      @size -= 1 if @size > 0
+    end
+
+    def each_part(& : String | Int32, Int32 ->) : Nil
+      index = 0
+      while index < @size
+        if @indexed[index]
+          yield @indexes[index], index
+        else
+          yield @names[index], index
+        end
+        index &+= 1
+      end
+      if ov = @overflow
+        offset = 0
+        ov.each do |part|
+          yield part, @size + offset
+          offset &+= 1
+        end
+      end
+    end
+
+    private def overflow : Array(String | Int32)
+      @overflow ||= [] of String | Int32
+    end
+  end
+
   struct FieldError
     getter field : String
     getter message : String
@@ -15,12 +86,12 @@ module Alumna
 
     def validate(data : Hash(String, AnyData), method : ServiceMethod? = nil) : Array(FieldError)
       errors = nil
-      path = [] of String | Int32
-      errors = _validate(data, method, path, errors)
+      path = FieldPath.new
+      errors = _validate(data, method, pointerof(path), errors)
       errors || EMPTY_ERRORS
     end
 
-    protected def _validate(data : Hash(String, AnyData), method : ServiceMethod?, path : Array(String | Int32), errors : Array(FieldError)?) : Array(FieldError)?
+    protected def _validate(data : Hash(String, AnyData), method : ServiceMethod?, path : Pointer(FieldPath), errors : Array(FieldError)?) : Array(FieldError)?
       is_create = method.try(&.create?) || false
       is_write = method.try(&.write?) || false
 
@@ -28,15 +99,15 @@ module Alumna
         data.each_key do |key|
           next if @fields_by_name.has_key?(key)
           # Reserved keys exist only at the payload root. Nested objects still reject them.
-          next if path.empty? && RESERVED_KEYS.includes?(key)
-          path.push(key)
+          next if path.value.empty? && RESERVED_KEYS.includes?(key)
+          path.value.push(key)
           errors = push_error(errors, path, "is not allowed")
-          path.pop
+          path.value.pop
         end
       end
 
       @fields.each do |field|
-        path.push(field.name)
+        path.value.push(field.name)
 
         # LCOV_EXCL_START - kcov wrongly reports on this "begin", while reporting coverage inside it
         begin
@@ -102,7 +173,7 @@ module Alumna
                 errors = push_error(errors, path, "must contain at most #{max} item#{max == 1 ? "" : "s"}") if value.size > max
               end
               value.each_with_index do |item, idx|
-                path.push(idx)
+                path.value.push(idx)
                 # LCOV_EXCL_START - kcov wrongly reports on this "begin", while reporting coverage inside it
                 begin
                   # LCOV_EXCL_STOP
@@ -118,7 +189,7 @@ module Alumna
                     end
                   end
                 ensure
-                  path.pop
+                  path.value.pop
                 end
               end
             end
@@ -130,7 +201,7 @@ module Alumna
             end
           end
         ensure
-          path.pop
+          path.value.pop
         end
       end
 
@@ -149,11 +220,11 @@ module Alumna
     end
 
     @[AlwaysInline]
-    private def push_error(errors : Array(FieldError)?, path : Array(String | Int32), message : String) : Array(FieldError)
+    private def push_error(errors : Array(FieldError)?, path : Pointer(FieldPath), message : String) : Array(FieldError)
       arr = errors || [] of FieldError
 
       field_path = String.build do |io|
-        path.each_with_index do |part, i|
+        path.value.each_part do |part, i|
           if part.is_a?(Int32)
             io << "[" << part << "]"
           else

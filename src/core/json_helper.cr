@@ -48,11 +48,97 @@ module Alumna
       end
     end
 
+    # Writes *val* as JSON into *io*. No `JSON::Builder` and no extra String.
+    def self.write(io : IO, val : AnyData) : Nil
+      case val
+      when String then write_string(io, val)
+      when Int    then io << val
+      when Float
+        if val.nan?
+          raise JSON::Error.new("NaN not allowed in JSON")
+        elsif val.infinite?
+          raise JSON::Error.new("Infinity not allowed in JSON")
+        end
+        io << val
+      when Bool then io << (val ? "true" : "false")
+      when Nil  then io << "null"
+      when Time
+        io << '"'
+        Time::Format::RFC_3339.format(val, io, fraction_digits: 0)
+        io << '"'
+      when Bytes
+        io << '['
+        index = 0
+        while index < val.size
+          io << ',' if index > 0
+          io << val[index]
+          index &+= 1
+        end
+        io << ']'
+      when Array
+        io << '['
+        index = 0
+        while index < val.size
+          io << ',' if index > 0
+          write(io, val[index])
+          index &+= 1
+        end
+        io << ']'
+      when Hash
+        io << '{'
+        first = true
+        val.each do |key, item|
+          if first
+            first = false
+          else
+            io << ','
+          end
+          write_string(io, key.to_s)
+          io << ':'
+          write(io, item)
+        end
+        io << '}'
+      else
+        io << "null"
+      end
+    end
+
+    # Writes a JSON string. Matches `JSON::Builder` escaping.
+    def self.write_string(io : IO, value : String) : Nil
+      io << '"'
+      bytes = value.to_slice
+      start = 0
+      index = 0
+      while index < bytes.size
+        byte = bytes[index]
+        if byte >= 0x20 && byte != 0x7f && byte != 34 && byte != 92
+          index &+= 1
+          next
+        end
+        io.write(bytes[start, index - start]) if index > start
+        case byte
+        when 92_u8 then io << "\\\\"
+        when 34_u8 then io << "\\\""
+        when  8_u8 then io << "\\b"
+        when 12_u8 then io << "\\f"
+        when 10_u8 then io << "\\n"
+        when 13_u8 then io << "\\r"
+        when  9_u8 then io << "\\t"
+        else
+          io << "\\u00"
+          io << '0' if byte < 0x10
+          byte.to_s(io, 16)
+        end
+        index &+= 1
+        start = index
+      end
+      io.write(bytes[start, bytes.size - start]) if start < bytes.size
+      io << '"'
+    end
+
     # Convenience method for Adapters to serialize AnyData to a String
     def self.to_string(val : AnyData) : String
-      String.build do |io|
-        JSON.build(io) { |builder| encode(val, builder) }
-      end
+      String.build { |io| write(io, val) }
     end
 
     # Convenience method for Adapters to deserialize a JSON string into AnyData
