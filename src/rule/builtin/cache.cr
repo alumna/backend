@@ -50,7 +50,7 @@ module Alumna
       # LCOV_EXCL_START - kcov misses Sync::Mutex#lock and the following begin
       @@json_mu.lock
       begin
-      # LCOV_EXCL_STOP
+        # LCOV_EXCL_STOP
         @@json_io.clear
         write_canonical(@@json_io, query)
         Digest::SHA256.hexdigest(@@json_io.to_slice)
@@ -160,7 +160,7 @@ module Alumna
       # LCOV_EXCL_START - kcov misses Sync::Mutex#lock and the following begin
       @@json_mu.lock
       begin
-      # LCOV_EXCL_STOP
+        # LCOV_EXCL_STOP
         @@json_io.clear
         yield @@json_io
         bytes = Bytes.new(@@json_io.bytesize)
