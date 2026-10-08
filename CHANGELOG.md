@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.11.0 - 2026-10-08
 
 ### Changed
 * **json:** `JsonHelper.write` encodes `AnyData` straight into an `IO`. `to_string` and the HTTP JSON serializer use it. No `JSON::Builder` on that path.
