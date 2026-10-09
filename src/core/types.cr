@@ -53,11 +53,12 @@ class Hash(K, V)
     {% end %}
   end
 
-  private def dig_any_impl(path : String) : V?
+  private def dig_any_impl(path : String) : V | Nil
     # Fast path: Single probe using internal find_entry.
     # Completely avoids double lookups (has_key? + []) and block closure overhead.
+    # Crystal 1.21.1 rejects a bare `V` when `V` is the `AnyData` alias.
     if entry = find_entry(path)
-      return entry.value
+      return entry.value.as(V | Nil)
     end
 
     current = self

@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Fixed
+* `Hash#dig_any_impl` returns `V | Nil`. Crystal 1.21.1 rejected a bare `V` when `V` is the `AnyData` alias.
+
 ## 0.11.0 - 2026-10-08
 
 ### Changed
