@@ -1,5 +1,13 @@
 # Alumna Backend changelog
 
+## Unreleased
+
+### Added
+* **routes:** `App#use` accepts a block. The block runs with the service as `self`, then the service is mounted. Use it when the service already exists. `Alumna.memory` still builds the service.
+* **session:** `Session#rule(required:)` overrides the constructor flag for that rule only. `start`, `stop`, and `rotate` keep the original cookie flags.
+* **rules:** `before`, `after`, `after_commit`, and `error` accept an array of rules. Each rule is registered in order with the same `on`.
+* **server:** `App#every` repeats a block until `close`. The fiber sleeps first. `App#on_stop` runs once at the start of `close`.
+
 ## 0.11.1 - 2026-10-08
 
 ### Fixed

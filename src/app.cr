@@ -22,6 +22,10 @@ module Alumna
     @pipeline_mutex : Sync::Mutex
     @pipelines_compiled : Atomic(Bool)
     @server : HTTP::Server?
+    # Set at the start of close. every fibers read it after sleep.
+    @stopping : Atomic(Bool)
+    # Nil until the first on_stop. close takes the list and clears it.
+    @stop_hooks : Array(Proc(Nil))?
 
     def initialize(@serializer : Http::Serializer = Http::JsonSerializer.new)
       @services = {} of String => Service
@@ -30,6 +34,8 @@ module Alumna
       @active_requests = Atomic(Int32).new(0)
       @server = nil
       @connections = MemoryConnections.new
+      @stopping = Atomic(Bool).new(false)
+      @stop_hooks = nil
     end
 
     # Negative is a config error, not a per-request 400.
@@ -48,6 +54,13 @@ module Alumna
     end
 
     def close : Nil
+      # :release pairs with the :acquire read in every.
+      @stopping.set(true, :release)
+      hooks = @stop_hooks
+      @stop_hooks = nil
+      if hooks
+        hooks.each(&.call)
+      end
       @connections.close_all
       @server.try(&.close)
     end
@@ -58,6 +71,13 @@ module Alumna
       service.path = normalized
       @services[normalized] = service
       self
+    end
+
+    # Same block shape as `Alumna.memory`. Use this when the service already exists.
+    # The block runs with the service as `self`, then the service is mounted.
+    def use(path : String, service : Service, &) : self
+      with service yield
+      use(path, service)
     end
 
     private def normalize_path(path) : String
@@ -277,3 +297,5 @@ module Alumna
     end
   end
 end
+
+require "./app/background"

@@ -46,6 +46,33 @@ describe "Alumna.session" do
     res.ctx.store.has_key?("session").should be_false
   end
 
+  it "rule required: false overrides a required session" do
+    sessions = Alumna::Session.new(Alumna::MemorySessionStore.new, required: true)
+    res = Alumna::Testing.run_rule(sessions.rule(required: false))
+    res.error.should be_nil
+    res.ctx.store.has_key?("session").should be_false
+  end
+
+  it "rule required: true overrides an optional session" do
+    sessions = Alumna::Session.new(Alumna::MemorySessionStore.new, required: false)
+    err = Alumna::Testing.run_rule(sessions.rule(required: true)).error
+    err.should_not be_nil
+    if err
+      err.status.should eq(401)
+      err.message.should eq("Missing session")
+    end
+  end
+
+  it "rule required: false still rejects an unknown id" do
+    sessions = Alumna::Session.new(Alumna::MemorySessionStore.new, required: true)
+    err = Alumna::Testing.run_rule(sessions.rule(required: false), headers: {"Cookie" => "alumna.sid=nope"}).error
+    err.should_not be_nil
+    if err
+      err.status.should eq(401)
+      err.message.should eq("Unauthorized")
+    end
+  end
+
   it "returns 401 for an unknown id" do
     store = Alumna::MemorySessionStore.new
     rule = Alumna.session(store)
