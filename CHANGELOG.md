@@ -1,6 +1,6 @@
 # Alumna Backend changelog
 
-## Unreleased
+## 0.12.0 - 2026-10-13
 
 ### Added
 * **routes:** `App#use` accepts a block. The block runs with the service as `self`, then the service is mounted. Use it when the service already exists. `Alumna.memory` still builds the service.
