@@ -107,7 +107,9 @@ module Alumna
         body = request.body
         return {} of String => AnyData if body.nil?
 
-        # empty body → {} (preserves the existing spec)
+        # Content-Length 0 still has a body IO. Decoding that IO is a 400.
+        # An empty body is an empty hash. Crystal 1.22 omits this header
+        # when the client body is nil. Other clients still send it.
         if (len = request.content_length) && len == 0
           return {} of String => AnyData
         end

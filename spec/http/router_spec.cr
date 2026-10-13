@@ -336,6 +336,19 @@ describe "Router integration" do
       JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
     end
 
+    it "treats Content-Length 0 as an empty hash" do
+      client = HTTP::Client.new("127.0.0.1", PORT)
+      headers = HTTP::Headers{
+        "Authorization"  => "valid-token",
+        "Content-Type"   => "application/json",
+        "Content-Length" => "0",
+      }
+      # The header is required. Crystal 1.22 does not add it for a nil body.
+      response = client.post("/items", headers: headers, body: "")
+      response.status_code.should eq(422)
+      JSON.parse(response.body)["error"].as_s.should eq("Validation failed")
+    end
+
     it "returns 413 when body exceeds limit" do
       app.max_body_size = 10
       response = post("/items", %|{"name":"1234567890"}|, AUTH)

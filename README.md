@@ -59,6 +59,7 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Execution Order & Hooks](#execution-order--hooks)
     - [After commit](#after-commit)
     - [Targeting Methods with `on:`](#targeting-methods-with-on)
+    - [Several rules at once](#several-rules-at-once)
     - [The Rule Context](#the-rule-context)
     - [Headers, Params, and Views](#headers-params-and-views)
 - [4. Built-in Rules](#4-built-in-rules)
@@ -75,6 +76,8 @@ app.listen(3000) # binds to 127.0.0.1:3000 by default
     - [Unix Sockets & Local Providers](#unix-sockets--local-providers)
     - [WebSockets](#websockets)
     - [Graceful Shutdown](#graceful-shutdown)
+        - [Stop hooks](#stop-hooks)
+        - [Interval work](#interval-work)
     - [Trusted Proxies](#trusted-proxies)
 - [6. Mail](#6-mail)
     - [Message](#message)
@@ -644,6 +647,20 @@ Use `on: :mutate` for `after_commit` when the rule must run on create, update, p
 before Alumna.cors(origins: ["*"]), on: :options
 ```
 
+### Several rules at once
+
+`before`, `after`, `after_commit`, and `error` also take an array of rules. Every rule in the array uses the same `on:`. The array order is the pipeline order.
+
+```crystal
+account = [sessions.rule, Authenticate]
+before account
+before account, on: :find
+```
+
+An empty array adds nothing. Each rule stays its own step and a stop in the first rule does not run the second. Also app/service boundary counts each rule normally.
+
+Do not wrap the list in one outer proc.
+
 ### The Rule Context
 
 | Field | Description |
@@ -1051,9 +1068,39 @@ The frame size cap is `app.max_body_size` (default 1 MiB). An oversize frame ret
 
 ### Graceful Shutdown
 
-Alumna safely traps `SIGINT` (Ctrl+C) and `SIGTERM`. When a shutdown signal is received, the server immediately stops accepting new connections but allows active HTTP requests to finish processing. Open WebSockets are closed first. They are not counted as active HTTP requests.
+Alumna traps `SIGINT` (Ctrl+C) and `SIGTERM`, and the server stops accepting new connections, while active HTTP requests can finish. Open WebSockets close first and they are not considered active HTTP requests.
 
-You can configure the maximum wait time using `shutdown_timeout` (defaults to 10 seconds). Once the timeout is reached, the server force-quits to prevent hanging indefinitely.
+`shutdown_timeout` is the maximum wait and, when not provided, the default is 10 seconds. After that, the process exits.
+
+#### Stop hooks
+
+`on_stop` registers a proc. `close` runs those procs once, in registration order, then it closes sockets and the HTTP server. A second `close` does not run them again.
+
+Register hooks before `listen`. A hook must return. A raise skips later hooks and skips the socket close.
+
+#### Interval work
+
+`every` starts one fiber for repeated work.
+
+```crystal
+app.every(15.seconds) do
+  sweep
+end
+
+app.on_stop do
+  bus.unsubscribe(subscription)
+end
+```
+
+The fiber sleeps first. Then it runs the block. Then it sleeps again.
+
+`interval` must be greater than zero.
+
+`close` sets a stop flag. After the current sleep, the fiber does not start another pass.
+
+A block that has already started runs until it returns. `listen` can return while that block is still running.
+
+`every` is for boot-time loops. The request path does not call it.
 
 ### Trusted Proxies
 

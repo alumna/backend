@@ -32,6 +32,12 @@ module Alumna
       self
     end
 
+    # Same `on` for every rule. Array order is pipeline order. Each rule stays its own step.
+    def before(rules : Array(Rule), on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rules(RulePhase::Before, rules, on)
+      self
+    end
+
     def before(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
       before(block, on: on)
     end
@@ -39,6 +45,12 @@ module Alumna
     def after(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
       register_rule(RulePhase::After, rule, on)
+      self
+    end
+
+    # Same `on` for every rule. Array order is pipeline order. Each rule stays its own step.
+    def after(rules : Array(Rule), on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rules(RulePhase::After, rules, on)
       self
     end
 
@@ -52,6 +64,12 @@ module Alumna
       self
     end
 
+    # Same `on` for every rule. Array order is pipeline order. Each rule stays its own step.
+    def after_commit(rules : Array(Rule), on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rules(RulePhase::AfterCommit, rules, on)
+      self
+    end
+
     def after_commit(on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil, &block : RuleContext -> ServiceError?)
       after_commit(block, on: on)
     end
@@ -59,6 +77,12 @@ module Alumna
     def error(rule : Rule, on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
       ensure_not_frozen!
       register_rule(RulePhase::Error, rule, on)
+      self
+    end
+
+    # Same `on` for every rule. Array order is pipeline order. Each rule stays its own step.
+    def error(rules : Array(Rule), on : ServiceMethod | Symbol | Array(ServiceMethod | Symbol) | Nil = nil)
+      register_rules(RulePhase::Error, rules, on)
       self
     end
 
@@ -73,6 +97,13 @@ module Alumna
       in RulePhase::After       then @after_rules[method]
       in RulePhase::AfterCommit then @after_commit_rules[method]
       in RulePhase::Error       then @error_rules[method]
+      end
+    end
+
+    private def register_rules(phase : RulePhase, rules : Array(Rule), on) : Nil
+      ensure_not_frozen!
+      rules.each do |rule|
+        register_rule(phase, rule, on)
       end
     end
 

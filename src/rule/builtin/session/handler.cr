@@ -6,6 +6,7 @@ module Alumna
   #
   #   sessions = Alumna::Session.new(Alumna::MemorySessionStore.new(ttl: 24.hours))
   #   app.before sessions.rule
+  #   app.before sessions.rule(required: false), on: :find
   #   started = sessions.start(ctx, Alumna.hash(user_id: id))
   #   next ServiceError.internal(started.message) if started.is_a?(StoreError)
   class Session
@@ -48,8 +49,9 @@ module Alumna
       end
     end
 
-    def rule : Rule
-      required = @required
+    # `required` overrides the constructor flag for this rule only.
+    # start, stop, and rotate keep the constructor cookie flags.
+    def rule(*, required : Bool = @required) : Rule
       skip = @skip_providers
       cookie = @cookie
       store_key = @store_key

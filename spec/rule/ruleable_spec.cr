@@ -184,6 +184,47 @@ describe Alumna::Ruleable do
     end
   end
 
+  it "registers a rule list in order and with the same on" do
+    r = DummyRuleable.new
+    first = Alumna::Rule.new { nil }
+    second = Alumna::Rule.new { nil }
+    listed = r.before([first, second], on: :get)
+    listed.should be(r)
+
+    get_rules = r.collect_rules(Alumna::ServiceMethod::Get, Alumna::RulePhase::Before)
+    get_rules.should eq([first, second])
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).should be_empty
+  end
+
+  it "adds nothing for an empty rule list" do
+    r = DummyRuleable.new
+    r.before([] of Alumna::Rule).should be(r)
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Before).should be_empty
+  end
+
+  it "registers after, after_commit, and error lists" do
+    r = DummyRuleable.new
+    one = Alumna::Rule.new { nil }
+    r.after([one], on: :create)
+    r.after_commit([one], on: :remove)
+    r.error([one], on: :find)
+
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::After).should eq([one])
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::After).should be_empty
+    r.collect_rules(Alumna::ServiceMethod::Remove, Alumna::RulePhase::AfterCommit).should eq([one])
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::AfterCommit).should be_empty
+    r.collect_rules(Alumna::ServiceMethod::Find, Alumna::RulePhase::Error).should eq([one])
+    r.collect_rules(Alumna::ServiceMethod::Create, Alumna::RulePhase::Error).should be_empty
+  end
+
+  it "raises when registering a rule list after freeze_rules!" do
+    r = DummyRuleable.new
+    r.freeze_rules!
+    expect_raises(Exception, "Cannot register rules after pipelines are compiled") do
+      r.before([] of Alumna::Rule)
+    end
+  end
+
   it "raises when registering after_commit after freeze_rules!" do
     r = DummyRuleable.new
     r.freeze_rules!
