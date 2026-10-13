@@ -55,7 +55,7 @@ jobs:
         run: crystal spec -Dpreview_mt -Dexecution_context --error-trace --verbose
 
   coverage:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       pull-requests: write
@@ -78,7 +78,7 @@ jobs:
           path: |
             lib
             ~/.cache/shards
-          key: ubuntu-22.04-crystal-latest-shards-${{ hashFiles('shard.yml') }}
+          key: ubuntu-26.04-crystal-latest-shards-${{ hashFiles('shard.yml') }}
 
       - run: shards install
 
