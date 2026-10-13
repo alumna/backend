@@ -7,6 +7,7 @@
 * **session:** `Session#rule(required:)` overrides the constructor flag for that rule only. `start`, `stop`, and `rotate` keep the original cookie flags.
 * **rules:** `before`, `after`, `after_commit`, and `error` accept an array of rules. Each rule is registered in order with the same `on`.
 * **server:** `App#every` repeats a block until `close`. The fiber sleeps first. `App#on_stop` runs once at the start of `close`.
+* **http:** A request with `Content-Length: 0` stays an empty hash. The JSON decoder is not called. Crystal 1.22 omits that header when the client body is nil. Clients that send the header still get the empty hash.
 
 ## 0.11.1 - 2026-10-08
 
