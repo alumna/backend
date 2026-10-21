@@ -1,5 +1,10 @@
 # Alumna Backend changelog
 
+## 0.13.0 - 2026-10-21
+
+### Added
+* **schema:** `partial: true` on a field or on `schema.index`. It requires `unique: true`. A missing or nil value stays outside a partial unique index. `MemoryAdapter` already skips nil, so this flag does not change it. An empty string is still unique.
+
 ## 0.12.0 - 2026-10-13
 
 ### Added
