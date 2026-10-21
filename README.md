@@ -451,6 +451,14 @@ MembershipSchema = Alumna::Schema.new
   .index("role") # Shorthand for a single-field index
 ```
 
+`partial: true` marks a unique field, or a unique `schema.index`, as optional. It requires `unique: true`. `MemoryAdapter` already skips a missing or nil unique value, so `partial` does not change it. An empty string is still a value, and a second `""` is **422**. The MongoDB adapter reads `partial` and builds a partial unique index. Float, any, hash, and array fields are rejected there.
+
+```crystal
+UserSchema = Alumna::Schema.new
+  .str("email", unique: true)
+  .str("phone_pair", unique: true, required: false, partial: true)
+```
+
 Adapters, including the built-in `MemoryAdapter`, read these traits to proactively reject conflicting payloads with a `422 Unprocessable Entity` ("already exists") before the conflict can corrupt your application state or trigger an unhandled SQL constraint exception.
 
 Database adapters create these indexes in `create_indexes!`. `Alumna::Service` provides a no-op. At boot:

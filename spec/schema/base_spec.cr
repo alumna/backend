@@ -37,12 +37,28 @@ describe Alumna::Schema do
       fd.max_length.should eq(10)
     end
 
-    it "stores traits (read_only, nullable, unique, indexed)" do
+    it "stores traits (read_only, nullable, unique, indexed, partial)" do
       fd = Alumna::Schema.new.field("x", :str, read_only: true, nullable: true, unique: true, indexed: true).fields.first
       fd.read_only.should be_true
       fd.nullable.should be_true
       fd.unique.should be_true
       fd.indexed.should be_true
+      fd.partial.should be_false
+    end
+
+    it "stores partial on a unique field" do
+      fd = Alumna::Schema.new.str("phone_pair", unique: true, required: false, partial: true).fields.first
+      fd.unique.should be_true
+      fd.partial.should be_true
+    end
+
+    it "rejects partial without unique" do
+      expect_raises(ArgumentError, "partial: true requires unique: true") do
+        Alumna::Schema.new.str("email", partial: true)
+      end
+      expect_raises(ArgumentError, "partial: true requires unique: true") do
+        Alumna::Schema.new.index("email", partial: true)
+      end
     end
   end
 
@@ -78,6 +94,7 @@ describe Alumna::Schema do
       idx = s.schema_indexes.first
       idx.fields.should eq(["email"])
       idx.unique.should be_true
+      idx.partial.should be_false
     end
 
     it "stores compound field indexes" do
@@ -85,6 +102,15 @@ describe Alumna::Schema do
       idx = s.schema_indexes.first
       idx.fields.should eq(["user_id", "status"])
       idx.unique.should be_false
+      idx.partial.should be_false
+    end
+
+    it "stores a partial compound unique index" do
+      s = Alumna::Schema.new.index(["user_id", "status"], unique: true, partial: true)
+      idx = s.schema_indexes.first
+      idx.fields.should eq(["user_id", "status"])
+      idx.unique.should be_true
+      idx.partial.should be_true
     end
   end
 

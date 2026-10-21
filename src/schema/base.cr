@@ -9,6 +9,8 @@ module Alumna
     getter nullable : Bool
     getter unique : Bool
     getter indexed : Bool
+    # Unique only when the value has this field's BSON type. Missing and null stay out.
+    getter partial : Bool
     getter read_only : Bool
     getter required_on : Array(ServiceMethod)?
     getter min_length : Int32?
@@ -29,6 +31,7 @@ module Alumna
       @nullable : Bool = false,
       @unique : Bool = false,
       @indexed : Bool = false,
+      @partial : Bool = false,
       @read_only : Bool = false,
       @min_length : Int32? = nil,
       @max_length : Int32? = nil,
@@ -55,7 +58,7 @@ module Alumna
     Str; Int; Float; Bool; Time; Bytes; Any; Hash; Array
   end
 
-  record IndexDef, fields : Array(String), unique : Bool
+  record IndexDef, fields : Array(String), unique : Bool, partial : Bool = false
 
   class Schema
     getter fields : Array(FieldDescriptor)
@@ -144,9 +147,12 @@ module Alumna
       end
     end
 
-    def index(fields : Array(String) | String, unique : Bool = false) : self
+    def index(fields : Array(String) | String, unique : Bool = false, partial : Bool = false) : self
+      if partial && !unique
+        raise ArgumentError.new("partial: true requires unique: true")
+      end
       arr = fields.is_a?(String) ? [fields] : fields
-      @schema_indexes << IndexDef.new(arr, unique)
+      @schema_indexes << IndexDef.new(arr, unique, partial)
       self
     end
 
@@ -157,6 +163,7 @@ module Alumna
       nullable : Bool = false,
       unique : Bool = false,
       indexed : Bool = false,
+      partial : Bool = false,
       read_only : Bool = false,
       min_length : Int32? = nil,
       max_length : Int32? = nil,
@@ -166,6 +173,10 @@ module Alumna
       element_type : FieldType? = nil,
       default : AnyData | Proc(AnyData) | Unprovided | Nil = Unprovided.new,
     ) : self
+      if partial && !unique
+        raise ArgumentError.new("partial: true requires unique: true")
+      end
+
       field_type = resolve_field_type(type)
       fmt = resolve_format(format)
 
@@ -189,6 +200,7 @@ module Alumna
         nullable: nullable,
         unique: unique,
         indexed: indexed,
+        partial: partial,
         read_only: read_only,
         min_length: min_length,
         max_length: max_length,
